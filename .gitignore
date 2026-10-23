@@ -1,0 +1,14 @@
+.env
+.env.*
+!.env.example
+runtime/
+output/
+node_modules/
+
+# Local system and generated cache files
+.DS_Store
+**/__pycache__/
+
+# Failure/replacement artifacts created only during --replace
+HTML视频项目/项目备份/
+HTML视频项目/失败项目/

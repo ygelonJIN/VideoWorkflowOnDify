@@ -1,0 +1,577 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>触海科技 · 外贸出海智能获客平台</title>
+<style>
+  @font-face{font-family:"PingFang SC";src:local("PingFang SC");}
+  @font-face{font-family:"Microsoft YaHei";src:local("Microsoft YaHei");}
+  @font-face{font-family:"Noto Sans CJK SC";src:local("Noto Sans CJK SC");}
+  @font-face{font-family:"SFMono-Regular";src:local("SFMono-Regular");}
+  @font-face{font-family:"JetBrains Mono";src:local("JetBrains Mono");}
+  :root{
+    --bg:#070b16;
+    --ink:#eaf1ff;
+    --muted:#93a4c6;
+    --line:rgba(255,255,255,.08);
+    --cyan:#38d6ff;
+    --blue:#4f7dff;
+    --green:#37e0a0;
+    --amber:#ffb454;
+    --red:#ff5d6c;
+    --violet:#8b7bff;
+    --panel:rgba(255,255,255,.045);
+    --panel2:rgba(255,255,255,.07);
+    --sans:"PingFang SC","Microsoft YaHei","Hiragino Sans GB","Noto Sans CJK SC",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    --mono:"SFMono-Regular","JetBrains Mono","Consolas","Menlo",monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  html,body{background:#000;font-family:var(--sans);}
+  body{display:flex;align-items:center;justify-content:center;min-height:100vh;overflow:hidden;}
+
+  #stage{position:relative;width:1080px;height:1920px;min-height:1920px;background:var(--bg);transform-origin:top left;}
+
+  /* ---------- ambient background ---------- */
+  .bg-grid{position:absolute;inset:0;z-index:0;pointer-events:none;
+    background-image:linear-gradient(rgba(255,255,255,.03) 1px,transparent 1px),
+                     linear-gradient(90deg,rgba(255,255,255,.03) 1px,transparent 1px);
+    background-size:60px 60px;
+    -webkit-mask-image:radial-gradient(circle at 50% 40%,#000 0%,transparent 78%);
+            mask-image:radial-gradient(circle at 50% 40%,#000 0%,transparent 78%);}
+  .bg-glow{position:absolute;inset:0;z-index:0;pointer-events:none;
+    background:
+      radial-gradient(600px 600px at 18% 12%,rgba(56,214,255,.16),transparent 60%),
+      radial-gradient(700px 700px at 88% 82%,rgba(79,125,255,.16),transparent 60%),
+      radial-gradient(500px 500px at 70% 30%,rgba(139,123,255,.10),transparent 60%);}
+  .bg-scan{position:absolute;left:0;right:0;top:-30%;height:30%;z-index:1;pointer-events:none;
+    background:linear-gradient(180deg,transparent,rgba(56,214,255,.06),transparent);}
+
+  /* ---------- avatar keep-out (top-right) ---------- */
+  .avatar-zone,.pip{position:absolute;top:96px;right:48px;width:214px;height:380px;z-index:60;
+    border-radius:22px;border:1px dashed rgba(255,255,255,.14);
+    background:repeating-linear-gradient(45deg,rgba(255,255,255,.02) 0 10px,transparent 10px 20px);
+    pointer-events:none;}
+  .avatar-zone::after{content:"";}
+
+  /* ---------- scenes ---------- */
+  .scene{position:absolute;inset:0;z-index:10;display:none;flex-direction:column;
+    width:100%;height:100%;padding:44px 44px 0;gap:20px;}
+  .scene.active{display:flex;}
+
+  /* ---------- top bar ---------- */
+  .topbar{display:flex;align-items:center;gap:14px;flex:0 0 auto;}
+  .brand{display:flex;align-items:center;gap:12px;}
+  .logo-mark{width:44px;height:44px;border-radius:12px;flex:0 0 auto;
+    background:conic-gradient(from 210deg,var(--cyan),var(--blue),var(--violet),var(--cyan));
+    display:grid;place-items:center;box-shadow:0 0 22px rgba(56,214,255,.35);}
+  .logo-mark span{font-weight:800;color:#04121f;font-size:22px;}
+  .brand-txt b{display:block;font-size:22px;letter-spacing:.04em;color:var(--ink);}
+  .brand-txt small{display:block;font-size:12px;color:var(--muted);letter-spacing:.14em;}
+  .status-chip{margin-left:auto;display:flex;align-items:center;gap:8px;
+    padding:8px 14px;border-radius:999px;background:var(--panel);border:1px solid var(--line);
+    font-size:13px;color:var(--muted);letter-spacing:.06em;}
+  .dot{width:8px;height:8px;border-radius:50%;background:var(--green);box-shadow:0 0 10px var(--green);}
+
+  /* ---------- generic blocks ---------- */
+  .block{background:var(--panel);border:1px solid var(--line);border-radius:20px;
+    padding:26px 28px;position:relative;overflow:hidden;}
+  .eyebrow{display:inline-flex;align-items:center;gap:10px;font-size:14px;letter-spacing:.24em;
+    color:var(--cyan);text-transform:uppercase;font-weight:700;}
+  .eyebrow::before{content:"";width:26px;height:2px;background:var(--cyan);border-radius:2px;}
+  .headline{max-width:650px;font-size:52px;line-height:1.12;font-weight:800;color:var(--ink);letter-spacing:-.01em;}
+  .headline .hl{color:var(--amber);}
+  .sub{font-size:20px;color:var(--muted);line-height:1.5;}
+
+  /* ---------- hero scene ---------- */
+  .hero-main{flex:1;display:flex;flex-direction:column;justify-content:center;gap:26px;}
+  .kicker{font-size:16px;letter-spacing:.3em;color:var(--cyan);font-weight:700;}
+  .big-title{font-size:78px;line-height:1.05;font-weight:900;color:var(--ink);letter-spacing:-.02em;}
+  .big-title em{font-style:normal;color:var(--amber);}
+  .big-title .strike{position:relative;color:var(--muted);}
+  .big-title .strike::after{content:"";position:absolute;left:-2%;right:-2%;top:52%;height:6px;
+    background:var(--red);border-radius:4px;transform:scaleX(0);transform-origin:left;}
+  .hero-sub{font-size:22px;color:var(--muted);max-width:640px;line-height:1.55;}
+
+  .excel-card{background:linear-gradient(180deg,#0d1526,#0a1120);border:1px solid var(--line);
+    border-radius:18px;padding:18px;box-shadow:0 24px 60px rgba(0,0,0,.4);}
+  .excel-head{display:flex;align-items:center;gap:10px;margin-bottom:14px;}
+  .excel-head .tab{font-size:13px;color:var(--muted);padding:6px 12px;border-radius:8px;background:var(--panel2);}
+  .excel-head .tab.on{color:#04121f;background:var(--green);font-weight:700;}
+  .excel-head .file{margin-left:auto;font-size:13px;color:var(--muted);font-family:var(--mono);}
+  table.grid{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:15px;}
+  table.grid th,table.grid td{border:1px solid rgba(255,255,255,.07);padding:11px 12px;text-align:left;color:var(--ink);}
+  table.grid th{background:rgba(255,255,255,.05);color:var(--muted);font-weight:600;font-size:13px;}
+  table.grid td.num{color:var(--cyan);}
+  table.grid tr.row-hl td{background:rgba(255,180,84,.14);}
+  .copy-cursor{position:absolute;right:26px;bottom:26px;width:34px;height:34px;border-radius:50%;
+    background:rgba(56,214,255,.18);border:1px solid var(--cyan);display:grid;place-items:center;
+    color:var(--cyan);font-size:16px;}
+
+  /* ---------- pain / fragmentation ---------- */
+  .pain-top{flex:0 0 auto;}
+  .frag-wrap{flex:1;display:flex;flex-direction:column;gap:18px;justify-content:center;}
+  .frag-row{display:flex;gap:16px;}
+  .tool{flex:1;background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:18px;
+    display:flex;flex-direction:column;gap:10px;position:relative;}
+  .tool .ticon{width:46px;height:46px;border-radius:12px;display:grid;place-items:center;font-size:22px;}
+  .tool h4{font-size:19px;color:var(--ink);font-weight:700;}
+  .tool p{font-size:14px;color:var(--muted);line-height:1.4;}
+  .tool .badge{position:absolute;top:14px;right:14px;font-size:12px;color:var(--red);
+    background:rgba(255,93,108,.12);border:1px solid rgba(255,93,108,.3);padding:3px 9px;border-radius:999px;}
+  .t-search .ticon{background:rgba(56,214,255,.16);color:var(--cyan);}
+  .t-data .ticon{background:rgba(79,125,255,.16);color:var(--blue);}
+  .t-wa .ticon{background:rgba(55,224,160,.16);color:var(--green);}
+  .t-crm .ticon{background:rgba(139,123,255,.16);color:var(--violet);}
+
+  .switch-panel{flex:0 0 auto;background:linear-gradient(180deg,#0d1526,#0a1120);border:1px solid var(--line);
+    border-radius:18px;padding:20px 22px;}
+  .switch-panel .sp-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;}
+  .switch-panel .sp-head b{font-size:18px;color:var(--ink);}
+  .switch-panel .sp-head .warn{font-size:13px;color:var(--red);display:flex;align-items:center;gap:8px;}
+  .win-tabs{display:flex;gap:10px;flex-wrap:wrap;}
+  .win-tab{font-size:13px;padding:8px 12px;border-radius:10px;background:var(--panel2);color:var(--muted);
+    border:1px solid var(--line);font-family:var(--mono);}
+  .win-tab.hot{color:var(--amber);border-color:rgba(255,180,84,.4);}
+  .chaos-svg{width:100%;height:120px;margin-top:14px;}
+  .chaos-svg path{fill:none;stroke:var(--red);stroke-width:2.5;stroke-linecap:round;opacity:.85;}
+  .chaos-svg circle{fill:var(--amber);}
+
+  /* ---------- solution ---------- */
+  .sol-top{flex:0 0 auto;}
+  .flow-wrap{flex:1;display:flex;flex-direction:column;gap:18px;justify-content:center;}
+  .flow{display:flex;align-items:stretch;gap:0;}
+  .node{flex:1;background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:20px 16px;
+    text-align:center;position:relative;}
+  .node .nicon{width:52px;height:52px;border-radius:14px;margin:0 auto 12px;display:grid;place-items:center;font-size:24px;}
+  .node h4{font-size:18px;color:var(--ink);font-weight:700;}
+  .node p{font-size:13px;color:var(--muted);margin-top:6px;line-height:1.4;}
+  .node.n1 .nicon{background:rgba(56,214,255,.16);color:var(--cyan);}
+  .node.n2 .nicon{background:rgba(55,224,160,.16);color:var(--green);}
+  .node.n3 .nicon{background:rgba(139,123,255,.16);color:var(--violet);}
+  .arrow{flex:0 0 46px;display:grid;place-items:center;color:var(--cyan);font-size:26px;}
+  .backend{background:linear-gradient(180deg,#0d1526,#0a1120);border:1px solid var(--line);border-radius:18px;padding:22px;}
+  .backend .bh{display:flex;align-items:center;gap:12px;margin-bottom:16px;}
+  .backend .bh b{font-size:19px;color:var(--ink);}
+  .single-badge{margin-left:auto;font-size:13px;color:#04121f;background:var(--green);padding:6px 14px;border-radius:999px;font-weight:700;}
+  .mini-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;}
+  .mini{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:14px;text-align:center;}
+  .mini .mi{font-size:22px;}
+  .mini .mt{font-size:13px;color:var(--muted);margin-top:6px;}
+
+  /* ---------- cta ---------- */
+  .cta-main{flex:1;display:flex;flex-direction:column;justify-content:center;gap:26px;}
+  .cta-title{font-size:60px;line-height:1.1;font-weight:900;color:var(--ink);}
+  .cta-title em{font-style:normal;color:var(--green);}
+  .stat-row{display:flex;gap:16px;}
+  .stat{flex:1;background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:20px;text-align:center;}
+  .stat .sv{font-size:44px;font-weight:900;color:var(--cyan);font-family:var(--mono);}
+  .stat .sl{font-size:14px;color:var(--muted);margin-top:6px;}
+  .cta-btn{align-self:flex-start;display:inline-flex;align-items:center;gap:14px;
+    padding:22px 40px;border-radius:16px;font-size:26px;font-weight:800;color:#04121f;
+    background:linear-gradient(90deg,var(--green),var(--cyan));box-shadow:0 0 30px rgba(55,224,160,.4);}
+  .cta-btn .arw{font-size:28px;}
+  .cta-foot{display:flex;align-items:center;gap:10px;font-size:15px;color:var(--muted);}
+  .cta-foot .tag{padding:5px 12px;border-radius:999px;background:var(--panel2);border:1px solid var(--line);}
+
+  /* ---------- bottom info strip ---------- */
+  .bottom-strip{flex:0 0 auto;margin-top:auto;padding:22px 0 30px;display:flex;flex-direction:column;gap:14px;}
+  .progress{height:6px;border-radius:6px;background:var(--panel2);overflow:hidden;}
+  .progress i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--cyan),var(--green));}
+  .strip-meta{display:flex;align-items:center;gap:16px;font-size:13px;color:var(--muted);letter-spacing:.06em;}
+  .strip-meta .sep{width:1px;height:14px;background:var(--line);}
+  .strip-meta .live{color:var(--green);}
+
+  /* ---------- captions ---------- */
+  .caption-layer{position:absolute;left:0;right:0;bottom:24%;z-index:50;display:flex;justify-content:center;pointer-events:none;}
+  .clip.caption{display:none;max-width:62%;background:rgba(6,10,20,.72);backdrop-filter:blur(6px);
+    border:1px solid var(--line);border-radius:14px;padding:14px 22px;font-size:37px;line-height:1.35;
+    color:var(--ink);text-align:center;box-shadow:0 10px 30px rgba(0,0,0,.4);}
+  .clip.caption.show{display:block;}
+  .clip.caption b{color:var(--amber);font-weight:800;}
+  video[data-video-role="avatar"],#heygen_avatar{position:absolute;top:96px;right:48px;width:214px;height:380px;
+    z-index:80;object-fit:cover;object-position:center top;border-radius:22px;overflow:hidden;
+    border:2px solid rgba(255,255,255,.18);background:#050914;box-shadow:0 18px 48px rgba(0,0,0,.42);}
+</style>
+  <style id="vertical-centered-content-contract">
+    [data-coverage="full"]{justify-content:center!important;}
+    [data-coverage="full"] > .topbar{position:absolute!important;top:0!important;left:0!important;right:0!important;}
+    [data-coverage="full"] > .head,[data-coverage="full"] > .body{flex:0 1 auto!important;}
+  </style>
+</head>
+<body>
+<div id="stage" data-composition-id="touchsea-foreign-trade-acquisition"
+     data-width="1080" data-height="1920" data-duration="30"
+     data-caption-sync="transcript-required" data-authoring-duration="30" data-timeline-scale="1">
+  <div class="bg-glow"></div>
+  <div class="bg-grid"></div>
+  <div class="bg-scan" id="scan"></div>
+
+  <!-- composition content -->
+  <div class="composition-content" style="position:absolute;inset:0;">
+
+    <!-- ===================== SCENE 1 : HOOK ===================== -->
+    <section class="scene clip active" id="scene-1" data-scene="s01" data-start="0" data-duration="8" data-coverage="full">
+      <div class="topbar">
+        <div class="brand">
+          <div class="logo-mark"><span>触</span></div>
+          <div class="brand-txt"><b>触海科技</b><small>TOUCHSEA · FOREIGN TRADE</small></div>
+        </div>
+        <div class="status-chip"><span class="dot"></span>痛点诊断中</div>
+      </div>
+
+      <div class="hero-main">
+        <div class="kicker">外贸获客 · 效率真相</div>
+        <h1 class="big-title">还在手动复制<br><span class="strike">海关数据到 Excel</span>？</h1>
+        <p class="hero-sub">搜索、海关数据、WhatsApp、CRM 各管各的，老板和销售每天都在做重复搬运。</p>
+
+        <div class="excel-card">
+          <div class="excel-head">
+            <span class="tab on">Sheet1</span><span class="tab">客户名单</span>
+            <span class="file">customs_data.xlsx</span>
+          </div>
+          <table class="grid">
+            <tr><th>国家</th><th>进口商</th><th>HS编码</th><th>金额</th></tr>
+            <tr class="row-hl"><td>US</td><td>GlobalTrade Inc.</td><td class="num">8471.30</td><td class="num">$128K</td></tr>
+            <tr><td>DE</td><td>Rhein Import GmbH</td><td class="num">8517.62</td><td class="num">$96K</td></tr>
+            <tr><td>JP</td><td>Sakura Trading Co.</td><td class="num">8471.50</td><td class="num">$74K</td></tr>
+          </table>
+          <div class="copy-cursor" id="cursor">⌘C</div>
+        </div>
+      </div>
+
+      <div class="bottom-strip">
+        <div class="progress"><i id="prog"></i></div>
+        <div class="strip-meta">
+          <span class="live">● 口播同步</span><span class="sep"></span>
+          <span>场景 1 / 5</span><span class="sep"></span>
+          <span>时长 30s</span><span class="sep"></span>
+          <span>#外贸获客 #B2B营销 #触海科技</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================== SCENE 2 : PAIN ===================== -->
+    <section class="scene clip" id="scene-2" data-scene="s02" data-start="8" data-duration="8" data-coverage="full">
+      <div class="topbar">
+        <div class="brand">
+          <div class="logo-mark"><span>触</span></div>
+          <div class="brand-txt"><b>触海科技</b><small>TOUCHSEA · FOREIGN TRADE</small></div>
+        </div>
+        <div class="status-chip"><span class="dot"></span>问题拆解</div>
+      </div>
+
+      <div class="pain-top block">
+        <div class="eyebrow">核心痛点</div>
+        <h2 class="headline" style="margin-top:14px;">不是团队不努力，<br>是<span class="hl">工具太分散</span>。</h2>
+      </div>
+
+      <div class="frag-wrap">
+        <div class="frag-row">
+          <div class="tool t-search"><div class="ticon">🔍</div><h4>搜索客户</h4><p>Google / LinkedIn 找线索</p><span class="badge">平台 A</span></div>
+          <div class="tool t-data"><div class="ticon">📊</div><h4>查海关数据</h4><p>另开一个数据网站</p><span class="badge">平台 B</span></div>
+        </div>
+        <div class="frag-row">
+          <div class="tool t-wa"><div class="ticon">💬</div><h4>发 WhatsApp</h4><p>第三个聊天软件</p><span class="badge">平台 C</span></div>
+          <div class="tool t-crm"><div class="ticon">🗂️</div><h4>录入 CRM</h4><p>再回后台手动填跟进</p><span class="badge">平台 D</span></div>
+        </div>
+      </div>
+
+      <div class="bottom-strip">
+        <div class="progress"><i id="prog2"></i></div>
+        <div class="strip-meta">
+          <span class="live">● 口播同步</span><span class="sep"></span>
+          <span>场景 2 / 5</span><span class="sep"></span>
+          <span>四个界面来回切换</span><span class="sep"></span>
+          <span>#外贸SaaS #效率提升</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================== SCENE 3 : CHAOS ===================== -->
+    <section class="scene clip" id="scene-3" data-scene="s03" data-start="16" data-duration="6" data-coverage="full">
+      <div class="topbar">
+        <div class="brand">
+          <div class="logo-mark"><span>触</span></div>
+          <div class="brand-txt"><b>触海科技</b><small>TOUCHSEA · FOREIGN TRADE</small></div>
+        </div>
+        <div class="status-chip"><span class="dot"></span>成本可视化</div>
+      </div>
+
+      <div class="pain-top block">
+        <div class="eyebrow">碎片化的代价</div>
+        <h2 class="headline" style="margin-top:14px;">每天在四个界面之间<br><span class="hl">来回切换，头都大了</span>。</h2>
+      </div>
+
+      <div class="switch-panel">
+        <div class="sp-head">
+          <b>今日窗口切换记录</b>
+          <span class="warn">▲ 线索易漏 · 记录对不上</span>
+        </div>
+        <div class="win-tabs">
+          <span class="win-tab hot">search.html</span>
+          <span class="win-tab">crm.touchsea</span>
+          <span class="win-tab hot">whatsapp.web</span>
+          <span class="win-tab">data.gov.cn</span>
+          <span class="win-tab hot">search.html</span>
+          <span class="win-tab">crm.touchsea</span>
+        </div>
+        <svg class="chaos-svg" viewBox="0 0 900 120" preserveAspectRatio="none">
+          <path d="M20,90 L160,30 L300,100 L440,20 L580,95 L720,35 L880,80"/>
+          <circle cx="20" cy="90" r="6"/><circle cx="160" cy="30" r="6"/><circle cx="300" cy="100" r="6"/>
+          <circle cx="440" cy="20" r="6"/><circle cx="580" cy="95" r="6"/><circle cx="720" cy="35" r="6"/><circle cx="880" cy="80" r="6"/>
+        </svg>
+      </div>
+
+      <div class="bottom-strip">
+        <div class="progress"><i id="prog3"></i></div>
+        <div class="strip-meta">
+          <span class="live">● 口播同步</span><span class="sep"></span>
+          <span>场景 3 / 5</span><span class="sep"></span>
+          <span>沟通记录常常对不上</span><span class="sep"></span>
+          <span>#外贸获客 #效率提升</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================== SCENE 4 : SOLUTION ===================== -->
+    <section class="scene clip" id="scene-4" data-scene="s04" data-start="22" data-duration="5" data-coverage="full">
+      <div class="topbar">
+        <div class="brand">
+          <div class="logo-mark"><span>触</span></div>
+          <div class="brand-txt"><b>触海科技</b><small>TOUCHSEA · FOREIGN TRADE</small></div>
+        </div>
+        <div class="status-chip"><span class="dot"></span>解决方案</div>
+      </div>
+
+      <div class="sol-top block">
+        <div class="eyebrow">一站式连接</div>
+        <h2 class="headline" style="margin-top:14px;">搜索 · 触达 · 跟进，<br><span class="hl">全流程打通</span>。</h2>
+      </div>
+
+      <div class="flow-wrap">
+        <div class="flow">
+          <div class="node n1"><div class="nicon">🔍</div><h4>发现客户</h4><p>智能搜索 + 海关数据</p></div>
+          <div class="arrow">→</div>
+          <div class="node n2"><div class="nicon">💬</div><h4>直接沟通</h4><p>一键发起 WhatsApp</p></div>
+          <div class="arrow">→</div>
+          <div class="node n3"><div class="nicon">🗂️</div><h4>自动同步</h4><p>实时写入 CRM</p></div>
+        </div>
+
+        <div class="backend">
+          <div class="bh"><b>统一后台操作面板</b><span class="single-badge">一个后台完成</span></div>
+          <div class="mini-grid">
+            <div class="mini"><div class="mi">🔎</div><div class="mt">线索池</div></div>
+            <div class="mini"><div class="mi">📈</div><div class="mt">数据看板</div></div>
+            <div class="mini"><div class="mi">✉️</div><div class="mt">消息中心</div></div>
+            <div class="mini"><div class="mi">🤝</div><div class="mt">跟进记录</div></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="bottom-strip">
+        <div class="progress"><i id="prog4"></i></div>
+        <div class="strip-meta">
+          <span class="live">● 口播同步</span><span class="sep"></span>
+          <span>场景 4 / 5</span><span class="sep"></span>
+          <span>无需反复跳转</span><span class="sep"></span>
+          <span>#触海科技 #外贸SaaS</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================== SCENE 5 : CTA ===================== -->
+    <section class="scene clip" id="scene-5" data-scene="s05" data-start="27" data-duration="3" data-coverage="full">
+      <div class="topbar">
+        <div class="brand">
+          <div class="logo-mark"><span>触</span></div>
+          <div class="brand-txt"><b>触海科技</b><small>TOUCHSEA · FOREIGN TRADE</small></div>
+        </div>
+        <div class="status-chip"><span class="dot"></span>开始使用</div>
+      </div>
+
+      <div class="cta-main">
+        <div class="eyebrow">告别碎片化</div>
+        <h2 class="cta-title">让销售专注谈单，<br><em>提升整体获客转化率</em>。</h2>
+
+        <div class="stat-row">
+          <div class="stat"><div class="sv" id="counter">0%</div><div class="sl">流程整合度</div></div>
+          <div class="stat"><div class="sv">1</div><div class="sl">统一后台</div></div>
+          <div class="stat"><div class="sv">0</div><div class="sl">重复跳转</div></div>
+        </div>
+
+        <div class="cta-btn" id="ctaBtn">点击免费开始 <span class="arw">→</span></div>
+        <div class="cta-foot">
+          <span class="tag">专业</span><span class="tag">直接</span><span class="tag">可信</span>
+          <span>体验高效外贸工作流</span>
+        </div>
+      </div>
+
+      <div class="bottom-strip">
+        <div class="progress"><i id="prog5"></i></div>
+        <div class="strip-meta">
+          <span class="live">● 口播同步</span><span class="sep"></span>
+          <span>场景 5 / 5</span><span class="sep"></span>
+          <span>点击免费开始</span><span class="sep"></span>
+          <span>#外贸获客 #B2B营销 #触海科技</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================== CAPTIONS ===================== -->
+    <div class="caption-layer">
+      <!-- CAPTIONS_START -->
+      <div class="clip caption" data-start="0.0"  data-duration="3.9" data-track-index="4">还在手动复制<b>海关数据</b>？</div>
+      <div class="clip caption" data-start="3.9"  data-duration="4.1" data-track-index="4">很多外贸老板抱怨<b>获客效率太低</b></div>
+      <div class="clip caption" data-start="8.0"  data-duration="3.9" data-track-index="4">不是团队不努力，是<b>工具太分散</b></div>
+      <div class="clip caption" data-start="11.9" data-duration="4.1" data-track-index="4">搜索、查数据<b>各在不同平台</b></div>
+      <div class="clip caption" data-start="16.0" data-duration="4.4" data-track-index="4">发 WhatsApp 又是<b>第三个软件</b></div>
+      <div class="clip caption" data-start="20.4" data-duration="4.3" data-track-index="4">还得回 CRM <b>手动录入跟进</b></div>
+      <div class="clip caption" data-start="24.8" data-duration="4.4" data-track-index="4">四个界面来回切换，<b>头都大了</b></div>
+      <div class="clip caption" data-start="29.2" data-duration="4.1" data-track-index="4">线索容易漏掉，<b>记录也常对不上</b></div>
+      <div class="clip caption" data-start="33.3" data-duration="6.2" data-track-index="4">触海科技<b>智能获客平台</b>解决分散痛点</div>
+      <div class="clip caption" data-start="39.5" data-duration="4.6" data-track-index="4">一站式连接<b>搜索·触达·跟进</b></div>
+      <div class="clip caption" data-start="44.1" data-duration="6.0" data-track-index="4">从发现客户到沟通<b>再到自动同步CRM</b></div>
+      <div class="clip caption" data-start="50.1" data-duration="4.6" data-track-index="4">所有动作<b>一个后台完成</b>，无需跳转</div>
+      <div class="clip caption" data-start="54.7" data-duration="5.0" data-track-index="4">让销售<b>专注谈单</b>，拒绝数据搬运</div>
+      <div class="clip caption" data-start="59.7" data-duration="4.1" data-track-index="4">告别碎片化，<b>提升获客转化率</b></div>
+      <div class="clip caption" data-start="63.9" data-duration="3.9" data-track-index="4"><b>点击免费开始</b>，体验高效工作流</div>
+      <!-- CAPTIONS_END -->
+    </div>
+
+    <!-- avatar keep-out zone (must stay empty) -->
+    <div class="avatar-zone pip" aria-hidden="true"></div>
+
+    <!-- media placeholders (activated by sync_video.py before render) -->
+    <template data-media-type="video" data-media-id="heygen_avatar" data-video-role="avatar" data-media-src="素材/avatar.mp4" data-start="0" data-duration="30"></template>
+    <template data-media-type="audio" data-media-id="voiceover_main" data-audio-role="voiceover" data-media-src="素材/voiceover.mp3" data-start="0" data-duration="30"></template>
+    <template data-media-type="audio" data-media-id="bgm_loop" data-audio-role="background-music" data-media-src="素材/bgm.mp3" data-start="0" data-duration="30"></template>
+    <script data-src="素材/vendor/gsap.min.js"></script>
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ---------- fitRootToViewport ---------- */
+  function fitRootToViewport(){
+    var stage=document.getElementById('stage');
+    if(!stage)return;
+    var W=1080,H=1920;
+    var s=Math.min(window.innerWidth/W,window.innerHeight/H);
+    stage.style.transform='scale('+s+')';
+    document.body.style.height=(H*s)+'px';
+    document.body.style.width=(W*s)+'px';
+  }
+  window.addEventListener('resize',fitRootToViewport);
+  fitRootToViewport();
+
+  /* ---------- timeline scale ---------- */
+  var timelineScale=Number(document.querySelector('[data-timeline-scale]').getAttribute('data-timeline-scale'))||1;
+  var at=function(seconds){return Number(seconds)*timelineScale;};
+
+  /* ---------- GSAP preview stub (no error if CDN blocked) ---------- */
+  function makeStubTimeline(){
+    var tl={_paused:true,_children:[],
+      from:function(){this._children.push(['from']);return this;},
+      to:function(){this._children.push(['to']);return this;},
+      set:function(){this._children.push(['set']);return this;},
+      eventCallback:function(){return this;},
+      seek:function(t){this._time=t;return this;},
+      time:function(t){if(t===undefined)return this._time||0;this._time=t;return this;},
+      duration:function(d){this._dur=d;return this;},
+      play:function(){return this;},pause:function(){return this;},
+      add:function(){return this;},addLabel:function(){return this;},
+      progress:function(p){return this;}
+    };
+    return tl;
+  }
+  var hasGsap=(typeof window.gsap!=='undefined'&&window.gsap&&window.gsap.timeline);
+  var gsapLib=hasGsap?window.gsap:null;
+  var master=gsapLib?gsapLib.timeline({paused:true}):makeStubTimeline();
+  window.__timelines=window.__timelines||{};
+  window.__timelines['touchsea-foreign-trade-acquisition']=master;
+
+  /* ---------- build motion timeline ---------- */
+  if(gsapLib){
+    // Scene 1 hook
+    master.from('.scene[data-scene="s01"] .kicker',{opacity:0,y:20,duration:at(0.6),ease:'power3.out'},at(0.2));
+    master.from('.scene[data-scene="s01"] .big-title',{opacity:0,y:24,duration:at(0.7),ease:'power3.out'},at(0.4));
+    master.from('.scene[data-scene="s01"] .excel-card',{opacity:0,y:20,duration:at(0.6),ease:'power3.out'},at(0.6));
+    master.from('.scene[data-scene="s01"] .excel-card tr',{opacity:0,x:-14,stagger:at(0.12),duration:at(0.4),ease:'power2.out'},at(0.9));
+    master.to('#cursor',{scale:0.9,duration:at(0.2),yoyo:true,repeat:1,ease:'power2.out'},at(1.4));
+
+    // Scene 2 pain
+    master.from('.scene[data-scene="s02"] .headline',{opacity:0,y:20,duration:at(0.6),ease:'power3.out'},at(8.2));
+    master.from('.scene[data-scene="s02"] .tool',{opacity:0,scale:0.85,stagger:at(0.1),duration:at(0.7),ease:'expo.out'},at(8.6));
+
+    // Scene 3 chaos
+    master.from('.scene[data-scene="s03"] .headline',{opacity:0,y:20,duration:at(0.6),ease:'power3.out'},at(16.2));
+    master.from('.scene[data-scene="s03"] .win-tab',{opacity:0,y:10,stagger:at(0.08),duration:at(0.4),ease:'power2.out'},at(16.6));
+    master.fromTo('.scene[data-scene="s03"] .chaos-svg path',{strokeDasharray:1200,strokeDashoffset:1200},{strokeDashoffset:0,duration:at(1.2),ease:'power2.inOut'},at(17.0));
+
+    // Scene 4 solution
+    master.from('.scene[data-scene="s04"] .headline',{opacity:0,y:20,duration:at(0.6),ease:'power3.out'},at(22.2));
+    master.from('.scene[data-scene="s04"] .node',{opacity:0,y:12,stagger:at(0.15),duration:at(0.8),ease:'power3.out'},at(22.6));
+    master.from('.scene[data-scene="s04"] .arrow',{opacity:0,scale:0.6,stagger:at(0.15),duration:at(0.5),ease:'power2.out'},at(22.9));
+    master.from('.scene[data-scene="s04"] .backend',{opacity:0,y:16,duration:at(0.6),ease:'power3.out'},at(23.4));
+    master.from('.scene[data-scene="s04"] .mini',{opacity:0,scale:0.8,stagger:at(0.08),duration:at(0.4),ease:'power2.out'},at(23.6));
+
+    // Scene 5 cta
+    master.from('.scene[data-scene="s05"] .cta-title',{opacity:0,y:20,duration:at(0.6),ease:'power3.out'},at(27.2));
+    master.from('.scene[data-scene="s05"] .stat',{opacity:0,y:14,stagger:at(0.1),duration:at(0.5),ease:'power2.out'},at(27.5));
+    master.from('#ctaBtn',{scale:0.5,opacity:0,duration:at(0.8),ease:'power3.out'},at(27.9));
+  }else{
+    // stub demo entries so structure exists without errors
+    master.from({},{}).to({},{}).set({});
+  }
+
+  /* ---------- deterministic scene/caption sync from the owned timeline ---------- */
+  var scenes=[].slice.call(document.querySelectorAll('.scene'));
+  var caps=[].slice.call(document.querySelectorAll('.clip.caption'));
+  var progEls={'s01':'#prog','s02':'#prog2','s03':'#prog3','s04':'#prog4','s05':'#prog5'};
+  var current=null;
+  var totalDuration=Number(document.getElementById('stage').getAttribute('data-duration'))||30;
+
+  function getStartFor(id){
+    var el=document.querySelector('.scene[data-scene="'+id+'"]');
+    return el?Number(el.getAttribute('data-start')):0;
+  }
+  function pickScene(t){
+    for(var i=scenes.length-1;i>=0;i--){
+      var st=Number(scenes[i].getAttribute('data-start'));
+      if(t>=st)return scenes[i].getAttribute('data-scene');
+    }
+    return scenes.length?scenes[0].getAttribute('data-scene'):'s01';
+  }
+  function showScene(id){
+    if(current===id)return;
+    scenes.forEach(function(s){s.classList.toggle('active',s.getAttribute('data-scene')===id);});
+    current=id;
+  }
+  function updateCaptions(t){
+    caps.forEach(function(c){
+      var st=Number(c.getAttribute('data-start'));
+      var du=Number(c.getAttribute('data-duration'));
+      c.classList.toggle('show',t>=st&&t<st+du);
+    });
+  }
+  function updateProgress(t){
+    var pct=Math.max(0,Math.min(1,t/totalDuration))*100;
+    Object.keys(progEls).forEach(function(k){
+      var el=document.querySelector(progEls[k]);
+      if(el)el.style.width=pct+'%';
+    });
+  }
+  function syncVisuals(t){
+    showScene(pickScene(t));
+    updateCaptions(t);
+    updateProgress(t);
+  }
+  master.eventCallback('onUpdate',function(){syncVisuals(master.time());});
+  syncVisuals(0);
+})();
+</script>
+</body>
+</html>

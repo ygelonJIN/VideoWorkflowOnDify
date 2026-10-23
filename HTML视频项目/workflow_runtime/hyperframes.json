@@ -1,0 +1,9 @@
+{
+  "name": "chuhai-product-demo",
+  "version": 1,
+  "composition": "index.html",
+  "width": 1080,
+  "height": 1920,
+  "fps": 25,
+  "duration": 30
+}
