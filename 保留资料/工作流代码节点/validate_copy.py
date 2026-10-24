@@ -70,7 +70,7 @@ def main(copy_text: str, brief_json: str) -> dict:
         if word in script:
             warnings.append("口播包含待合规复核表达: " + word)
 
-    allowed_purposes = {"hook", "pain", "solution", "proof", "cta"}
+    allowed_purposes = {"hook", "context", "pain", "insight", "solution", "proof", "example", "ending", "summary", "cta"}
     normalized_sentences = []
     seen_ids = set()
     cursor = 0.0
@@ -87,7 +87,7 @@ def main(copy_text: str, brief_json: str) -> dict:
         purpose = str(item.get("purpose") or "").strip()
         if purpose not in allowed_purposes:
             old = purpose or "empty"
-            purpose = "hook" if index == 1 else ("cta" if index == len(sentences) else "solution")
+            purpose = "hook" if index == 1 else ("ending" if index == len(sentences) else "insight")
             warnings.append("%s purpose=%s 已归一化为 %s" % (sentence_id, old, purpose))
         estimated = max(1.2, len(re.sub(r"\s+", "", text)) / 4.35)
         normalized_sentences.append({
@@ -104,9 +104,10 @@ def main(copy_text: str, brief_json: str) -> dict:
     if len(normalized_sentences) < 3:
         errors.append("口播至少需要 3 个完整句子")
     normalized_sentences[0]["purpose"] = "hook"
-    normalized_sentences[-1]["purpose"] = "cta"
-    if not any(item["purpose"] == "solution" for item in normalized_sentences):
-        normalized_sentences[min(1, len(normalized_sentences) - 1)]["purpose"] = "solution"
+    if normalized_sentences[-1]["purpose"] not in {"ending", "summary", "cta"}:
+        normalized_sentences[-1]["purpose"] = "ending"
+    if not any(item["purpose"] in {"insight", "solution"} for item in normalized_sentences):
+        normalized_sentences[min(1, len(normalized_sentences) - 1)]["purpose"] = "insight"
 
     normalized_captions = [item["text"] for item in normalized_sentences]
     supplied_captions = data.get("burned_in_caption_lines")

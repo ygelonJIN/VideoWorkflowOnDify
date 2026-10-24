@@ -33,10 +33,10 @@ def main(storyboard_text: str, script_json: str) -> dict:
             "scene_id": "s%02d" % (index + 1),
             "sentence_ids": [str(item.get("id") or "s%02d" % (index + 1))],
             "voiceover_text": str(item.get("text", "")),
-            "purpose": item.get("purpose") if item.get("purpose") in {"hook", "pain", "solution", "proof", "cta"} else ("hook" if index == 0 else ("cta" if index == len(sentences) - 1 else "solution")),
+            "purpose": item.get("purpose") if item.get("purpose") in {"hook", "context", "pain", "insight", "solution", "proof", "example", "ending", "summary", "cta"} else ("hook" if index == 0 else ("ending" if index == len(sentences) - 1 else "insight")),
             "visual_source": "reusable_ui_template",
             "ui_template": "workflow",
-            "on_screen_text": re.sub(r"\s+", "", str(item.get("text", "")))[:16],
+            "on_screen_text": re.sub(r"\s+", "", str(item.get("text", "")))[:160],
             "visual_brief": "展示当前口播对应的可复用界面、步骤、清单或信息组件",
             "motion": "关键信息逐项出现",
             "transition": "cut"
@@ -61,7 +61,7 @@ def main(storyboard_text: str, script_json: str) -> dict:
         "dashboard", "list", "workflow", "comparison", "timeline",
         "planner", "tracker", "story", "none"
     }
-    allowed_purposes = {"hook", "pain", "solution", "proof", "cta"}
+    allowed_purposes = {"hook", "context", "pain", "insight", "solution", "proof", "example", "ending", "summary", "cta"}
 
     normalized_scenes = []
     for index, scene in enumerate(scenes, 1):
@@ -91,7 +91,7 @@ def main(storyboard_text: str, script_json: str) -> dict:
         purpose = str(scene.get("purpose", "")).strip()
         if purpose not in allowed_purposes:
             old = purpose or "empty"
-            purpose = "hook" if index == 1 else ("cta" if index == len(scenes) else "solution")
+            purpose = "hook" if index == 1 else ("ending" if index == len(scenes) else "insight")
             warnings.append("%s purpose=%s 已归一化为 %s" % (scene_id, old, purpose))
         scene["purpose"] = purpose
         purposes.add(purpose)
@@ -113,14 +113,16 @@ def main(storyboard_text: str, script_json: str) -> dict:
         scene["ui_template"] = template
 
         on_screen = re.sub(r"\s+", "", str(scene.get("on_screen_text", "")))
-        if len(on_screen) > 16:
-            warnings.append("%s 屏幕主文案超过 16 字，已截断；这不影响完整句子字幕" % scene_id)
-            on_screen = on_screen[:16]
+        if len(on_screen) > 160:
+            warnings.append("%s 屏幕主文案超过 160 字，已截断；这不影响完整句子字幕" % scene_id)
+            on_screen = on_screen[:160]
         scene["on_screen_text"] = on_screen
 
         avatar = scene.get("avatar_pip") if isinstance(scene.get("avatar_pip"), dict) else {}
         avatar["visible"] = True
-        avatar["position"] = "top_right"
+        allowed_positions = {"composition", "top_left", "top_right", "bottom_left", "bottom_right", "custom"}
+        position = str(avatar.get("position") or "composition").strip()
+        avatar["position"] = position if position in allowed_positions else "composition"
         avatar["behavior"] = str(avatar.get("behavior") or "persistent")
         scene["avatar_pip"] = avatar
 
@@ -144,12 +146,12 @@ def main(storyboard_text: str, script_json: str) -> dict:
     if "hook" not in purposes:
         scenes[0]["purpose"] = "hook"
         warnings.append("缺少 hook，已将第一个场景设为 hook")
-    if "cta" not in purposes:
-        scenes[-1]["purpose"] = "cta"
-        warnings.append("缺少 cta，已将最后一个场景设为 cta")
-    if "solution" not in {item["purpose"] for item in scenes}:
-        scenes[min(1, len(scenes) - 1)]["purpose"] = "solution"
-        warnings.append("缺少 solution，已将中间场景设为 solution")
+    if not {"ending", "summary", "cta"} & purposes:
+        scenes[-1]["purpose"] = "ending"
+        warnings.append("缺少结尾角色，已将最后一个场景设为 ending")
+    if not {"insight", "solution"} & {item["purpose"] for item in scenes}:
+        scenes[min(1, len(scenes) - 1)]["purpose"] = "insight"
+        warnings.append("缺少核心内容角色，已将中间场景设为 insight")
 
     storyboard["scenes"] = scenes
     storyboard["validation"] = {"errors": [], "warnings": warnings}

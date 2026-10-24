@@ -14,7 +14,7 @@ def main(request_id: str, approved_package_json: str, production_requirements: s
     if not voiceover:
         raise ValueError("缺少已批准口播")
 
-    title = str(request_id or "").strip() or str(brief.get("brand", "video"))
+    title = str(request_id or "").strip() or str(brief.get("topic") or brief.get("source_text") or "video")
     payload = {
         "type": "avatar",
         "title": title,

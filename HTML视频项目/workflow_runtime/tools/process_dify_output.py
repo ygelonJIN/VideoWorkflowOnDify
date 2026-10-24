@@ -28,6 +28,30 @@ from sync_video import (  # noqa: E402
 )
 
 
+def find_embedded_package(text: str) -> dict:
+    """Find an approved-package JSON embedded after report prose or HTML."""
+    import json
+    decoder = json.JSONDecoder()
+    candidates = []
+    for index, char in enumerate(text):
+        if char != "{":
+            continue
+        try:
+            value, _ = decoder.raw_decode(text[index:])
+        except Exception:
+            continue
+        value = decode_json_value(value)
+        if not isinstance(value, dict):
+            continue
+        if any(key in value for key in ("approved_script", "approved_package_json", "voiceover_script", "html_document", "build_package_json", "build_package")):
+            candidates.append(value)
+    preferred = [
+        value for value in candidates
+        if any(key in value for key in ("approval", "approved_script", "approved_package_json", "build_package_json", "build_package"))
+    ]
+    return (preferred or candidates)[-1] if candidates else {}
+
+
 def unwrap_package(data: dict) -> dict:
     package = decode_json_value(data.get("build_package_json", data.get("build_package", data)))
     if isinstance(package, str):
@@ -137,11 +161,23 @@ def main() -> None:
     text = read_payload(args.input_file, args.project_name, args.terminal_paste)
     parsed = parse_json_object(text)
     if isinstance(parsed, dict) and any(
-        key in parsed for key in ("html_document", "html", "build_package_json", "build_package", "heygen_response_json", "voiceover_script")
+        key in parsed for key in ("html_document", "html", "build_package_json", "build_package", "heygen_response_json", "voiceover_script", "approved_script", "approved_package_json")
     ):
         data = parsed
     elif "<html" in text.lower():
-        data = {"html_document": text}
+        html_document = clean_html_document(text)
+        embedded = find_embedded_package(text)
+        if embedded:
+            package = dict(embedded)
+            package.setdefault("html_document", html_document)
+            approved_script = decode_json_value(package.get("approved_script", {}))
+            if isinstance(approved_script, dict):
+                voiceover = str(approved_script.get("voiceover_script") or approved_script.get("approved_voiceover_script") or "").strip()
+                if voiceover:
+                    package.setdefault("voiceover_script", voiceover)
+            data = {"build_package_json": package}
+        else:
+            data = {"html_document": text}
     else:
         raise SystemExit("输入内容不是合法 Dify JSON，也不是完整 HTML")
     package = unwrap_package(data)

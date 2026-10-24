@@ -30,28 +30,30 @@ def main(structured_input_text: str) -> dict:
                 return {}
         return {}
 
-    campaign = obj(data.get("campaign"))
+    topic_record = obj(data.get("topic_record") or data.get("campaign"))
     creative = obj(data.get("creative"))
-    brand = obj(data.get("brand"))
+    context = obj(data.get("context") or data.get("brand"))
     history = obj(data.get("history"))
 
-    if not campaign:
-        fallback_text = raw or "未提供活动需求"
-        campaign = {
-            "brand": "未提供品牌",
-            "product": "未提供产品",
-            "audience": "目标客户",
-            "pain": fallback_text[:120],
-            "facts_confirmed": [fallback_text[:200]] if fallback_text else [],
-            "offer": "",
-            "cta": "进一步了解",
-            "duration_seconds": 30,
-            "platform": "douyin"
-        }
+    topic = str(topic_record.get("topic") or topic_record.get("source_text") or raw or "当前主题").strip()
+    source_text = str(topic_record.get("source_text") or raw or topic).strip()
+    campaign = {
+        "topic": topic,
+        "source_text": source_text,
+        "audience_hint": str(topic_record.get("audience_hint") or topic_record.get("audience") or "").strip(),
+        "context": obj(topic_record.get("context")),
+        "facts_confirmed": topic_record.get("facts_confirmed") if isinstance(topic_record.get("facts_confirmed"), list) else [],
+        "constraints": topic_record.get("constraints") if isinstance(topic_record.get("constraints"), list) else [],
+        "duration_seconds": topic_record.get("duration_seconds", 30),
+    }
+    for key in ("brand", "product", "audience", "pain", "offer", "cta", "tone", "platform", "proof"):
+        value = topic_record.get(key)
+        if value not in (None, "", [], {}):
+            campaign[key] = value
 
     return {
         "campaign_json": json.dumps(campaign, ensure_ascii=False),
         "creative_json": json.dumps(creative, ensure_ascii=False),
-        "brand_json": json.dumps(brand, ensure_ascii=False),
+        "brand_json": json.dumps(context, ensure_ascii=False),
         "history_json": json.dumps(history, ensure_ascii=False)
     }

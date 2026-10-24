@@ -78,10 +78,15 @@ def parse_json_object(text: str):
 def paste_is_complete(text: str) -> bool:
     value = parse_json_object(text)
     if isinstance(value, dict) and any(
-        key in value for key in ("html_document", "html", "build_package_json", "build_package", "heygen_response_json", "voiceover_script")
+        key in value for key in ("html_document", "html", "build_package_json", "build_package", "heygen_response_json", "voiceover_script", "approved_script", "approved_package_json")
     ):
         return True
-    return "</html>" in text.lower()
+    lower = text.lower()
+    if "</html>" not in lower:
+        return False
+    if "视频内容生产资料" in text:
+        return any(marker in text for marker in ('"approved_script"', '"approved_package_json"', '"voiceover_script"'))
+    return True
 
 
 def read_terminal_paste(prompt: str, fd: int | None = None) -> str:

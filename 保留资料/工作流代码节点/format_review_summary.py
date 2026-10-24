@@ -14,7 +14,7 @@ def main(strategy_json: str, script_json: str, storyboard_json: str, motion_plan
     motion = parse(motion_plan_json)
     compliance = parse(compliance_json)
 
-    lines = ["# 视频内容人工审核", ""]
+    lines = ["# 自动生产摘要", ""]
     lines.append("## 内容角度")
     lines.append("- 核心结论：" + str(strategy.get("core_message") or script.get("hook") or "未填写"))
     hook = str(strategy.get("hook") or script.get("hook") or "")

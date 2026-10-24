@@ -5,9 +5,12 @@ PROJECT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$PROJECT_DIR"
 
 NODE_BIN="${NODE_BIN:-/tmp/node22-runtime/bin/node}"
-HF_CLI="${HYPERFRAMES_CLI:-/Users/jinfeiqing/.npm/_npx/7ba6bcc82b4b0196/node_modules/hyperframes/bin/hyperframes.mjs}"
+HF_CLI="${HYPERFRAMES_CLI:-}"
 CHROME_BIN="${HYPERFRAMES_BROWSER_PATH:-/Applications/Google Chrome.app/Contents/MacOS/Google Chrome}"
 
+if [ ! -x "$NODE_BIN" ]; then
+  NODE_BIN="$(find "$HOME/.nvm/versions/node" -path '*/bin/node' -type f 2>/dev/null | sort -V | tail -1 || true)"
+fi
 if [ ! -x "$NODE_BIN" ]; then
   NODE_BIN="$(command -v node || true)"
 fi
@@ -15,8 +18,14 @@ if [ -z "${NODE_BIN:-}" ]; then
   echo "缺少 Node.js，请安装 Node.js 22+。"
   exit 1
 fi
-if [ ! -f "$HF_CLI" ]; then
-  echo "缺少 HyperFrames CLI：$HF_CLI"
+if [ -z "$HF_CLI" ] || [ ! -f "$HF_CLI" ]; then
+  HF_CLI="$(find "$HOME/.npm/_npx" -path '*/node_modules/hyperframes/bin/hyperframes.mjs' -type f 2>/dev/null | sort | tail -1 || true)"
+fi
+if [ -z "$HF_CLI" ] || [ ! -f "$HF_CLI" ]; then
+  HF_CLI="$(command -v hyperframes || true)"
+fi
+if [ -z "$HF_CLI" ] || [ ! -f "$HF_CLI" ]; then
+  echo "缺少 HyperFrames CLI。请安装 Node.js 22+ 后运行 npx hyperframes --version。"
   exit 1
 fi
 if [ ! -x "$CHROME_BIN" ]; then
@@ -57,7 +66,6 @@ fi
 SYNC_ARGS=(
   --html index.html
   --voice "$VOICE_FILE"
-  --target-duration 30
 )
 if grep -q 'data-render-mode="black-frame"' index.html; then
   SYNC_ARGS+=(--black-frame)
@@ -71,6 +79,8 @@ python3 脚本/sync_video.py "${SYNC_ARGS[@]}" "${TRANSCRIPT_ARG[@]}"
 
 echo "检查生产排版/内容密度/音画同步契约..."
 python3 脚本/check_html_contract.py index.html
+echo "检查真实 DOM 的组件重叠、垂直构图和字幕规格..."
+HYPERFRAMES_CLI="$HF_CLI" HYPERFRAMES_BROWSER_PATH="$CHROME_BIN" "$NODE_BIN" 脚本/check_html_layout.mjs index.html
 
 if [ "${RUN_HYPERFRAMES_CHECK:-0}" = "1" ]; then
   echo "检查 HTML 组合..."
@@ -85,5 +95,11 @@ HYPERFRAMES_BROWSER_PATH="$CHROME_BIN" "$NODE_BIN" "$HF_CLI" render . \
   --no-browser-gpu \
   --experimental-fast-capture=false \
   -o ./成片/最终视频.mp4
+
+echo "标准化最终 MP4 响度..."
+python3 脚本/normalize_final_audio.py --video ./成片/最终视频.mp4
+
+echo "检查最终 MP4 的媒体主时钟与无数字人契约..."
+python3 脚本/check_final_video.py   --video ./成片/最终视频.mp4   --voice "$VOICE_FILE"   --html index.html
 
 echo "完成：$PROJECT_DIR/成片/最终视频.mp4"

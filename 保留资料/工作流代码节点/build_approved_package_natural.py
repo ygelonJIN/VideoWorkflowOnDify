@@ -18,12 +18,12 @@ def main(brief_json: str, draft_script_json: str, storyboard_json: str, motion_p
 
     voiceover = str(script.get("voiceover_script", "")).strip()
     if not voiceover:
-        raise ValueError("人工确认后的口播不能为空")
+        raise ValueError("自动通过的口播不能为空")
 
     package = {
         "approval": {
             "status": "approved",
-            "feedback": "人工审核动作：" + str(review_action or "approve"),
+            "feedback": "自动生产模式：" + str(review_action or "approve"),
             "approved_script_hash": hashlib.sha256(voiceover.encode("utf-8")).hexdigest()
         },
         "brief": brief,

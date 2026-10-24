@@ -6,7 +6,9 @@ import argparse
 import base64
 import json
 import os
+import re
 import shutil
+import urllib.error
 import urllib.request
 import subprocess
 import sys
@@ -44,9 +46,21 @@ def normalize_input(data: dict) -> dict:
         raise SystemExit("Dify 输出缺少 voiceover_script/approved_voiceover_script")
     if 'data-render-mode="black-frame"' not in html:
         raise SystemExit("HTML 缺少 data-render-mode=\"black-frame\"，拒绝混入数字人版本")
-    if 'data-video-role="avatar"' in html or 'data-media-id="heygen_avatar"' in html:
-        raise SystemExit("黑帧项目不得包含数字人媒体占位")
-    return {"html_document": html, "voiceover_script": voiceover, "render_mode": "black_frame"}
+    if re.search(r'data-video-role="avatar"|data-media-id="heygen_avatar"|class="[^"]*(?:avatar-window|black-frame)', html, re.I):
+        raise SystemExit("无数字人项目不得包含数字人媒体、数字人窗口或黑帧占位")
+    raw_tts = package.get("tts_config", {})
+    tts_config = raw_tts if isinstance(raw_tts, dict) else {}
+    return {
+        "html_document": html,
+        "voiceover_script": voiceover,
+        "render_mode": "black_frame",
+        "tts_config": {
+            "provider": str(tts_config.get("provider", "")).strip(),
+            "base_url": str(tts_config.get("base_url", "")).strip(),
+            "model": str(tts_config.get("model", "")).strip(),
+            "voice": str(tts_config.get("voice", "")).strip(),
+        },
+    }
 
 
 def generate_mimo_voice(script: str, output: Path, model: str, voice: str, base_url: str) -> None:
@@ -63,18 +77,30 @@ def generate_mimo_voice(script: str, output: Path, model: str, voice: str, base_
         "audio": {"format": "mp3", "voice": voice or "mimo_default"},
         "stream": False,
     }, ensure_ascii=False).encode("utf-8")
-    request = urllib.request.Request(
-        endpoint,
-        data=payload,
-        method="POST",
-        headers={"api-key": api_key, "Content-Type": "application/json", "Accept": "application/json"},
-    )
     output.parent.mkdir(parents=True, exist_ok=True)
-    try:
-        with urllib.request.urlopen(request, timeout=120) as response:
-            result = json.loads(response.read().decode("utf-8"))
-    except Exception as exc:
-        raise SystemExit(f"MiMo TTS API 调用失败：{type(exc).__name__}: {exc}") from exc
+    auth_options = [
+        {"Authorization": "Bearer " + api_key},
+        {"api-key": api_key},
+        {"X-Api-Key": api_key},
+    ]
+    result = None
+    last_error = None
+    for auth_headers in auth_options:
+        headers = {"Content-Type": "application/json", "Accept": "application/json", **auth_headers}
+        request = urllib.request.Request(endpoint, data=payload, method="POST", headers=headers)
+        try:
+            with urllib.request.urlopen(request, timeout=120) as response:
+                result = json.loads(response.read().decode("utf-8"))
+            break
+        except urllib.error.HTTPError as exc:
+            last_error = exc
+            if exc.code == 401:
+                continue
+            raise SystemExit(f"MiMo TTS API 调用失败：HTTP Error {exc.code}") from exc
+        except Exception as exc:
+            raise SystemExit(f"MiMo TTS API 调用失败：{type(exc).__name__}: {exc}") from exc
+    if result is None:
+        raise SystemExit("MiMo TTS 鉴权失败（401）：请确认 MIMO_API_KEY 是 Xiaomi MiMo 的有效 API Key，并匹配当前 Base 地址")
     try:
         audio_b64 = result["choices"][0]["message"]["audio"]["data"]
         audio = base64.b64decode(audio_b64)
@@ -162,19 +188,28 @@ def main() -> None:
     parser.add_argument("--input-file", type=Path, required=True)
     parser.add_argument("--replace", action="store_true")
     parser.add_argument("--voice-file", type=Path, help="可选：使用已有音频替代 TTS")
-    parser.add_argument("--voice-name", default=os.environ.get("MIMO_TTS_VOICE", os.environ.get("TTS_VOICE", "mimo_default")), help="音色名称：MiMo 预置音色、macOS voice 或其他 TTS voice ID")
+    parser.add_argument("--voice-name", default=None, help="音色名称：MiMo 预置音色、macOS voice 或其他 TTS voice ID；默认读取 Dify 配置或 mimo_default")
     parser.add_argument("--voice-rate", type=int, default=190, help="仅 macOS TTS 使用的语速")
-    parser.add_argument("--tts-provider", choices=("mimo", "macos", "openai-compatible"), default=os.environ.get("TTS_PROVIDER", "mimo"))
-    parser.add_argument("--tts-base-url", default=os.environ.get("TTS_BASE_URL", "https://api.xiaomimimo.com/v1"), help="MiMo/OpenAI-compatible API 基础地址")
-    parser.add_argument("--tts-model", default=os.environ.get("TTS_MODEL", "mimo-v2.5-tts"), help="TTS API 模型名")
+    parser.add_argument("--tts-provider", choices=("mimo", "macos", "openai-compatible"), default=None)
+    parser.add_argument("--tts-base-url", default=None, help="MiMo/OpenAI-compatible API 基础地址；默认读取 Dify 配置或 https://api.xiaomimimo.com/v1")
+    parser.add_argument("--tts-model", default=None, help="TTS API 模型名；默认读取 Dify 配置或 mimo-v2.5-tts")
     parser.add_argument("--skip-render", action="store_true")
     args = parser.parse_args()
 
     raw = json.loads(args.input_file.read_text(encoding="utf-8"))
     data = normalize_input(raw)
+    tts_config = data.get("tts_config", {})
+    provider = args.tts_provider or tts_config.get("provider") or os.environ.get("TTS_PROVIDER", "mimo")
+    base_url = args.tts_base_url or tts_config.get("base_url") or os.environ.get("TTS_BASE_URL", "https://api.xiaomimimo.com/v1")
+    model = args.tts_model or tts_config.get("model") or os.environ.get("TTS_MODEL", "mimo-v2.5-tts")
+    voice_name = args.voice_name or tts_config.get("voice") or os.environ.get("MIMO_TTS_VOICE", os.environ.get("TTS_VOICE", "mimo_default"))
     project_dir = BASE / args.project_name
     if project_dir.exists() and not args.replace:
-        raise SystemExit(f"项目文件夹已存在：{project_dir}。确认重渲染时添加 --replace")
+        final_video = project_dir / "成片" / "最终视频.mp4"
+        if final_video.exists():
+            raise SystemExit(f"项目文件夹已存在且包含成片：{project_dir}。确认重渲染时添加 --replace")
+        print(f"发现未完成项目：{project_dir}；将自动备份半成品并重建")
+        args.replace = True
 
     staging = BASE / "Dify输出" / args.project_name
     staging.mkdir(parents=True, exist_ok=True)
@@ -188,16 +223,21 @@ def main() -> None:
 
     backup_dir = None
     if project_dir.exists():
-        backup_root = BASE / "项目备份"
-        backup_root.mkdir(parents=True, exist_ok=True)
-        stamp = time.strftime("%Y%m%d-%H%M%S")
-        backup_dir = backup_root / f"{args.project_name}-{stamp}"
-        suffix = 1
-        while backup_dir.exists():
-            backup_dir = backup_root / f"{args.project_name}-{stamp}-{suffix}"
-            suffix += 1
-        shutil.move(str(project_dir), str(backup_dir))
-        print(f"旧项目已备份到：{backup_dir}")
+        final_video = project_dir / "成片" / "最终视频.mp4"
+        if not final_video.exists():
+            shutil.rmtree(project_dir)
+            print("未完成项目已清理，不保留备份")
+        else:
+            backup_root = BASE / "项目备份"
+            backup_root.mkdir(parents=True, exist_ok=True)
+            stamp = time.strftime("%Y%m%d-%H%M%S")
+            backup_dir = backup_root / f"{args.project_name}-{stamp}"
+            suffix = 1
+            while backup_dir.exists():
+                backup_dir = backup_root / f"{args.project_name}-{stamp}-{suffix}"
+                suffix += 1
+            shutil.move(str(project_dir), str(backup_dir))
+            print(f"旧项目已备份到：{backup_dir}")
 
     try:
         (project_dir / "媒体").mkdir(parents=True, exist_ok=True)
@@ -220,21 +260,28 @@ def main() -> None:
                 "-acodec", "libmp3lame", "-b:a", "160k",
                 "-af", "loudnorm=I=-16:TP=-1.5:LRA=11", str(voice_path),
             ], check=True)
-        elif args.tts_provider == "macos":
-            generate_macos_voice(data["voiceover_script"], voice_path, args.voice_name, args.voice_rate)
-        elif args.tts_provider == "mimo":
+        elif provider == "macos":
+            generate_macos_voice(data["voiceover_script"], voice_path, voice_name, args.voice_rate)
+        elif provider == "mimo":
             generate_mimo_voice(
-                data["voiceover_script"], voice_path, args.tts_model,
-                args.voice_name, args.tts_base_url,
+                data["voiceover_script"], voice_path, model,
+                voice_name, base_url,
             )
         else:
             generate_api_voice(
-                data["voiceover_script"], voice_path, args.tts_base_url,
-                args.tts_model, args.voice_name,
+                data["voiceover_script"], voice_path, base_url,
+                model, voice_name,
             )
         generate_background_music(project_dir)
+        ascii_media = project_dir / "media"
+        ascii_assets = project_dir / "assets"
+        ascii_media.mkdir(parents=True, exist_ok=True)
+        ascii_assets.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(voice_path, ascii_media / "voice.mp3")
+        shutil.copy2(project_dir / "媒体" / "背景音乐.mp3", ascii_media / "bgm.mp3")
+        shutil.copy2(RUNTIME_DIR / "assets" / "vendor" / "gsap.min.js", ascii_assets / "gsap.min.js")
         subprocess.run(["bash", str(project_dir / "render.sh")], cwd=project_dir, check=True)
-    except Exception:
+    except (Exception, SystemExit):
         failed_root = BASE / "失败项目"
         if project_dir.exists():
             failed_root.mkdir(parents=True, exist_ok=True)
