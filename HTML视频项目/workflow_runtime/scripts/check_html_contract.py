@@ -15,6 +15,7 @@ def main() -> None:
     args = parser.parse_args()
     doc = args.html.read_text(encoding="utf-8")
     errors: list[str] = []
+    black_frame = 'data-render-mode="black-frame"' in doc
 
     if not doc.lower().lstrip().startswith("<!doctype html>"):
         errors.append("缺少完整 HTML 文档头")
@@ -44,10 +45,18 @@ def main() -> None:
             errors.append("组件尺寸覆盖被禁止：" + selector.strip() + " 使用了 " + ",".join(used))
     if re.search(r'\bat\(\s*start\b', doc):
         errors.append("场景开始时间被二次缩放：data-start 已是真实秒数，禁止再次 at(start)")
-    if not re.search(r'\.avatar-zone \.avatar-window\{[^}]*top:0!important', doc):
-        errors.append("数字人内层未固定填满 .avatar-zone")
-    if not re.search(r'\.avatar-window video[^{]*\{[^}]*width:100%!important', doc):
-        errors.append("数字人视频未铺满小窗")
+    if black_frame:
+        if not re.search(r'\.avatar-black-frame\s*\{[^}]*top:\s*96px[^}]*right:\s*48px[^}]*width:\s*214px[^}]*height:\s*380px[^}]*background:\s*#000', doc, re.I):
+            errors.append("缺少固定 214×380 的右上角纯黑帧 .avatar-black-frame")
+        if 'data-video-role="avatar"' in doc or 'data-media-id="heygen_avatar"' in doc or '.avatar-window' in doc:
+            errors.append("黑帧模式不得包含数字人媒体、avatar 角色或数字人窗口")
+        if 'data-audio-role="voiceover"' not in doc:
+            errors.append("黑帧模式必须保留独立口播音频图层")
+    else:
+        if not re.search(r'\.avatar-zone \.avatar-window\{[^}]*top:0!important', doc):
+            errors.append("数字人内层未固定填满 .avatar-zone")
+        if not re.search(r'\.avatar-window video[^{]*\{[^}]*width:100%!important', doc):
+            errors.append("数字人视频未铺满小窗")
     if "font-size:37px!important" not in doc:
         errors.append("字幕字号不是固定 37px")
     if len(re.findall(r'data-coverage="full"', doc)) < 5:

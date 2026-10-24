@@ -78,7 +78,7 @@ def parse_json_object(text: str):
 def paste_is_complete(text: str) -> bool:
     value = parse_json_object(text)
     if isinstance(value, dict) and any(
-        key in value for key in ("html_document", "html", "build_package_json", "build_package", "heygen_response_json")
+        key in value for key in ("html_document", "html", "build_package_json", "build_package", "heygen_response_json", "voiceover_script")
     ):
         return True
     return "</html>" in text.lower()
@@ -268,6 +268,9 @@ def main() -> None:
     response_path = staging / "heygen_response.json"
     html_path.write_text(html, encoding="utf-8")
     response_path.write_text(json.dumps(response, ensure_ascii=False, indent=2), encoding="utf-8")
+    voiceover = str(data.get("voiceover_script", data.get("approved_voiceover_script", ""))).strip()
+    if voiceover:
+        (staging / "voiceover_script.txt").write_text(voiceover + "\n", encoding="utf-8")
 
     def response_path_value(payload, *path):
         value = payload

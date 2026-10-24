@@ -47,7 +47,7 @@ def main(campaign_json: str, creative_json: str, brand_json: str, history_json: 
         "hard_rules": {
             "one_angle_per_video": True,
             "voice_chars_per_second": 4.2,
-            "caption_max_chars": 16,
+            "caption_unit": "complete_sentence",
             "avatar_pip_position": "top_right",
             "semantic_change_interval_seconds": 2.5
         }

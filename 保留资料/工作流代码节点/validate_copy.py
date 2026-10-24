@@ -37,20 +37,22 @@ def main(copy_text: str, brief_json: str) -> dict:
     warnings = []
     errors = []
 
-    sentences = data.get("sentences")
-    if not isinstance(sentences, list):
-        sentences = []
+    supplied_sentences = data.get("sentences")
+    if not isinstance(supplied_sentences, list):
+        supplied_sentences = []
     script = str(data.get("voiceover_script", "")).strip()
-    if not script and sentences:
-        script = " ".join(str(item.get("text", "") if isinstance(item, dict) else item).strip() for item in sentences).strip()
+    if not script and supplied_sentences:
+        script = " ".join(str(item.get("text", "") if isinstance(item, dict) else item).strip() for item in supplied_sentences).strip()
     if not script:
         raise ValueError("voiceover_script 和 sentences 不能同时为空")
     data["voiceover_script"] = script
 
+    # The final script is the text truth. Rebuild captions by complete sentences,
+    # preserving terminal punctuation and never splitting or joining fragments.
+    sentence_texts = [match.group(0).strip() for match in re.finditer(r".*?(?:[。！？!?]+|$)", script, flags=re.S) if match.group(0).strip()]
+    sentences = [{"id": "s%02d" % (i + 1), "text": text} for i, text in enumerate(sentence_texts)]
     if not sentences:
-        parts = [part.strip() for part in re.split(r"[。！？!?]+", script) if part.strip()]
-        sentences = [{"id": "s%02d" % (i + 1), "text": part} for i, part in enumerate(parts)]
-        warnings.append("sentences 缺失，已按标点拆分")
+        raise ValueError("口播中没有完整句子")
 
     compact = re.sub(r"\s+", "", script)
     target_duration = float(brief.get("target_duration_seconds", 30))
@@ -106,17 +108,13 @@ def main(copy_text: str, brief_json: str) -> dict:
     if not any(item["purpose"] == "solution" for item in normalized_sentences):
         normalized_sentences[min(1, len(normalized_sentences) - 1)]["purpose"] = "solution"
 
-    captions = data.get("burned_in_caption_lines")
-    if not isinstance(captions, list) or not captions:
-        captions = [re.sub(r"\s+", "", item["text"])[:16] for item in normalized_sentences]
-        warnings.append("burned_in_caption_lines 缺失，已从 sentences 生成")
-    normalized_captions = []
-    for index, line in enumerate(captions, 1):
-        text = re.sub(r"\s+", "", str(line))
-        if len(text) > 16:
-            warnings.append("第 %d 条字幕超过 16 字，已截断" % index)
-            text = text[:16]
-        normalized_captions.append(text)
+    normalized_captions = [item["text"] for item in normalized_sentences]
+    supplied_captions = data.get("burned_in_caption_lines")
+    if isinstance(supplied_captions, list) and supplied_captions:
+        supplied_clean = [re.sub(r"\s+", "", str(line)) for line in supplied_captions]
+        expected_clean = [re.sub(r"\s+", "", line) for line in normalized_captions]
+        if supplied_clean != expected_clean:
+            warnings.append("burned_in_caption_lines 与完整句子不一致，已强制改为逐句完整字幕")
     data["burned_in_caption_lines"] = normalized_captions
 
     estimated_duration = round(cursor, 2)

@@ -66,6 +66,9 @@ cp "$TEMPLATE_DIR/docs/视频说明.md" "$PROJECT_DIR/"
 cp "$TEMPLATE_DIR/docs/项目说明.md" "$PROJECT_DIR/"
 cp "$HTML_INPUT" "$PROJECT_DIR/index.html"
 cp "$RESPONSE_INPUT" "$PROJECT_DIR/heygen_response.json"
+if [ -f "$(dirname "$HTML_INPUT")/voiceover_script.txt" ]; then
+  cp "$(dirname "$HTML_INPUT")/voiceover_script.txt" "$PROJECT_DIR/口播文案.txt"
+fi
 
 echo "已创建独立项目：$PROJECT_DIR"
 if [ "${SKIP_RENDER:-0}" = "1" ]; then

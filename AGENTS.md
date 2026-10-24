@@ -9,13 +9,13 @@ Dify工作流/                         # 可导入的 Dify Workflow
 HTML视频项目/333/                   # 当前唯一正式项目
 HTML视频项目/Dify输出/               # Dify 原始 TXT、JSON、HTML 和 HeyGen 响应
 HTML视频项目/workflow_runtime/       # 可复用模板、脚本、运行资产和工具
-保留资料/                           # 提示词、代码节点、产品事实和生产标准
+保留资料/                           # 提示词、代码节点、用户输入事实和生产标准
 ```
 
 统一处理入口：
 
 ```bash
-bash /Users/jinfeiqing/Desktop/实习/视频工作流/HTML视频项目/workflow_runtime/tools/run_dify_output.sh 项目名
+bash /Volumes/TUF ESD-T1A Media/视频工作流/HTML视频项目/workflow_runtime/tools/run_dify_output.sh 项目名
 ```
 
 ## 修改 Workflow 或提示词时的强制同步规则
@@ -35,7 +35,7 @@ bash /Users/jinfeiqing/Desktop/实习/视频工作流/HTML视频项目/workflow_
 
 ## 视频制作强制规则
 
-- 不调用 HeyGen API，不读取或输出 API Key，除非用户明确要求生成数字人视频。
+- 不调用 HeyGen API，不读取或输出 API Key，除非用户明确要求生成数字人视频。`黑帧口播` 工作流即使保留口播，也不得调用 HeyGen。
 - 静态 PNG 不能直接当作完整动效镜头。每个中段镜头必须包含语义相关元素级动画。
 - 动画必须由语音内容或明确时间线驱动，不能只做整图缩放、循环呼吸或无意义漂移。
 - 产品 UI 使用可复用高保真模板组件，通过变量改变行业、数据和流程；示例数据标记为“场景演示”，不得冒充真实产品截图。
@@ -50,12 +50,12 @@ bash /Users/jinfeiqing/Desktop/实习/视频工作流/HTML视频项目/workflow_
 - `保留资料/工作流代码节点/`：YAML 内 Code 节点的可读镜像。
 - `HTML视频项目/workflow_runtime/`：可复用模板、GSAP、渲染脚本和工具。
 - `HTML视频项目/333/`：当前项目成品和项目内运行脚本，不作为新项目模板直接修改。
-- `保留资料/项目文档/`：产品事实、内容规则、视频需求与质量标准。
+- `保留资料/项目文档/`：任意主题通用的用户输入事实、内容规则、视频需求与质量标准；不保存固定产品故事。
 - `项目使用说明.md`：人类操作说明和维护入口。
 
 ## 修改后的最低验证
 
-1. 解析两个 YAML，确认没有语法错误。
+1. 解析全部 YAML，确认没有语法错误。
 2. 检查修改过的提示词在 YAML 中存在。
 3. 检查修改过的 Code 节点在 YAML 中存在。
 4. Python 文件执行语法编译，Shell 文件执行 `bash -n`。

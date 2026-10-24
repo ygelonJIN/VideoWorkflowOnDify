@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import html
 import json
 import os
@@ -10,6 +11,7 @@ import re
 import shutil
 import subprocess
 import tempfile
+from difflib import SequenceMatcher
 from pathlib import Path
 
 PUNCTUATION = set("，。！？；：、,.!?;:…—-()（）[]【】\"'“”‘’")
@@ -52,6 +54,10 @@ TRADITIONAL_TO_SIMPLIFIED = str.maketrans({
 
 PRODUCTION_LAYOUT_CSS = """
 <style id="production-layout-contract">
+  @font-face{font-family:"PingFang SC";src:local("PingFang SC");}
+  @font-face{font-family:"Microsoft YaHei";src:local("Microsoft YaHei");}
+  @font-face{font-family:"Noto Sans CJK SC";src:local("Noto Sans CJK SC");}
+  @font-face{font-family:"Noto Sans SC";src:local("Noto Sans SC");}
   html,body{width:100%;height:100%;margin:0;padding:0;overflow:hidden;background:#000;}
   #stage{position:relative!important;width:1080px!important;height:1920px!important;min-height:1920px!important;overflow:hidden!important;}
   [data-composition-id]{position:absolute!important;inset:0!important;width:1080px!important;height:1920px!important;min-height:1920px!important;overflow:hidden!important;}
@@ -121,6 +127,31 @@ def run(command: list[str]) -> subprocess.CompletedProcess[str]:
     return subprocess.run(command, check=True, text=True, capture_output=True)
 
 
+def refresh_media_identity_manifest() -> None:
+    manifest_path = Path("媒体/媒体身份.json")
+    if not manifest_path.exists():
+        return
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except Exception:
+        return
+    files = manifest.get("files") if isinstance(manifest.get("files"), dict) else {}
+    named_files = {
+        "HeyGen数字人.mp4": Path("媒体/HeyGen数字人.mp4"),
+        "HeyGen口播.mp3": Path("媒体/HeyGen口播.mp3"),
+        "背景音乐.mp3": Path("媒体/背景音乐.mp3"),
+        "字幕/HeyGen转写.json": Path("字幕/HeyGen转写.json"),
+    }
+    for name, path in named_files.items():
+        if not path.is_file():
+            continue
+        digest = hashlib.sha256(path.read_bytes()).hexdigest()
+        files[name] = {"size": path.stat().st_size, "sha256": digest}
+    manifest["files"] = files
+    manifest["normalized_at"] = __import__("time").strftime("%Y-%m-%dT%H:%M:%S%z")
+    manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+
 def media_duration(path: Path) -> float:
     result = run([
         "ffprobe", "-v", "error", "-show_entries", "format=duration",
@@ -161,30 +192,6 @@ def clean_text(value: object) -> str:
 
 def visible_length(text: str) -> int:
     return sum(1 for char in text if not char.isspace())
-
-
-def split_long_cue(text: str, start: float, end: float, max_chars: int) -> list[dict]:
-    text = clean_text(text)
-    if not text:
-        return []
-    if visible_length(text) <= max_chars:
-        return [{"text": text, "start": start, "end": end}]
-    chunks, current = [], ""
-    for char in text:
-        current += char
-        if (char in PUNCTUATION and visible_length(current) >= max(6, max_chars // 2)) or visible_length(current) >= max_chars:
-            chunks.append(current.strip())
-            current = ""
-    if current.strip():
-        chunks.append(current.strip())
-    weights = [max(1, visible_length(chunk)) for chunk in chunks]
-    total, cursor, duration = sum(weights), start, max(0.2, end - start)
-    cues = []
-    for index, (chunk, weight) in enumerate(zip(chunks, weights)):
-        chunk_end = end if index == len(chunks) - 1 else cursor + duration * weight / total
-        cues.append({"text": chunk, "start": round(cursor, 3), "end": round(chunk_end, 3)})
-        cursor = chunk_end
-    return cues
 
 
 def collect_entries(payload: object) -> list[dict]:
@@ -235,22 +242,110 @@ def load_transcript(path: Path) -> list[dict]:
     return collect_entries(json.loads(content)) if stripped.startswith(("{", "[")) else parse_srt(path)
 
 
-def group_entries(entries: list[dict], max_chars: int) -> list[dict]:
-    word_level = len(entries) >= 8 and all(visible_length(item["text"]) <= 6 for item in entries)
-    if not word_level:
-        return [cue for item in entries for cue in split_long_cue(item["text"], item["start"], item["end"], max_chars)]
-    cues, text, start, end = [], "", 0.0, 0.0
+def transcript_char_timeline(entries: list[dict]) -> tuple[str, list[float]]:
+    chars: list[str] = []
+    times: list[float] = []
     for item in entries:
-        candidate = (text + item["text"]).strip()
-        if text and (visible_length(candidate) > max_chars or item["start"] - end > 0.35 or text[-1:] in PUNCTUATION):
-            cues.extend(split_long_cue(text, start, end, max_chars))
-            text = ""
+        text = "".join(char for char in clean_text(item["text"]) if not char.isspace())
         if not text:
-            start = item["start"]
-        text, end = candidate, item["end"]
-    if text:
-        cues.extend(split_long_cue(text, start, end, max_chars))
-    return cues
+            continue
+        start = max(0.0, float(item["start"]))
+        end = max(start + 0.01, float(item["end"]))
+        step = (end - start) / len(text)
+        for index, char in enumerate(text):
+            chars.append(char)
+            times.append(start + step * (index + 0.5))
+    return "".join(chars), times
+
+
+def align_reference_char_times(reference: str, entries: list[dict]) -> tuple[str, list[float], float]:
+    ref_text = "".join(char for char in clean_text(reference) if not char.isspace())
+    asr_text, asr_times = transcript_char_timeline(entries)
+    total_end = max((float(item["end"]) for item in entries), default=0.0)
+    if not ref_text:
+        return "", [], total_end
+    if not asr_text:
+        span = max(total_end, max(1.0, len(ref_text) * 0.16))
+        return ref_text, [span * (index + 0.5) / len(ref_text) for index in range(len(ref_text))], span
+
+    ref_times: list[float | None] = [None] * len(ref_text)
+    matcher = SequenceMatcher(None, asr_text, ref_text, autojunk=False)
+    matched_chars = 0
+    for tag, i1, i2, j1, j2 in matcher.get_opcodes():
+        if tag == "equal":
+            for offset in range(j2 - j1):
+                ref_times[j1 + offset] = asr_times[i1 + offset]
+            matched_chars += j2 - j1
+        elif j2 > j1:
+            before = asr_times[i1 - 1] if i1 > 0 else 0.0
+            after = asr_times[i2] if i2 < len(asr_times) else total_end
+            if after <= before:
+                after = before + 0.04 * max(1, j2 - j1)
+            for offset, j in enumerate(range(j1, j2)):
+                ratio = (offset + 1) / (j2 - j1 + 1)
+                ref_times[j] = before + (after - before) * ratio
+
+    known = [(index, value) for index, value in enumerate(ref_times) if value is not None]
+    if not known:
+        span = max(total_end, len(ref_text) * 0.16)
+        return ref_text, [span * (index + 0.5) / len(ref_text) for index in range(len(ref_text))], span
+    for index in range(len(ref_times)):
+        if ref_times[index] is not None:
+            continue
+        previous = next(((pos, value) for pos, value in reversed(known) if pos < index), None)
+        following = next(((pos, value) for pos, value in known if pos > index), None)
+        if previous and following:
+            ratio = (index - previous[0]) / (following[0] - previous[0])
+            ref_times[index] = previous[1] + (following[1] - previous[1]) * ratio
+        elif previous:
+            ref_times[index] = previous[1] + 0.04 * (index - previous[0])
+        else:
+            ref_times[index] = max(0.0, following[1] - 0.04 * (following[0] - index))
+
+    values = [float(value) for value in ref_times]
+    for index in range(1, len(values)):
+        values[index] = max(values[index], values[index - 1] + 0.002)
+    ratio = matched_chars / max(1, len(ref_text))
+    return ref_text, values, ratio
+
+
+def split_complete_sentences(text: str) -> list[str]:
+    text = clean_text(text)
+    if not text:
+        return []
+    return [match.group(0).strip() for match in re.finditer(r'.*?(?:[。！？!?]+(?:["”’\'）\]】》]+)?|$)', text, flags=re.S) if match.group(0).strip()]
+
+
+def cues_from_reference(reference: str, entries: list[dict]) -> tuple[list[dict], float]:
+    ref_text, char_times, match_ratio = align_reference_char_times(reference, entries)
+    if not ref_text:
+        return [], match_ratio
+    total_end = max((float(item["end"]) for item in entries), default=char_times[-1] + 0.35)
+    spans = [(match.start(), match.end()) for match in re.finditer(
+        r'.*?(?:[。！？!?]+(?:["”’\'）\]】》]+)?|$)', ref_text, flags=re.S
+    ) if match.group(0).strip()]
+    cues: list[dict] = []
+    for span_index, (start_index, end_index) in enumerate(spans):
+        text = clean_text(ref_text[start_index:end_index])
+        if not text:
+            continue
+        if span_index == 0:
+            start = max(0.0, char_times[start_index] - 0.08)
+        else:
+            start = (char_times[start_index - 1] + char_times[start_index]) / 2
+        if end_index >= len(ref_text):
+            end = min(total_end, char_times[end_index - 1] + 0.35)
+        else:
+            end = (char_times[end_index - 1] + char_times[end_index]) / 2
+        if end <= start:
+            end = start + 0.2
+        cues.append({"text": text, "start": round(start, 3), "end": round(end, 3)})
+    return cues, match_ratio
+
+
+def group_entries_into_sentences(entries: list[dict]) -> list[dict]:
+    transcript_text = "".join(clean_text(item["text"]) for item in entries)
+    return cues_from_reference(transcript_text, entries)[0]
 
 
 def format_srt_time(seconds: float) -> str:
@@ -332,11 +427,13 @@ def set_media_duration(document: str, element_id: str, duration: float) -> str:
     return document[:match.start()] + set_attribute(match.group(0), "data-duration", f"{duration:.3f}") + document[match.end():]
 
 
-def set_role_duration(document: str, media_type: str, role: str, duration: float) -> str:
+def set_role_duration(document: str, media_type: str, role: str, duration: float, allow_missing: bool = False) -> str:
     role_attr = "data-video-role" if media_type == "video" else "data-audio-role"
     pattern = re.compile(rf'<{media_type}\b[^>]*\b{role_attr}="{re.escape(role)}"[^>]*>', re.I)
     match = pattern.search(document)
     if not match:
+        if allow_missing:
+            return document
         return set_media_duration(document, {
             ("video", "avatar"): "heygen-video",
             ("audio", "voiceover"): "heygen-voice",
@@ -482,7 +579,7 @@ def normalize_scaled_scene_positions(document: str) -> str:
     return document
 
 
-def rewrite_html(path: Path, cues: list[dict], target_duration: float, transcript_path: Path) -> None:
+def rewrite_html(path: Path, cues: list[dict], target_duration: float, transcript_path: Path, avatar_required: bool = True) -> None:
     document = activate_media_placeholders(path.read_text(encoding="utf-8"))
     document = normalize_wall_clock_controller(document)
     if CAPTION_START in document and CAPTION_END in document:
@@ -498,7 +595,7 @@ def rewrite_html(path: Path, cues: list[dict], target_duration: float, transcrip
         document = scale_scene_timings(document, timeline_factor)
     document = normalize_scaled_scene_positions(document)
     document = set_role_duration(document, "audio", "voiceover", target_duration)
-    document = set_role_duration(document, "video", "avatar", target_duration)
+    document = set_role_duration(document, "video", "avatar", target_duration, allow_missing=not avatar_required)
     document = set_role_duration(document, "audio", "background-music", target_duration)
     document = ensure_root_composition(document, target_duration)
     root_pattern = re.compile(r'(<div\b[^>]*\bdata-composition-id="[^"]+"[^>]*>)', re.I)
@@ -542,17 +639,22 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--html", type=Path, default=Path("index.html"))
     parser.add_argument("--voice", type=Path, default=Path("媒体/HeyGen口播.mp3"))
-    parser.add_argument("--avatar-video", type=Path, default=Path("媒体/HeyGen数字人.mp4"))
+    parser.add_argument("--avatar-video", type=Path)
+    parser.add_argument("--black-frame", dest="black_frame", action="store_true", help="黑帧模式：右上角纯黑占位，不显示数字人")
     parser.add_argument("--transcript", type=Path)
     parser.add_argument("--auto-transcribe", action="store_true")
     parser.add_argument("--target-duration", type=float, default=30.0)
     parser.add_argument("--duration-tolerance", type=float, default=0.25)
-    parser.add_argument("--max-caption-chars", type=int, default=16)
+    parser.add_argument("--reference-script", type=Path, help="已批准口播原文；字幕文字以此为唯一真值")
     parser.add_argument("--skip-media-normalization", action="store_true")
     args = parser.parse_args()
-    for path in (args.html, args.voice, args.avatar_video):
+    for path in (args.html, args.voice):
         if not path.exists():
             raise SystemExit(f"缺少文件：{path}")
+    if args.avatar_video is not None and not args.avatar_video.exists():
+        raise SystemExit(f"缺少文件：{args.avatar_video}")
+    if not args.black_frame and args.avatar_video is None:
+        raise SystemExit("完整版必须提供 --avatar-video；黑帧模式请使用 --black-frame")
     transcript = args.transcript
     if transcript is None:
         candidates = sorted(Path("字幕").glob("HeyGen转写.*")) + sorted(Path("字幕").glob("口播时间码.json"))
@@ -572,11 +674,18 @@ def main() -> None:
         if not cues:
             raise SystemExit("缺少 HeyGen transcript，且 HTML 中没有可用字幕时间码。")
     else:
-        cues = group_entries(load_transcript(transcript), args.max_caption_chars)
+        entries = load_transcript(transcript)
+        reference = args.reference_script.read_text(encoding="utf-8") if args.reference_script and args.reference_script.exists() else ""
+        if reference.strip():
+            cues, match_ratio = cues_from_reference(reference, entries)
+            Path("字幕/口播文案.txt").write_text(reference.strip() + "\n", encoding="utf-8")
+            print(f"caption_reference_alignment={match_ratio:.3f}")
+        else:
+            cues = group_entries_into_sentences(entries)
     if not cues:
         raise SystemExit("未能从时间码生成字幕")
     voice_actual = media_duration(args.voice)
-    avatar_actual = media_duration(args.avatar_video)
+    avatar_actual = media_duration(args.avatar_video) if args.avatar_video and args.avatar_video.exists() else 0.0
     natural_duration = max(voice_actual, avatar_actual)
     if fallback and cues and cues[-1]["end"] > 0:
         cues = scale_cues(cues, natural_duration / cues[-1]["end"])
@@ -589,20 +698,28 @@ def main() -> None:
     )
     if not args.skip_media_normalization:
         normalize_media_duration(args.voice, effective_duration)
-        normalize_media_duration(args.avatar_video, effective_duration)
+        if args.avatar_video and args.avatar_video.exists():
+            normalize_media_duration(args.avatar_video, effective_duration)
         background_music = Path("媒体/背景音乐.mp3")
         if background_music.exists():
             normalize_media_duration(background_music, effective_duration)
         effective_duration = max(media_duration(args.voice), media_duration(args.avatar_video))
+        refresh_media_identity_manifest()
     write_outputs(cues, Path("字幕/口播时间码.json"), Path("字幕/口播字幕.srt"))
-    rewrite_html(args.html, cues, effective_duration, Path("字幕/HTML字幕时间码.json" if fallback else "字幕/口播时间码.json"))
+    rewrite_html(
+        args.html,
+        cues,
+        effective_duration,
+        Path("字幕/HTML字幕时间码.json" if fallback else "字幕/口播时间码.json"),
+        avatar_required=not args.black_frame,
+    )
     config_path = Path("hyperframes.json")
     if config_path.exists():
         config = json.loads(config_path.read_text(encoding="utf-8"))
         config["duration"] = round(effective_duration, 3)
         config_path.write_text(json.dumps(config, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     print(f"voice_duration={media_duration(args.voice):.3f}")
-    print(f"avatar_duration={media_duration(args.avatar_video):.3f}")
+    print(f"avatar_duration={avatar_actual:.3f}")
     print(f"caption_cues={len(cues)}")
     print(f"updated={args.html}")
 

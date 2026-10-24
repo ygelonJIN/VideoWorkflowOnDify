@@ -8,6 +8,7 @@ import json
 import shutil
 import subprocess
 import sys
+import tempfile
 import time
 import urllib.request
 from pathlib import Path
@@ -172,24 +173,33 @@ def main() -> None:
         print(f"复用已验证的 HeyGen 媒体：video_id={video_id}")
         return
 
-    for name in ("HeyGen数字人.mp4", "HeyGen口播.mp3", "媒体身份.json"):
-        (args.media_dir / name).unlink(missing_ok=True)
-    Path("字幕/HeyGen转写.json").unlink(missing_ok=True)
-
     video_path = args.media_dir / "HeyGen数字人.mp4"
     audio_path = args.media_dir / "HeyGen口播.mp3"
-    download(video_url, video_path)
-    if audio_url:
-        download(audio_url, audio_path)
-    else:
-        subprocess.run([
-            "ffmpeg", "-y", "-i", str(video_path),
-            "-vn", "-acodec", "libmp3lame", "-q:a", "2", str(audio_path),
-        ], check=True)
-
     transcript_path = Path("字幕/HeyGen转写.json")
-    if transcript_url:
-        download(transcript_url, transcript_path)
+    with tempfile.TemporaryDirectory(prefix="heygen-media-") as temp_dir_name:
+        temp_dir = Path(temp_dir_name)
+        temp_video = temp_dir / "HeyGen数字人.mp4"
+        temp_audio = temp_dir / "HeyGen口播.mp3"
+        temp_transcript = temp_dir / "HeyGen转写.json"
+        download(video_url, temp_video)
+        if audio_url:
+            download(audio_url, temp_audio)
+        else:
+            subprocess.run([
+                "ffmpeg", "-y", "-i", str(temp_video),
+                "-vn", "-acodec", "libmp3lame", "-q:a", "2", str(temp_audio),
+            ], check=True)
+        if transcript_url:
+            download(transcript_url, temp_transcript)
+
+        # All downloads must succeed before replacing existing project media.
+        shutil.move(str(temp_video), str(video_path))
+        shutil.move(str(temp_audio), str(audio_path))
+        if transcript_url:
+            transcript_path.parent.mkdir(parents=True, exist_ok=True)
+            shutil.move(str(temp_transcript), str(transcript_path))
+        else:
+            transcript_path.unlink(missing_ok=True)
 
     music_mp3 = args.media_dir / "背景音乐.mp3"
     if not music_mp3.exists():

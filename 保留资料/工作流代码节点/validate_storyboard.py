@@ -28,7 +28,7 @@ def main(storyboard_text: str, script_json: str) -> dict:
     if not isinstance(scenes, list) or not scenes:
         sentences = [item for item in script.get("sentences", []) if isinstance(item, dict) and str(item.get("text", "")).strip()]
         if not sentences:
-            sentences = [{"id": "s01", "text": str(script.get("voiceover_script") or "继续介绍产品流程")}]
+            sentences = [{"id": "s01", "text": str(script.get("voiceover_script") or "继续解释当前主题")}]
         scenes = [{
             "scene_id": "s%02d" % (index + 1),
             "sentence_ids": [str(item.get("id") or "s%02d" % (index + 1))],
@@ -37,7 +37,7 @@ def main(storyboard_text: str, script_json: str) -> dict:
             "visual_source": "reusable_ui_template",
             "ui_template": "workflow",
             "on_screen_text": re.sub(r"\s+", "", str(item.get("text", "")))[:16],
-            "visual_brief": "展示当前口播对应的可复用产品流程界面",
+            "visual_brief": "展示当前口播对应的可复用界面、步骤、清单或信息组件",
             "motion": "关键信息逐项出现",
             "transition": "cut"
         } for index, item in enumerate(sentences[:7])]
@@ -58,8 +58,8 @@ def main(storyboard_text: str, script_json: str) -> dict:
         "generated_image", "motion_graphic"
     }
     allowed_templates = {
-        "buyer_search", "lead_list", "data_dashboard", "outreach",
-        "crm_followup", "workflow", "comparison", "none"
+        "dashboard", "list", "workflow", "comparison", "timeline",
+        "planner", "tracker", "story", "none"
     }
     allowed_purposes = {"hook", "pain", "solution", "proof", "cta"}
 
@@ -107,14 +107,14 @@ def main(storyboard_text: str, script_json: str) -> dict:
             source = "reusable_ui_template" if template != "none" else "motion_graphic"
             warnings.append("%s visual_source=%s 已归一化为 %s" % (scene_id, old, source))
         if source == "generated_image" and template != "none":
-            warnings.append("%s 生成图不能伪装为产品 UI 模板，ui_template 已改为 none" % scene_id)
+            warnings.append("%s 生成图不能伪装为界面模板，ui_template 已改为 none" % scene_id)
             template = "none"
         scene["visual_source"] = source
         scene["ui_template"] = template
 
         on_screen = re.sub(r"\s+", "", str(scene.get("on_screen_text", "")))
         if len(on_screen) > 16:
-            warnings.append("%s on_screen_text 超过 16 字，已截断" % scene_id)
+            warnings.append("%s 屏幕主文案超过 16 字，已截断；这不影响完整句子字幕" % scene_id)
             on_screen = on_screen[:16]
         scene["on_screen_text"] = on_screen
 

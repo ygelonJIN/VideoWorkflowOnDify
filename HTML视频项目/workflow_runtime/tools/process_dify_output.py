@@ -40,6 +40,12 @@ def get_response(package: dict) -> dict:
     return response if isinstance(response, dict) else {}
 
 
+def is_black_frame_output(package: dict, response: dict) -> bool:
+    if response:
+        return False
+    return bool(str(package.get("voiceover_script", package.get("approved_voiceover_script", ""))).strip())
+
+
 def is_full_video_output(package: dict, response: dict) -> bool:
     if not response:
         return False
@@ -119,14 +125,19 @@ def main() -> None:
     parser.add_argument("project_name", type=valid_project_name)
     parser.add_argument("input_file", type=Path, nargs="?")
     parser.add_argument("--terminal-paste", action="store_true", help="兼容模式：直接向终端粘贴；长内容可能受终端模拟器转码影响")
-    parser.add_argument("--replace", action="store_true", help="全合一输出需要重建同名项目时使用；旧项目会自动备份")
+    parser.add_argument("--replace", action="store_true", help="需要重建同名项目时使用；旧项目会自动备份")
+    parser.add_argument("--voice-file", type=Path, help="黑帧口播模式可选：使用已有音频替代 TTS")
+    parser.add_argument("--tts-provider", choices=("mimo", "macos", "openai-compatible"), help="黑帧口播 TTS 供应商类型；默认 mimo")
+    parser.add_argument("--tts-base-url", help="MiMo/OpenAI-compatible API 基础地址")
+    parser.add_argument("--tts-model", help="TTS 模型或音色模型名")
+    parser.add_argument("--tts-voice", help="音色 voice ID 或 macOS voice 名")
     parser.add_argument("--no-open", action="store_true", help="HTML-only 输出保存后不打开浏览器")
     args = parser.parse_args()
 
     text = read_payload(args.input_file, args.project_name, args.terminal_paste)
     parsed = parse_json_object(text)
     if isinstance(parsed, dict) and any(
-        key in parsed for key in ("html_document", "html", "build_package_json", "build_package", "heygen_response_json")
+        key in parsed for key in ("html_document", "html", "build_package_json", "build_package", "heygen_response_json", "voiceover_script")
     ):
         data = parsed
     elif "<html" in text.lower():
@@ -138,6 +149,38 @@ def main() -> None:
     if "<!doctype html>" not in html.lower():
         raise SystemExit("Dify 输出缺少完整 html_document")
     response = get_response(package)
+
+    tts_args = (args.voice_file, args.tts_provider, args.tts_base_url, args.tts_model, args.tts_voice)
+    if any(tts_args) and not is_black_frame_output(package, response):
+        raise SystemExit("TTS/音色参数只能用于黑帧口播输出")
+    if is_black_frame_output(package, response):
+        normalized_input = {
+            "build_package_json": {
+                **package,
+                "html_document": html,
+                "voiceover_script": str(package.get("voiceover_script", package.get("approved_voiceover_script", ""))).strip(),
+            }
+        }
+        input_path = BASE / "Dify输出" / f"{args.project_name}-blackframe-input.json"
+        input_path.parent.mkdir(parents=True, exist_ok=True)
+        input_path.write_text(json.dumps(normalized_input, ensure_ascii=False, indent=2), encoding="utf-8")
+        command = [sys.executable, str(TOOLS_DIR / "build_black_frame_project.py"), args.project_name, "--input-file", str(input_path)]
+        if args.replace:
+            command.append("--replace")
+        if args.voice_file:
+            command.extend(["--voice-file", str(args.voice_file)])
+        if args.tts_provider:
+            command.extend(["--tts-provider", args.tts_provider])
+        if args.tts_base_url:
+            command.extend(["--tts-base-url", args.tts_base_url])
+        if args.tts_model:
+            command.extend(["--tts-model", args.tts_model])
+        if args.tts_voice:
+            command.extend(["--voice-name", args.tts_voice])
+        print("检测到黑帧口播输出：生成口播并渲染 MP4。")
+        subprocess.run(command, check=True)
+        print(f"完成：{BASE / args.project_name / '成片' / '最终视频.mp4'}")
+        return
 
     if is_full_video_output(package, response):
         normalized_input = {

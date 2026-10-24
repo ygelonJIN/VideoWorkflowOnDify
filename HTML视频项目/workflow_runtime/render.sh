@@ -24,36 +24,60 @@ if [ ! -x "$CHROME_BIN" ]; then
   exit 1
 fi
 
-if [ ! -f heygen_response.json ]; then
-  echo "缺少 heygen_response.json"
-  exit 1
-fi
-
-echo "核验 HeyGen video_id 与媒体身份..."
-if [ "${FORCE_HEYGEN_DOWNLOAD:-0}" = "1" ]; then
-  python3 脚本/download_heygen_media.py heygen_response.json
+if grep -q 'data-render-mode="black-frame"' index.html; then
+  RENDER_MODE="black-frame"
+  VOICE_FILE="媒体/口播.mp3"
+  if [ ! -f "$VOICE_FILE" ]; then
+    echo "缺少本地口播音频：$VOICE_FILE"
+    exit 1
+  fi
 else
-  python3 脚本/download_heygen_media.py heygen_response.json --if-needed
+  RENDER_MODE="full"
+  VOICE_FILE="媒体/HeyGen口播.mp3"
+  if [ ! -f heygen_response.json ]; then
+    echo "缺少 heygen_response.json"
+    exit 1
+  fi
+  echo "核验 HeyGen video_id 与媒体身份..."
+  if [ "${FORCE_HEYGEN_DOWNLOAD:-0}" = "1" ]; then
+    python3 脚本/download_heygen_media.py heygen_response.json
+  else
+    python3 脚本/download_heygen_media.py heygen_response.json --if-needed
+  fi
 fi
 
 echo "同步真实口播时间码并校准音画时长..."
-if [ -s 字幕/HeyGen转写.json ]; then
+if [ -f 口播文案.txt ] && [ -s 字幕/口播时间码.json ]; then
+  TRANSCRIPT_ARG=(--transcript 字幕/口播时间码.json)
+elif [ "$RENDER_MODE" = "full" ] && [ -s 字幕/HeyGen转写.json ]; then
   TRANSCRIPT_ARG=(--transcript 字幕/HeyGen转写.json)
 else
   TRANSCRIPT_ARG=(--auto-transcribe)
 fi
-python3 脚本/sync_video.py \
-  --html index.html \
-  --voice 媒体/HeyGen口播.mp3 \
-  --avatar-video 媒体/HeyGen数字人.mp4 \
-  --target-duration 30 \
-  "${TRANSCRIPT_ARG[@]}"
+SYNC_ARGS=(
+  --html index.html
+  --voice "$VOICE_FILE"
+  --target-duration 30
+)
+if grep -q 'data-render-mode="black-frame"' index.html; then
+  SYNC_ARGS+=(--black-frame)
+else
+  SYNC_ARGS+=(--avatar-video 媒体/HeyGen数字人.mp4)
+fi
+if [ -f 口播文案.txt ]; then
+  SYNC_ARGS+=(--reference-script 口播文案.txt)
+fi
+python3 脚本/sync_video.py "${SYNC_ARGS[@]}" "${TRANSCRIPT_ARG[@]}"
 
 echo "检查生产排版/内容密度/音画同步契约..."
 python3 脚本/check_html_contract.py index.html
 
-echo "检查 HTML 组合..."
-HYPERFRAMES_BROWSER_PATH="$CHROME_BIN" "$NODE_BIN" "$HF_CLI" check . --no-browser-gpu || true
+if [ "${RUN_HYPERFRAMES_CHECK:-0}" = "1" ]; then
+  echo "检查 HTML 组合..."
+  HYPERFRAMES_BROWSER_PATH="$CHROME_BIN" "$NODE_BIN" "$HF_CLI" check . --no-browser-gpu || true
+else
+  echo "跳过交互式 HyperFrames check；生产契约已由 check_html_contract.py 验证。"
+fi
 
 echo "渲染最终 MP4..."
 HYPERFRAMES_BROWSER_PATH="$CHROME_BIN" "$NODE_BIN" "$HF_CLI" render . \
