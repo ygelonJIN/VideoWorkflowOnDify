@@ -13,5 +13,9 @@ node_modules/
 HTML视频项目/项目备份/
 HTML视频项目/失败项目/
 
-HTML视频项目/333/
-HTML视频项目/Dify输出/333*
+# Do not upload local video projects or their generated outputs.
+# Keep only the reusable runtime under HTML视频项目/.
+HTML视频项目/*
+!HTML视频项目/Dify输出/
+!HTML视频项目/workflow_runtime/
+HTML视频项目/Dify输出/*
