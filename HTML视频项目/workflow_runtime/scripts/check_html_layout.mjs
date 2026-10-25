@@ -63,18 +63,18 @@ const report = await page.evaluate(() => {
     const rootStyle = getComputedStyle(captionRoot);
     const capStyle = getComputedStyle(captionSample);
     const rootRect = rect(captionRoot);
-    const expectedBottom = innerHeight * 0.20;
-    const expectedWidth = innerWidth * 0.70;
+    const expectedBottom = innerHeight * 0.13;
+    const expectedWidth = innerWidth * 0.80;
     subtitleMetrics.bottom = rootStyle.bottom;
     subtitleMetrics.width = Number(rootRect.width.toFixed(1));
     subtitleMetrics.fontSize = capStyle.fontSize;
     subtitleMetrics.lineHeight = capStyle.lineHeight;
     subtitleMetrics.fontWeight = capStyle.fontWeight;
     subtitleMetrics.background = capStyle.backgroundColor;
-    if (Math.abs(parseFloat(rootStyle.bottom)-expectedBottom) > 2) errors.push(`字幕位置错误：bottom=${rootStyle.bottom}，应为20%`);
+    if (Math.abs(parseFloat(rootStyle.bottom)-expectedBottom) > 2) errors.push(`字幕位置错误：bottom=${rootStyle.bottom}，应为13%`);
     if (Math.abs(rootRect.width-expectedWidth) > 3) errors.push(`字幕宽度错误：${rootRect.width.toFixed(1)}px，应约为${expectedWidth.toFixed(1)}px`);
-    if (Math.abs(parseFloat(capStyle.fontSize)-40) > 0.1) errors.push(`字幕字号错误：${capStyle.fontSize}，应为40px`);
-    if (Math.abs(parseFloat(capStyle.lineHeight)/40-1.35) > 0.02) errors.push(`字幕行高错误：${capStyle.lineHeight}，应为1.35`);
+    if (Math.abs(parseFloat(capStyle.fontSize)-45) > 0.1) errors.push(`字幕字号错误：${capStyle.fontSize}，应为45px`);
+    if (Math.abs(parseFloat(capStyle.lineHeight)/45-1.35) > 0.02) errors.push(`字幕行高错误：${capStyle.lineHeight}，应为1.35`);
     if (parseInt(capStyle.fontWeight,10) < 700) errors.push(`字幕字重错误：${capStyle.fontWeight}，应为700`);
   }
 

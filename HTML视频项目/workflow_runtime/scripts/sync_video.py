@@ -62,12 +62,13 @@ PRODUCTION_LAYOUT_CSS = """
   html,body{width:100%;height:100%;margin:0;padding:0;overflow:hidden;background:#000;}
   #stage{position:relative!important;width:1080px!important;height:1920px!important;overflow:hidden!important;}
   [data-composition-id]{position:absolute!important;inset:0!important;width:1080px!important;height:1920px!important;overflow:hidden!important;}
-  #captions,.caption-layer{position:absolute!important;left:50%!important;right:auto!important;bottom:15%!important;top:auto!important;
-    width:70%!important;max-width:70%!important;transform:translateX(-50%)!important;z-index:70!important;pointer-events:none!important;text-align:center!important;}
+  #captions,.caption-layer{position:absolute!important;left:50%!important;right:auto!important;bottom:13%!important;top:auto!important;
+    width:80%!important;max-width:80%!important;transform:translateX(-50%)!important;z-index:70!important;pointer-events:none!important;text-align:center!important;}
   .clip.caption,.caption{box-sizing:border-box!important;display:none!important;width:auto!important;max-width:100%!important;
-    background:rgba(6,10,20,.42)!important;border:1px solid rgba(120,150,200,.25)!important;border-radius:14px!important;
-    padding:14px 16px!important;font-family:"PingFang SC","Microsoft YaHei","Noto Sans CJK SC","Source Han Sans SC","Hiragino Sans GB",sans-serif!important;
-    font-size:40px!important;line-height:1.35!important;font-weight:700!important;color:#fff!important;text-align:center!important;white-space:normal!important;}
+    background:transparent!important;border:0!important;border-radius:0!important;padding:0!important;
+    font-family:"PingFang SC","Microsoft YaHei","Noto Sans CJK SC","Source Han Sans SC","Hiragino Sans GB",sans-serif!important;
+    font-size:45px!important;line-height:1.35!important;font-weight:700!important;color:#fff!important;text-align:center!important;white-space:normal!important;
+    text-shadow:0 3px 12px rgba(0,0,0,.72),0 1px 4px rgba(0,0,0,.85)!important;}
   .clip.caption.show,.caption.show{display:inline-block!important;}
   .caption .cap-inner{display:inline!important;padding:0!important;background:transparent!important;border:0!important;backdrop-filter:none!important;}
   video[data-video-role="avatar"]{object-fit:cover!important;}

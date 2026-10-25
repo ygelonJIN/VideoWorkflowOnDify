@@ -29,8 +29,9 @@ def main() -> None:
     if "production-layout-contract" not in doc:
         errors.append("缺少技术运行时 contract")
     for token in (
-        'bottom:15%', 'width:70%', 'max-width:70%', 'font-size:40px',
-        'line-height:1.35', 'font-weight:700', 'background:rgba(6,10,20,.42)',
+        'bottom:13%', 'width:80%', 'max-width:80%', 'font-size:45px',
+        'line-height:1.35', 'font-weight:700', 'background:transparent',
+        'text-shadow:',
     ):
         if token not in doc:
             errors.append("字幕契约缺少 " + token)
