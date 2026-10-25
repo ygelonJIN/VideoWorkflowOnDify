@@ -1,0 +1,2257 @@
+version: 0.7.0
+kind: app
+app:
+  name: 通用｜01_有数字人完整视频
+  description: 有右上角数字人的完整视频：生成内容、HTML、HeyGen 数字人口播、已批准字幕真值、BGM 和 MP4。
+  icon: 📝
+  icon_type: emoji
+  icon_background: '#E4FBCC'
+  mode: workflow
+  use_icon_as_answer_icon: false
+dependencies:
+- current_identifier: null
+  type: marketplace
+  value:
+    marketplace_plugin_unique_identifier: langgenius/mimo:0.0.12@15e6a7b32bbe35faba5e3a646eaa14fdca34d9e95909586f6313d5dd364f8d95
+    version: null
+workflow:
+  conversation_variables: []
+  environment_variables:
+  - description: HeyGen API Key；只在 HTTP Header 中使用，不写入提示词。
+    id: 7a9ac6e3-0000-4000-9000-000000000021
+    name: HEYGEN_API_KEY
+    selector:
+    - env
+    - HEYGEN_API_KEY
+    value: ''
+    value_type: string
+  - description: HeyGen API 基础地址。
+    id: 7a9ac6e3-0000-4000-9000-000000000022
+    name: HEYGEN_API_BASE
+    selector:
+    - env
+    - HEYGEN_API_BASE
+    value: https://api.heygen.com
+    value_type: string
+  - description: 固定 HeyGen 数字人 ID。
+    id: 7a9ac6e3-0000-4000-9000-000000000023
+    name: HEYGEN_AVATAR_ID
+    selector:
+    - env
+    - HEYGEN_AVATAR_ID
+    value: ''
+    value_type: string
+  - description: 固定 HeyGen 中文声音 ID。
+    id: 7a9ac6e3-0000-4000-9000-000000000024
+    name: HEYGEN_VOICE_ID
+    selector:
+    - env
+    - HEYGEN_VOICE_ID
+    value: ''
+    value_type: string
+  features: {}
+  graph:
+    nodes:
+    - id: a00
+      type: custom
+      data:
+        type: start
+        title: A00_输入活动需求
+        variables:
+        - label: 主题、原始文本或随口一句话
+          variable: campaign_brief
+          type: paragraph
+          required: true
+          max_length: 30000
+        - label: 可选创作偏好
+          variable: creative_preferences
+          type: paragraph
+          required: false
+          max_length: 12000
+        - label: 可选背景/规范
+          variable: brand_guidelines
+          type: paragraph
+          required: false
+          max_length: 12000
+        - label: 可选历史/补充
+          variable: history_notes
+          type: paragraph
+          required: false
+          max_length: 20000
+        - label: 请求编号
+          variable: request_id
+          type: text-input
+          required: true
+          max_length: 128
+        - label: 运行模式
+          variable: mode
+          type: text-input
+          required: false
+          max_length: 20
+        - label: 生产要求
+          variable: production_requirements
+          type: paragraph
+          required: false
+          max_length: 12000
+        - label: 批量需求
+          variable: batch_requests
+          type: paragraph
+          required: false
+          max_length: 60000
+      position:
+        x: 30
+        y: 340
+      positionAbsolute:
+        x: 30
+        y: 340
+      sourcePosition: right
+      targetPosition: left
+      width: 270
+      height: 260
+    - id: a01
+      type: custom
+      data:
+        type: llm
+        title: A01_整理自然语言需求
+        model:
+          provider: langgenius/mimo/mimo
+          name: mimo-v2.6-pro
+          mode: chat
+          completion_params:
+            temperature: 0.1
+            max_completion_tokens: 1800
+        prompt_template:
+        - id: a01-system
+          role: system
+          text: "# 任意输入整理\n\n你是内容策划助理。把用户输入整理成内部 JSON，不要询问用户，不要输出解释。输入可能是人物、经历、知识、兴趣、感受、观点、事件、一句话或任意原始文本；也可能是聊天记录、会议纪要、文章、语音转写、清单、转发片段或零散笔记。\n\n## 本次输入（必须全部使用）\n\n- `campaign_brief`：{{#a00.campaign_brief#}}\n- `creative_preferences`：{{#a00.creative_preferences#}}\n- `brand_guidelines`：{{#a00.brand_guidelines#}}\n- `history_notes`：{{#a00.history_notes#}}\n- `request_id`：{{#a00.request_id#}}\n- `production_requirements`：{{#a00.production_requirements#}}\n\n## 输出 JSON\n\n```json\n{\n  \"topic_record\": {\n    \"topic\": \"一句话主题（提炼后，不是原话）\",\n    \"source_text\": \"原始输入全文，完整保留，便于后续核对\",\n    \"audience_hint\": \"可选受众提示，不确定就留空\",\n    \"context\": {},\n    \"facts_confirmed\": [\"用户明确给出的事实、数字、经历或来源明确的说法\"],\n    \"constraints\": [\"用户明确提出的限制或要求\"],\n    \"duration_seconds\": 30\n  },\n  \"distill\": {\n    \"source_form\": \"chat_log|meeting_notes|article|voice_transcript|list|note|idea|brief|mixed\",\n    \"thesis\": \"一句话主张\",\n    \"thesis_source\": \"user_stated|implied|inferred_from_facts\",\n    \"thesis_type\": \"judgment|causal|method|prediction|experience\",\n    \"arguments\": [\n      {\"id\": \"a1\", \"claim\": \"能独立成立的论点\", \"evidence\": \"支撑它的具体事实/数字/对比/经历，没有就留空\", \"support\": \"data|experience|comparison|mechanism|counterexample|none\", \"strength\": \"high|medium|low\"}\n    ],\n    \"counterpoints\": [\"素材里需要正面回应的相反说法\"],\n    \"dropped\": [\"被丢弃的内容类别\"],\n    \"open_questions\": [\"素材没讲清、成稿不能编造的点\"]\n  },\n  \"creative\": {\n    \"topic_mode\": \"rotate\",\n    \"angle_preference\": \"可选角度偏好\"\n  },\n  \"history\": {}\n}\n```\n\n## 提炼优先（所有输入形态都先做这一步）\n\n1. **先提炼，再定主题。** 不管输入是聊天记录、文章还是几句话，都先回答一个问题：这个人真正想说的是什么判断？答案就是 `distill.thesis`。\n2. `thesis` 必须是判断句：A 导致 B / X 不是 Y / 应该做 Z / 本质上是什么。禁止写成话题名词（\"关于回乡的思考\"）、过程描述（\"聊了回乡的事\"）或口号。\n3. `thesis` 优先取输入者自己的立场。分辨依据：被追问的那句、被反驳后坚持的那句、说得最长、带数字或情绪、反复出现的那句。其他人的附和、客套和跑题不算立场。\n4. **素材只是素材，时间顺序不是结构。** \"先…然后…后来…\"只在它本身是因果链时才保留；单纯的过程、行程、寒暄、付款、打招呼一律不进 `thesis` 和 `arguments`。\n5. `arguments` 是支撑这个主张的理由，多少条由素材决定，不凑数、不硬拆：能独立成立、说得清楚的留下，说不清的并进别的论点或直接丢。\n6. 有证据就写进 `evidence`（数字、对比、亲历细节、反例、机制）；没有证据把 `support` 写成 `none`，并在 `open_questions` 记一句缺什么——**不得编造数字、案例或效果**。\n7. 素材里有冲突观点时：`thesis` 取输入者的立场，冲突说法进 `counterpoints`，成稿必须回应，不许装作没看见。\n8. 素材只有流水叙事、没有任何判断时：从 `facts_confirmed` 里推出最有支撑的一个判断，`thesis_source` 写 `inferred_from_facts`，缺的部分写进 `open_questions`。\n9. `dropped` 用短标签列清楚丢了什么类别（寒暄、重复、跑题、无关人物、玩笑、时间细节），方便后面核对没把废话写回去。\n10. 论点之间怎么排、每条讲多长，都交给你判断；不要为了整齐去做对称结构。\n\n## 规则\n\n- 不预设行业、商业结构或转化目标；用户没给的字段一律留空，不得自行补写故事。\n- 如果只是随口一句话，就把它作为 `source_text` 和 `topic`，`thesis` 用这句话的判断含义，论点按这句话能支撑的写，不要补写背景故事或商业故事。\n- 没有填写的可选内容使用空字符串、空数组或空对象。\n- 不得发明用户未提供的数字、案例、价格、经历、效果或承诺。\n- 主题完全由用户输入决定，不得默认改成商业、SaaS、获客或任何特定行业。\n- `duration_seconds` 默认 30；用户没说时长就不要按素材长度加长。\n\n## 素材类输入\n\n- 输入可能是聊天记录、笔记、文档摘录、语音转写、清单、链接摘要或碎片想法；一律当素材，不当文案。\n- `topic` 写提炼后的主题句，不要直接摘一句原话当主题。\n- `source_text` 保留原文便于核对；`facts_confirmed` 只提取能当论据的事实、经历、数字和明确观点。\n- 寒暄、语气词、表情、@、重复、玩笑、跑题和只有当事人才懂的指代，不要写进任何字段。\n- 聊天记录里\"他说/我说\"的轮次结构不是内容：先合并同一方观点，再提炼，不要把对话拆成论点。\n\n- 只输出 JSON。\n"
+        context:
+          enabled: false
+          variable_selector: []
+        vision:
+          enabled: false
+      position:
+        x: 350
+        y: 315
+      positionAbsolute:
+        x: 350
+        y: 315
+      sourcePosition: right
+      targetPosition: left
+      width: 310
+      height: 155
+    - id: a02
+      type: custom
+      data:
+        type: code
+        title: A02_解析整理结果
+        code_language: python3
+        code: "def main(structured_input_text: str) -> dict:\n    import json\n    import re\n\n    raw = str(structured_input_text or \"\").strip()\n    cleaned = re.sub(r\"^```(?:json)?\\s*|\\s*```$\", \"\", raw, flags=re.I)\n    data = {}\n    try:\n        parsed = json.loads(cleaned)\n        if isinstance(parsed, dict):\n            data = parsed\n    except Exception:\n        start, end = cleaned.find(\"{\"), cleaned.rfind(\"}\")\n        if start >= 0 and end > start:\n            try:\n                parsed = json.loads(cleaned[start:end + 1])\n                if isinstance(parsed, dict):\n                    data = parsed\n            except Exception:\n                data = {}\n\n    def obj(value):\n        if isinstance(value, dict):\n            return value\n        if isinstance(value, str):\n            try:\n                parsed = json.loads(value)\n                return parsed if isinstance(parsed, dict) else {}\n            except Exception:\n                return {}\n        return {}\n\n    def str_list(value):\n        if not isinstance(value, list):\n            return []\n        return [str(item).strip() for item in value if str(item).strip()]\n\n    topic_record = obj(data.get(\"topic_record\") or data.get(\"campaign\"))\n    distill_raw = obj(data.get(\"distill\"))\n    creative = obj(data.get(\"creative\"))\n    context = obj(data.get(\"context\") or data.get(\"brand\"))\n    history = obj(data.get(\"history\"))\n\n    topic = str(topic_record.get(\"topic\") or topic_record.get(\"source_text\") or raw or \"当前主题\").strip()\n    source_text = str(topic_record.get(\"source_text\") or raw or topic).strip()\n\n    arguments = []\n    for index, item in enumerate(distill_raw.get(\"arguments\") or []):\n        if not isinstance(item, dict):\n            continue\n        claim = str(item.get(\"claim\") or \"\").strip()\n        if not claim:\n            continue\n        arguments.append({\n            \"id\": str(item.get(\"id\") or \"a%d\" % (index + 1)).strip(),\n            \"claim\": claim,\n            \"evidence\": str(item.get(\"evidence\") or \"\").strip(),\n            \"support\": str(item.get(\"support\") or \"none\").strip(),\n            \"strength\": str(item.get(\"strength\") or \"medium\").strip(),\n        })\n    seen_ids = set()\n    for argument in arguments:\n        while argument[\"id\"] in seen_ids:\n            argument[\"id\"] = argument[\"id\"] + \"_dup\"\n        seen_ids.add(argument[\"id\"])\n\n    thesis = str(distill_raw.get(\"thesis\") or \"\").strip()\n    if not thesis:\n        thesis = topic\n    distill = {\n        \"source_form\": str(distill_raw.get(\"source_form\") or \"\").strip() or \"mixed\",\n        \"thesis\": thesis,\n        \"thesis_source\": str(distill_raw.get(\"thesis_source\") or \"\").strip() or \"inferred_from_facts\",\n        \"thesis_type\": str(distill_raw.get(\"thesis_type\") or \"\").strip() or \"judgment\",\n        \"arguments\": arguments,\n        \"counterpoints\": str_list(distill_raw.get(\"counterpoints\")),\n        \"dropped\": str_list(distill_raw.get(\"dropped\")),\n        \"open_questions\": str_list(distill_raw.get(\"open_questions\")),\n    }\n\n    campaign = {\n        \"topic\": topic,\n        \"source_text\": source_text,\n        \"audience_hint\": str(topic_record.get(\"audience_hint\") or topic_record.get(\"audience\") or \"\").strip(),\n        \"context\": obj(topic_record.get(\"context\")),\n        \"facts_confirmed\": topic_record.get(\"facts_confirmed\") if isinstance(topic_record.get(\"facts_confirmed\"), list) else [],\n        \"constraints\": topic_record.get(\"constraints\") if isinstance(topic_record.get(\"constraints\"), list) else [],\n        \"duration_seconds\": topic_record.get(\"duration_seconds\", 30),\n        \"distill\": distill,\n    }\n    for key in (\"brand\", \"product\", \"audience\", \"pain\", \"offer\", \"cta\", \"tone\", \"platform\", \"proof\"):\n        value = topic_record.get(key)\n        if value not in (None, \"\", [], {}):\n            campaign[key] = value\n\n    return {\n        \"campaign_json\": json.dumps(campaign, ensure_ascii=False),\n        \"creative_json\": json.dumps(creative, ensure_ascii=False),\n        \"brand_json\": json.dumps(context, ensure_ascii=False),\n        \"history_json\": json.dumps(history, ensure_ascii=False)\n    }"
+        variables:
+        - variable: structured_input_text
+          value_selector:
+          - a01
+          - text
+          value_type: string
+        outputs:
+          campaign_json:
+            type: string
+            children: null
+          creative_json:
+            type: string
+            children: null
+          brand_json:
+            type: string
+            children: null
+          history_json:
+            type: string
+            children: null
+      position:
+        x: 705
+        y: 335
+      positionAbsolute:
+        x: 705
+        y: 335
+      sourcePosition: right
+      targetPosition: left
+      width: 270
+      height: 158
+    - id: a03
+      type: custom
+      data:
+        type: code
+        title: A03_标准化Brief
+        code_language: python3
+        code: "def main(campaign_json: str, creative_json: str, brand_json: str, history_json: str) -> dict:\n    import json\n    import re\n\n    def load(value, fallback):\n        try:\n            parsed = json.loads(value or \"\")\n            return parsed if isinstance(parsed, dict) else fallback\n        except Exception:\n            return fallback\n\n    campaign = load(campaign_json, {})\n    creative = load(creative_json, {})\n    context = load(brand_json, {})\n    history = load(history_json, {})\n\n    topic = str(campaign.get(\"topic\") or campaign.get(\"source_text\") or campaign.get(\"product\") or campaign.get(\"brand\") or \"当前主题\").strip()\n    source_text = str(campaign.get(\"source_text\") or topic).strip()\n    audience_hint = str(campaign.get(\"audience_hint\") or campaign.get(\"audience\") or \"\").strip()\n    facts_confirmed = campaign.get(\"facts_confirmed\") if isinstance(campaign.get(\"facts_confirmed\"), list) else []\n    constraints = campaign.get(\"constraints\") if isinstance(campaign.get(\"constraints\"), list) else []\n    normalization_warnings = []\n    if not str(campaign.get(\"topic\") or \"\").strip():\n        normalization_warnings.append(\"topic 缺失，已使用 source_text/当前主题作为主题\")\n\n    distill = campaign.get(\"distill\") if isinstance(campaign.get(\"distill\"), dict) else {}\n    arguments = [item for item in (distill.get(\"arguments\") or []) if isinstance(item, dict) and str(item.get(\"claim\") or \"\").strip()]\n    thesis = str(distill.get(\"thesis\") or \"\").strip()\n    source_form = str(distill.get(\"source_form\") or \"\").strip() or \"mixed\"\n    if not thesis:\n        thesis = topic\n        normalization_warnings.append(\"distill.thesis 缺失，已回落到主题句\")\n    if not arguments:\n        normalization_warnings.append(\"distill.arguments 为空，本次只能按单一论点展开\")\n    distill = {\n        \"source_form\": source_form,\n        \"thesis\": thesis,\n        \"thesis_source\": str(distill.get(\"thesis_source\") or \"\").strip() or \"inferred_from_facts\",\n        \"thesis_type\": str(distill.get(\"thesis_type\") or \"\").strip() or \"judgment\",\n        \"arguments\": arguments,\n        \"counterpoints\": [str(item).strip() for item in (distill.get(\"counterpoints\") or []) if str(item).strip()],\n        \"dropped\": [str(item).strip() for item in (distill.get(\"dropped\") or []) if str(item).strip()],\n        \"open_questions\": [str(item).strip() for item in (distill.get(\"open_questions\") or []) if str(item).strip()],\n    }\n    argument_count = len(distill[\"arguments\"])\n    source_chars = len(re.sub(r\"\\s+\", \"\", source_text))\n\n    raw_duration = str(campaign.get(\"duration_seconds\") or \"\").strip()\n    duration = 0.0\n    if raw_duration:\n        try:\n            duration = max(1.0, float(raw_duration))\n        except Exception:\n            duration = 0.0\n    if duration <= 0:\n        duration = 30.0\n        normalization_warnings.append(\"未指定时长，编排参考时长取 30 秒；最终以真实口播为准\")\n\n    brief = {\n        \"topic\": topic,\n        \"source_text\": source_text,\n        \"source_chars\": source_chars,\n        \"audience_hint\": audience_hint,\n        \"context\": context,\n        \"facts_confirmed\": facts_confirmed,\n        \"constraints\": constraints,\n        \"creative\": creative,\n        \"history\": history,\n        \"distill\": distill,\n        \"argument_count\": argument_count,\n        \"language\": \"zh-CN\",\n        \"aspect_ratio\": \"9:16\",\n        \"resolution\": \"1080x1920\",\n        \"fps\": 25,\n        \"target_duration_seconds\": duration,\n        \"normalization_warnings\": normalization_warnings,\n        \"hard_rules\": {\n            \"one_angle_per_video\": True,\n            \"voice_chars_per_second\": 4.2,\n            \"caption_unit\": \"complete_sentence\",\n            \"content_assumptions\": \"none\",\n            \"argument_spine\": True,\n            \"no_chronology_retelling\": True,\n            \"source_text_is_material_only\": True,\n            \"duration_is_reference_only\": True,\n            \"no_length_quota\": True,\n        }\n    }\n    for key in (\"brand\", \"product\", \"audience\", \"pain\", \"offer\", \"cta\", \"tone\", \"platform\", \"proof\"):\n        value = campaign.get(key)\n        if value not in (None, \"\", [], {}):\n            brief[key] = value\n\n    normalized_text = re.sub(r\"\\s+\", \"\", source_text).lower()\n    return {\n        \"brief_json\": json.dumps(brief, ensure_ascii=False),\n        \"target_duration_seconds\": duration,\n        \"proof_fingerprint\": normalized_text,\n        \"validation_ok\": True\n    }"
+        variables:
+        - variable: campaign_json
+          value_selector:
+          - a02
+          - campaign_json
+          value_type: string
+        - variable: creative_json
+          value_selector:
+          - a02
+          - creative_json
+          value_type: string
+        - variable: brand_json
+          value_selector:
+          - a02
+          - brand_json
+          value_type: string
+        - variable: history_json
+          value_selector:
+          - a02
+          - history_json
+          value_type: string
+        outputs:
+          brief_json:
+            type: string
+            children: null
+          target_duration_seconds:
+            type: number
+            children: null
+          proof_fingerprint:
+            type: string
+            children: null
+          validation_ok:
+            type: boolean
+            children: null
+      position:
+        x: 1060
+        y: 335
+      positionAbsolute:
+        x: 1060
+        y: 335
+      sourcePosition: right
+      targetPosition: left
+      width: 270
+      height: 196
+    - id: a03_gate
+      type: custom
+      data:
+        type: if-else
+        title: A03_Brief门禁
+        cases:
+        - id: valid
+          case_id: valid
+          logical_operator: and
+          conditions:
+          - id: valid-condition
+            variable_selector:
+            - a03
+            - validation_ok
+            comparison_operator: is
+            value: 'true'
+            varType: boolean
+      position:
+        x: 1415
+        y: 355
+      positionAbsolute:
+        x: 1415
+        y: 355
+      sourcePosition: right
+      targetPosition: left
+      width: 270
+      height: 105
+    - id: a04
+      type: custom
+      data:
+        type: llm
+        title: A04_选择内容角度
+        model:
+          provider: langgenius/mimo/mimo
+          name: mimo-v2.6-pro
+          mode: chat
+          completion_params:
+            temperature: 0.2
+            max_completion_tokens: 1200
+        prompt_template:
+        - id: a04-system
+          role: system
+          text: "# 内容策略师\n\n你是任意主题的中文短视频内容策略师。只能从已确认 brief 和审核主题池中选择一个角度，不得自行发明事实，也不得把主题强行解释成某个固定行业。\n\n## 输入\n\n- `brief`：主题、原始文本、已确认事实、约束，以及 `distill`（已提炼的主张与论点）\n- `approved_topics`：已审核主题池\n- `history`：已使用主题和效果反馈\n\n## 本次输入（必须全部使用）\n\n- `brief_json`：{{#a03.brief_json#}}\n- `creative_preferences`：{{#a00.creative_preferences#}}\n- `history_notes`：{{#a00.history_notes#}}\n- `request_id`：{{#a00.request_id#}}\n\n## 论点脊柱（强制，最高优先级）\n\n`brief_json.distill` 已经给出主张和论点。你的任务不是重新想题材，而是把这根脊柱排成一条能立住的叙事顺序。\n\n1. `core_message` 必须等于 `distill.thesis` 的意思：可以更锋利、更具体，但**不许换题**，也不许退回到更宽泛的话题。\n2. 输出 `argument_order`：把 `distill.arguments` 的 id 排成一个顺序，不许编造新 id，也不许为了凑数新增论点。\n3. 输出 `argument_claims`：`{id: 一句话论点}`，只做压缩，不改意思；这条会一路带到口播和分镜，必须能被观众单独听懂。\n4. 排序判断标准依次是：能直接推出结论的机制 > 有数字或对比的事实 > 亲历细节 > 类比和常识。弱的论点放到后面，讲不动就少讲一条，而不是硬撑。\n5. 自检：如果 `argument_order` 与 `distill.arguments` 的原顺序完全一致，说明你在照抄素材，重排一次再输出。\n6. 从 `distill.counterpoints` 里挑最容易让人不服的那条，写进 `proof_priority` 的前部——成稿必须正面回应它，不许回避。\n7. `distill.dropped` 里的内容一律不写回来；`distill.open_questions` 里的内容不得编造答案，写进 `claims_to_verify`。\n\n## 结构自由\n\n- 标题和副标题只要短、能一眼读完，字数由你判断。\n- 视频分几段、每段多长，由论点本身的重量决定：重要的一条可以占很久，次要的一条一句话带过也行。\n- 屏幕主文案写到能一眼读完为止，讲不完的内容留在口播里。\n- 单元之间要有递进、对比、因果或行动关系，不写时间线流水账。\n- 禁止“首先、其次、最后”式模板、空洞口号、鸡汤和无信息量过渡句。\n- 第一段直接进入 Hook，不做空白封面；结尾用一句有力总结或自然行动建议收束。\n\n## 重组规则（优先于原始输入顺序）\n\n- brief 里的原始输入只是素材，不是提纲：先提炼出一个能立住的结论，再倒推需要哪些论据。\n- 不沿用原始输入的时间顺序或原有结构；禁止把聊天记录按段改写成文案。\n- 论据按“能否让结论更快成立”排序，不按原话出现的先后排序。\n- 自检：如果连续三个论据的先后与原始输入一致，换一个顺序。\n\n## 素材类输入\n\n- 素材不是文案：先判断这段素材真正的分歧、结论或情绪落点，再选一个能立住的角度。\n- 禁止按原顺序搬运：不把聊天轮次、文档段落或清单条目当成叙事结构，也不按发言/段落顺序组织论据。\n- 素材里有多个话题时只选一个，其余写进 `excluded_topics`。\n\n## 论点要求（强制）\n\n- `core_message` 必须是一句能被单独当标题的断言，不是话题描述，也不是过程总结。\n- `hook_candidates[0]` 必须是结论型断言，不能只是一句场景或过程描述。\n- `proof_priority` 按“能否让结论更快成立”排序，不按素材出现顺序。\n- `argument_order` 与 `argument_claims` 必须齐全，缺一个都算没完成。\n\n## 目标\n\n一条视频只解决一个用户认知任务：提出问题、解释概念、展示步骤、分享经历、验证方法、给出启发，或形成自然行动建议。\n\n## 约束\n\n1. 主题可以是人物、知识、运动、感受、经历、成长、生活、观点或任意用户输入。\n2. 不选择无法由 brief 和用户事实支持的案例角度。\n3. 一条视频只讲一个核心角度，不堆砌全部知识点。\n4. Hook 必须具体，避免“大家好”“今天介绍”。\n5. 数字、价格、经历和结果只能来自 `facts_confirmed`。\n6. 输出 JSON，不输出 Markdown。\n\n## 输出 JSON\n\n```json\n{\n  \"angle_id\": \"string\",\n  \"angle_type\": \"问题型|经历型|方法型|结果型|场景型|行动型\",\n  \"core_message\": \"一句话核心结论，等义于 distill.thesis\",\n  \"argument_order\": [\"a2\", \"a1\", \"a3\"],\n  \"argument_claims\": {\"a1\": \"压缩后的一句话论点\", \"a2\": \"压缩后的一句话论点\"},\n  \"audience_tension\": \"可选的观众/情境张力；没有明确受众时写空字符串\",\n  \"hook_candidates\": [\"候选 Hook 1\", \"候选 Hook 2\", \"候选 Hook 3\"],\n  \"proof_priority\": [\"本条优先使用的已确认事实或经验\"],\n  \"claims_to_verify\": [\"无法确认、需要人工核验的内容\"],\n  \"selection_reason\": \"选择该角度的原因\",\n  \"excluded_topics\": [\"本次明确不讲的内容\"]\n}\n```\n"
+        context:
+          enabled: false
+          variable_selector: []
+        vision:
+          enabled: false
+      position:
+        x: 1710
+        y: 295
+      positionAbsolute:
+        x: 1710
+        y: 295
+      sourcePosition: right
+      targetPosition: left
+      width: 310
+      height: 155
+    - id: a05
+      type: custom
+      data:
+        type: code
+        title: A05_解析内容角度
+        code_language: python3
+        code: "def main(strategy_text: str) -> dict:\n    import json\n    import re\n\n    raw = str(strategy_text or \"\").strip()\n    raw = re.sub(r\"^```(?:json)?\\s*|\\s*```$\", \"\", raw, flags=re.I)\n    try:\n        data = json.loads(raw)\n    except Exception:\n        start, end = raw.find(\"{\"), raw.rfind(\"}\")\n        data = {}\n        if start >= 0 and end > start:\n            try:\n                data = json.loads(raw[start:end + 1])\n            except Exception:\n                data = {}\n    if not isinstance(data, dict):\n        data = {}\n    fallback_warning = \"\"\n    if not data:\n        fallback_warning = \"内容策略 JSON 无法解析，已生成基础角度继续\"\n        data = {\"core_message\": raw[:200] or \"聚焦一个具体业务问题\", \"angle_id\": \"angle_generated\"}\n\n    warnings = [fallback_warning] if fallback_warning else []\n    core_message = str(data.get(\"core_message\", \"\")).strip()\n    hook = str(data.get(\"hook\", \"\")).strip()\n    hooks = data.get(\"hook_candidates\")\n    if not isinstance(hooks, list):\n        hooks = []\n    hooks = [str(item).strip() for item in hooks if str(item).strip()]\n    if not hooks:\n        hooks = [hook or core_message or \"聚焦一个具体业务问题\"]\n        warnings.append(\"hook_candidates 缺失，已使用 hook/core_message 生成\")\n    data[\"hook_candidates\"] = hooks\n    data[\"hook\"] = hooks[0]\n\n    if not core_message:\n        core_message = data[\"hook\"]\n        data[\"core_message\"] = core_message\n        warnings.append(\"core_message 缺失，已使用 hook 生成\")\n    if not str(data.get(\"angle_id\", \"\")).strip():\n        data[\"angle_id\"] = \"angle_generated\"\n        warnings.append(\"angle_id 缺失，已生成 angle_generated\")\n\n    claims_raw = data.get(\"argument_claims\")\n    claims = {}\n    if isinstance(claims_raw, dict):\n        for key, value in claims_raw.items():\n            text = str(value or \"\").strip()\n            if text:\n                claims[str(key).strip()] = text\n    order_raw = data.get(\"argument_order\")\n    order = []\n    if isinstance(order_raw, list):\n        for item in order_raw:\n            token = str(item or \"\").strip()\n            if token and token not in order:\n                order.append(token)\n    if not order:\n        order = list(claims.keys())\n        if order:\n            warnings.append(\"argument_order 缺失，已按 argument_claims 顺序展开\")\n    missing_claims = [token for token in order if token not in claims]\n    if missing_claims:\n        warnings.append(\"argument_order 中的 \" + \"、\".join(missing_claims) + \" 没有对应 argument_claims\")\n    data[\"argument_order\"] = order\n    data[\"argument_claims\"] = claims\n    if not order:\n        warnings.append(\"本次没有论点排序，视频只能按单一论点展开\")\n\n    data[\"normalization_warnings\"] = warnings\n\n    return {\n        \"strategy_json\": json.dumps(data, ensure_ascii=False),\n        \"angle_id\": str(data[\"angle_id\"]),\n        \"hook\": str(data[\"hook\"]),\n        \"core_message\": core_message,\n        \"parse_ok\": True\n    }"
+        variables:
+        - variable: strategy_text
+          value_selector:
+          - a04
+          - text
+          value_type: string
+        outputs:
+          strategy_json:
+            type: string
+            children: null
+          angle_id:
+            type: string
+            children: null
+          hook:
+            type: string
+            children: null
+          core_message:
+            type: string
+            children: null
+          parse_ok:
+            type: boolean
+            children: null
+      position:
+        x: 2065
+        y: 315
+      positionAbsolute:
+        x: 2065
+        y: 315
+      sourcePosition: right
+      targetPosition: left
+      width: 270
+      height: 177
+    - id: a06
+      type: custom
+      data:
+        type: llm
+        title: A06_生成口播文案
+        model:
+          provider: langgenius/mimo/mimo
+          name: mimo-v2.6-pro
+          mode: chat
+          completion_params:
+            temperature: 0.2
+            max_completion_tokens: 10000
+        prompt_template:
+        - id: a06-system
+          role: system
+          text: "# 任意主题口播文案\n\n你是自然、有信息量的中文短视频口播文案。用户输入只是素材，不是完整口播。你的任务是把 `brief.distill` 里已经提炼好的主张和论点，讲成一条观众能听懂、能记住、能被说服的口播；主题可以是人物、知识、运动、感受、经历、成长、观点或任何其他需求。\n\n## 本次输入（必须全部使用）\n\n- `brief_json`：{{#a03.brief_json#}}\n- `strategy_json`：{{#a05.strategy_json#}}\n- `production_requirements`：{{#a00.production_requirements#}}\n\n## 论点结构（强制，违反即重写）\n\n这是一条讲观点的视频，不是素材回顾。不限制句数和字数，但骨架只有一种：\n\n1. **第一句**：直接说出 `brief_json.distill.thesis`（可用 `strategy_json.core_message` 的措辞），必须是一句判断。\n2. **第二句**：把这个结论推到代价、反常识或后果上（“因为……”“这意味着……”“代价是……”），让观众非听下去不可。\n3. **中间**：按 `strategy_json.argument_order` 展开论点，先把论点说清再给证据；顺序照 `argument_order`，不照素材出现顺序。每条讲多长由它自己的重量决定，讲透就过，讲不动就合并。\n4. **结尾**：回收主张，能被单独截出来当金句；不要写成“总结一下”的口播腔。\n\n硬性约束：\n\n- `argument_coverage` 必须逐条报告每个论点用在哪一句：`[{\"id\": \"a1\", \"sentence_index\": 2}]`。这是给门禁核对的，不许漏报。\n- 一个论点可以占多句，但不许把两个不相干的论点硬塞进一句。\n- `strategy_json.argument_claims` 是论点的标准表述，改写时要保证意思不变。\n- 素材里的多个话题只讲 `argument_order` 里的这一个方向，其余一概不讲。\n\n## 禁止复述（强制）\n\n- 禁止按原始输入的时间顺序叙述。`然后、接着、后来、之后再、当天、第二天、隔天、那时候、当时`这类时间连接词不能当叙事骨架：它们出现的次数取决于内容，但一旦成串，就说明你在复述过程，必须改。\n- 禁止保留对话轮次：不写“他说/我说/她说/对方说/有人问”，把对话内容改成面向观众的判断。\n- 禁止逐句改写素材，禁止整句照抄原文；原话只在关键句上做短引用。\n- 禁止把过程当内容：行程、寒暄、付款、打招呼、天气、谁先开口，一律不写。\n- `brief_json.distill.dropped` 里列出的类别，一个字都不要写回来。\n\n## 生成策略\n\n- 长度由内容决定：把观点讲透就停，不为凑时长注水，也不为压缩时长删论点；写多长，成片就多长。\n- 按 4.2 字/秒估算，估算值只用于 HTML 编排参考，最终以真实口播为准。\n- 每个论点先用一句话写出“观众这几秒要记住什么”，写不出来就说明这个论点不成立，删掉它而不是堆形容词。\n- 根据论点合理扩写机制、代价、适用场景和可执行动作；不要强行加入商业转化或推广口吻。\n- 只能使用 `facts_confirmed` 里的数字、经历、案例、价格和效果；通用解释可以合理扩写，但不得编造数据、经历或承诺。\n\n## 语言要求\n\n- 像一个人在讲观点，不像在转述素材；某句离开上下文看不懂，就改写成观众能独立理解的表达。\n- 禁止“首先、其次、最后”式模板、空洞口号、鸡汤和无信息量过渡句。\n- 禁止绝对化承诺、保证结果、制造恐慌或贬低他人。\n- 口播不得包含镜头指令、括号、Markdown 或舞台说明。\n- 英文词和数字必须适合朗读。\n\n## 分句规则（给本地切分用，不写字幕）\n\n字幕由我们最后自己写，你不需要生成字幕文案或字幕样式。你只需要把口播按完整句子写成句末带标点的文本，本地会按句子切分并逐句上屏。\n\n- 一个完整句子以 `。！？!?` 结束；逗号、顿号、冒号、分号不切句。\n- 不要把两个不相干的半句硬拼成一句，也不要为凑长度写长句。\n\n## 硬性规则\n\n1. 首句必须是结论或反常识断言；可以有场景或人称，但落点必须是判断。\n2. 一条视频只讲一个核心角度，但可以把这个角度讲完整。\n3. 不确定内容进入 `claims_to_verify`。\n4. `argument_coverage` 必须覆盖 `strategy_json.argument_order` 的全部 id。\n5. 只输出严格合法 JSON，不输出解释。\n\n## 输出 JSON\n\n```json\n{\n  \"voiceover_script\": \"完整口播全文，使用完整句末标点。\",\n  \"sentences\": [\n    {\"id\": \"s01\", \"text\": \"第一条完整句子。\", \"purpose\": \"hook\"}\n  ],\n  \"argument_coverage\": [\n    {\"id\": \"a1\", \"sentence_index\": 2}\n  ],\n  \"claims_to_verify\": []\n}\n```\n"
+        context:
+          enabled: false
+          variable_selector: []
+        vision:
+          enabled: false
+      position:
+        x: 2420
+        y: 315
+      positionAbsolute:
+        x: 2420
+        y: 315
+      sourcePosition: right
+      targetPosition: left
+      width: 310
+      height: 155
+    - id: a07
+      type: custom
+      data:
+        type: code
+        title: A07_整理口播
+        code_language: python3
+        code: "def main(copy_text: str, brief_json: str) -> dict:\n    import hashlib\n    import json\n    import math\n    import re\n\n    def parse(raw, label):\n        value = str(raw or \"\").strip()\n        value = re.sub(r\"^```(?:json)?\\s*|\\s*```$\", \"\", value, flags=re.I)\n        try:\n            return json.loads(value)\n        except Exception:\n            start, end = value.find(\"{\"), value.rfind(\"}\")\n            if start >= 0 and end > start:\n                try:\n                    return json.loads(value[start:end + 1])\n                except Exception:\n                    pass\n            return {\"__invalid_json__\": True, \"__label__\": label, \"__excerpt__\": value[:1000]}\n\n    brief = parse(brief_json, \"brief\")\n    data = parse(copy_text, \"文案\")\n    if not isinstance(data, dict):\n        data = {\"__invalid_json__\": True, \"__label__\": \"文案\", \"__excerpt__\": str(copy_text)[:1000]}\n    if data.get(\"__invalid_json__\"):\n        excerpt = str(data.get(\"__excerpt__\") or \"\")\n        return {\n            \"script_json\": json.dumps({\"voiceover_script\": excerpt, \"sentences\": [], \"validation\": {\"errors\": [\"JSON 无法解析\"]}}, ensure_ascii=False),\n            \"voiceover_script\": excerpt,\n            \"estimated_duration_seconds\": 0.0,\n            \"script_hash\": hashlib.sha256(excerpt.encode(\"utf-8\")).hexdigest(),\n            \"copy_valid\": False,\n            \"copy_errors_json\": json.dumps([\"口播 JSON 无法解析，请自动改写为严格 JSON\"], ensure_ascii=False),\n            \"copy_warnings_json\": \"[]\",\n            \"recommended_motion_count_min\": 6\n        }\n    warnings = []\n    errors = []\n\n    supplied_sentences = data.get(\"sentences\")\n    if not isinstance(supplied_sentences, list):\n        supplied_sentences = []\n    script = str(data.get(\"voiceover_script\", \"\")).strip()\n    if not script and supplied_sentences:\n        script = \" \".join(str(item.get(\"text\", \"\") if isinstance(item, dict) else item).strip() for item in supplied_sentences).strip()\n    if not script:\n        raise ValueError(\"voiceover_script 和 sentences 不能同时为空\")\n    data[\"voiceover_script\"] = script\n\n    # The final script is the text truth. Rebuild captions by complete sentences,\n    # preserving terminal punctuation and never splitting or joining fragments.\n    sentence_texts = [match.group(0).strip() for match in re.finditer(r\".*?(?:[。！？!?]+|$)\", script, flags=re.S) if match.group(0).strip()]\n    sentences = [{\"id\": \"s%02d\" % (i + 1), \"text\": text} for i, text in enumerate(sentence_texts)]\n    if not sentences:\n        errors.append(\"口播里没有完整句子，无法生成逐句字幕\")\n        sentences = [{\"id\": \"s01\", \"text\": script}]\n\n    compact = re.sub(r\"\\s+\", \"\", script)\n    target_duration = float(brief.get(\"target_duration_seconds\") or 0) or 30.0\n\n    banned = [\"保证出单\", \"百分百\", \"马上爆单\", \"行业第一\", \"绝对第一\", \"最强\", \"最先进\"]\n    for word in banned:\n        if word in script:\n            warnings.append(\"口播包含待合规复核表达: \" + word)\n\n    # ---------------- 内容诊断：只提示，不限制长度和结构 ----------------\n    distill = brief.get(\"distill\") if isinstance(brief.get(\"distill\"), dict) else {}\n    thesis = str(distill.get(\"thesis\") or \"\").strip()\n    arguments = [item for item in (distill.get(\"arguments\") or [])\n                 if isinstance(item, dict) and str(item.get(\"claim\") or \"\").strip()]\n    source_text = str(brief.get(\"source_text\") or \"\")\n    compact_source = re.sub(r\"\\s+\", \"\", source_text)\n\n    def shingles(text, size=6):\n        return {text[index:index + size] for index in range(max(0, len(text) - size + 1))}\n\n    chronology_words = [\"然后\", \"接着\", \"后来\", \"再后来\", \"之后\", \"当天\", \"第二天\", \"隔天\", \"那时候\", \"当时\", \"再往后\"]\n    chronology_count = sum(script.count(word) for word in chronology_words)\n\n    verbatim_ratio = 0.0\n    if len(compact_source) >= 400:\n        script_shingles = shingles(compact, 8)\n        source_shingles = shingles(compact_source, 8)\n        verbatim_ratio = len(script_shingles & source_shingles) / float(max(1, len(script_shingles)))\n\n    dialogue_marks = [\"他说\", \"她说\", \"我说\", \"对方说\", \"他问\", \"我问\", \"有人问\"]\n    dialogue_count = sum(script.count(word) for word in dialogue_marks)\n\n    argument_ids = [str(item.get(\"id\") or \"a%d\" % (index + 1)) for index, item in enumerate(arguments)]\n    coverage = data.get(\"argument_coverage\")\n    covered_ids = []\n    if isinstance(coverage, list):\n        for item in coverage:\n            token = \"\"\n            if isinstance(item, dict):\n                token = str(item.get(\"id\") or item.get(\"argument_id\") or \"\").strip()\n            else:\n                token = str(item or \"\").strip()\n            if token and token not in covered_ids:\n                covered_ids.append(token)\n    unknown_ids = [token for token in covered_ids if token not in argument_ids]\n    if unknown_ids:\n        warnings.append(\"argument_coverage 出现未知论点：\" + \"、\".join(unknown_ids) + \"（只提示，不拦截）\")\n    elif argument_ids and covered_ids:\n        missing = [token for token in argument_ids if token not in covered_ids]\n        if missing:\n            warnings.append(\"自报覆盖里没提到论点 \" + \"、\".join(missing) + \"：可能是合并或略讲，按内容判断是否需要补（只提示，不拦截）\")\n\n    if len(re.sub(r\"\\s+\", \"\", thesis)) >= 6:\n        thesis_shingles = shingles(re.sub(r\"\\s+\", \"\", thesis), 2)\n        if thesis_shingles and not any(token in compact for token in thesis_shingles):\n            warnings.append(\"全文没有明显回应 distill.thesis，检查是否换题了（只提示）\")\n\n    # 唯一的内容拦截：时间连接词成串说明在按过程复述。不设字数/句数配额。\n    if chronology_count >= 5:\n        errors.append(\"口播在按时间顺序复述（时间连接词 %d 处：%s）：改成论点结构，删掉过程衔接\" % (\n            chronology_count, \"、\".join(sorted({word for word in chronology_words if word in script}))))\n    elif chronology_count >= 3:\n        warnings.append(\"时间连接词 %d 处，偏多则可能在复述过程（只提示）\" % chronology_count)\n\n    data[\"sentences\"] = sentences\n\n    allowed_purposes = {\"hook\", \"context\", \"pain\", \"insight\", \"solution\", \"proof\", \"example\", \"ending\", \"summary\", \"cta\"}\n    normalized_sentences = []\n    seen_ids = set()\n    cursor = 0.0\n    for index, item in enumerate(sentences, 1):\n        if not isinstance(item, dict):\n            item = {\"text\": str(item)}\n        text = str(item.get(\"text\", \"\")).strip()\n        if not text:\n            continue\n        sentence_id = str(item.get(\"id\") or \"s%02d\" % index)\n        while sentence_id in seen_ids:\n            sentence_id = sentence_id + \"_dup\"\n        seen_ids.add(sentence_id)\n        purpose = str(item.get(\"purpose\") or \"\").strip()\n        if purpose not in allowed_purposes:\n            old = purpose or \"empty\"\n            purpose = \"hook\" if index == 1 else (\"ending\" if index == len(sentences) else \"insight\")\n            warnings.append(\"%s purpose=%s 已归一化为 %s\" % (sentence_id, old, purpose))\n        estimated = max(1.2, len(re.sub(r\"\\s+\", \"\", text)) / 4.35)\n        normalized_sentences.append({\n            \"id\": sentence_id,\n            \"text\": text,\n            \"purpose\": purpose,\n            \"estimated_start_seconds\": round(cursor, 2),\n            \"estimated_end_seconds\": round(cursor + estimated, 2)\n        })\n        cursor += estimated\n\n    if not normalized_sentences:\n        raise ValueError(\"sentences 中没有有效文本\")\n    normalized_sentences[0][\"purpose\"] = \"hook\"\n    if normalized_sentences[-1][\"purpose\"] not in {\"ending\", \"summary\", \"cta\"}:\n        normalized_sentences[-1][\"purpose\"] = \"ending\"\n    if not any(item[\"purpose\"] in {\"insight\", \"solution\"} for item in normalized_sentences):\n        normalized_sentences[min(1, len(normalized_sentences) - 1)][\"purpose\"] = \"insight\"\n\n    normalized_captions = [item[\"text\"] for item in normalized_sentences]\n    supplied_captions = data.get(\"burned_in_caption_lines\")\n    if isinstance(supplied_captions, list) and supplied_captions:\n        supplied_clean = [re.sub(r\"\\s+\", \"\", str(line)) for line in supplied_captions]\n        expected_clean = [re.sub(r\"\\s+\", \"\", line) for line in normalized_captions]\n        if supplied_clean != expected_clean:\n            warnings.append(\"burned_in_caption_lines 与完整句子不一致，已强制改为逐句完整字幕\")\n    data[\"burned_in_caption_lines\"] = normalized_captions\n\n    estimated_duration = round(cursor, 2)\n\n    data[\"sentences\"] = normalized_sentences\n    data[\"estimated_duration_seconds\"] = estimated_duration\n    data[\"argument_coverage\"] = coverage if isinstance(coverage, list) else []\n    data[\"content_diagnostics\"] = {\n        \"thesis\": thesis,\n        \"argument_ids\": argument_ids,\n        \"covered_argument_ids\": covered_ids,\n        \"chronology_words\": chronology_count,\n        \"verbatim_ratio\": round(verbatim_ratio, 3),\n        \"dialogue_marks\": dialogue_count,\n        \"characters\": len(compact),\n        \"sentences\": len(normalized_sentences),\n    }\n    data[\"validation\"] = {\"errors\": errors, \"warnings\": warnings}\n    script_hash = hashlib.sha256(re.sub(r\"\\s+\", \"\", script).encode(\"utf-8\")).hexdigest()\n    return {\n        \"script_json\": json.dumps(data, ensure_ascii=False),\n        \"voiceover_script\": script,\n        \"estimated_duration_seconds\": estimated_duration,\n        \"script_hash\": script_hash,\n        \"copy_valid\": not errors,\n        \"copy_errors_json\": json.dumps(errors, ensure_ascii=False),\n        \"copy_warnings_json\": json.dumps(warnings, ensure_ascii=False),\n        \"recommended_motion_count_min\": max(6, int(math.ceil(target_duration / 2.5)))\n    }"
+        variables:
+        - variable: copy_text
+          value_selector:
+          - a06
+          - text
+          value_type: string
+        - variable: brief_json
+          value_selector:
+          - a03
+          - brief_json
+          value_type: string
+        outputs:
+          script_json:
+            type: string
+            children: null
+          voiceover_script:
+            type: string
+            children: null
+          estimated_duration_seconds:
+            type: number
+            children: null
+          script_hash:
+            type: string
+            children: null
+          copy_valid:
+            type: boolean
+            children: null
+          copy_errors_json:
+            type: string
+            children: null
+          copy_warnings_json:
+            type: string
+            children: null
+          recommended_motion_count_min:
+            type: number
+            children: null
+      position:
+        x: 2775
+        y: 315
+      positionAbsolute:
+        x: 2775
+        y: 315
+      sourcePosition: right
+      targetPosition: left
+      width: 270
+      height: 234
+    - id: a07_gate
+      type: custom
+      data:
+        type: if-else
+        title: A07_口播门禁
+        cases:
+        - id: copy_valid
+          case_id: copy_valid
+          logical_operator: and
+          conditions:
+          - id: copy_valid-condition
+            variable_selector:
+            - a07
+            - copy_valid
+            comparison_operator: is
+            value: 'true'
+            varType: boolean
+      position:
+        x: 3130
+        y: 335
+      positionAbsolute:
+        x: 3130
+        y: 335
+      sourcePosition: right
+      targetPosition: left
+      width: 270
+      height: 105
+    - id: a08
+      type: custom
+      data:
+        type: llm
+        title: A08_生成语义分镜
+        model:
+          provider: langgenius/mimo/mimo
+          name: mimo-v2.6-pro
+          mode: chat
+          completion_params:
+            temperature: 0.15
+            max_completion_tokens: 30000
+        prompt_template:
+        - id: a08-system
+          role: system
+          text: "# 分镜导演\n\n你是中文短视频导演兼剪辑师。基于已批准口播生成镜头级 storyboard。音画由同一句语义驱动，不得提前列出后续信息。主题可以是知识、运动、赚钱、成长、经历、生活或观点。\n\n## 本次输入（必须全部使用）\n\n- `brief_json`：{{#a03.brief_json#}}\n- `strategy_json`：{{#a05.strategy_json#}}\n- `script_json`：{{#a07.script_json#}}\n- `production_requirements`：{{#a00.production_requirements#}}\n\n## 论点脊柱（强制）\n\n`brief_json.distill` 是这条视频的主张和论点，`strategy_json.argument_order` 是讲论点的顺序。分镜必须服务这根脊柱：\n\n1. `creative_strategy.core_message` 只能等义于 `brief_json.distill.thesis`；`creative_strategy.title` 是它的钩子化写法。\n2. 每个 scene 额外输出 `argument_id`：这一屏在支撑哪个论点，取 `argument_order` 里的 id；开场 hook 和结尾收束可以写空字符串。\n3. 镜头顺序必须与 `argument_order` 一致，**不得按素材出现顺序或时间先后排**。\n4. 画面证据优先用该论点的 `evidence`：数字就做数据卡，对比就做左右/前后，机制就做流程或结构图，反例就做对照；没有证据的论点只做强文案页，不要伪造图表。\n5. `distill.counterpoints` 里的对立说法，如果要出现，必须出现在被反驳的位置，不能当成结论。\n\n## 规则\n\n1. 镜头划分以口播句子为准：一句话可以拆成几屏，几句也可以合成一屏，由语义决定，不设固定页数；模型估算时间仅作为初稿，最终由真实语音时间码校准。\n2. 每个镜头只表达当前口播正在解释的一件事；画面应包含清晰可读的视觉证据，但组件数量、类型、大小、层级和空间关系由模型根据内容自由设计。\n3. 节奏由口播和内容决定：语义变化处就该有变化，不需要按固定秒数塞动作。\n4. 界面或内容画面优先使用可复用模板变量，不伪造真实截图。`visual_source` 与 `ui_template` 必须遵守互斥规则：\n   - `visual_source=generated_image` 时，`ui_template` 必须为 `none`，且只能用于抽象氛围、背景或 B-roll。\n   - 展示界面、数据、步骤、清单、计划、时间线、对比或 CTA 时，`visual_source` 必须为 `reusable_ui_template`，并选择对应的非 `none` 模板。\n   - 不允许出现 `generated_image` 加任何界面模板的组合。\n5. 示例数据必须标记“场景演示”或“示例数据”。\n6. 数字人只作为小窗或独立媒体层，位置、尺寸和融入方式由本次构图决定；黑帧模式使用纯黑占位。\n7. 转场必须发生在语义停顿处。\n8. 输出 JSON，不输出 Markdown。\n\n## 输出格式（硬性）\n\n- 输出紧凑 JSON：不要缩进、不要换行、不要多余空格；`estimated_start_seconds`/`estimated_end_seconds` 可省略，本地会用真实时间码重算。\n- 屏幕主文案要能一眼读完，超出就拆屏或精简，不要把长段落塞进一屏。\n\n只输出 JSON 对象：第一个字符必须是 `{`，最后一个字符必须是 `}`；不要代码围栏，不要任何前后说明。\n\n## 输出 JSON\n\n```json\n{\n  \"creative_strategy\": {\n    \"title\": \"钩子化的短标题\",\n    \"subtitle\": \"一句话说明主题\",\n    \"ending_line\": \"一句有力总结或明确CTA\",\n    \"core_message\": \"等义于 distill.thesis\",\n    \"visual_style\": \"string\",\n    \"voice_direction\": \"string\"\n  },\n  \"scenes\": [\n    {\n      \"scene_id\": \"s01\",\n      \"sentence_ids\": [\"s01\"],\n      \"argument_id\": \"a1\",\n      \"purpose\": \"hook|context|insight|example|ending|summary|cta|pain|solution|proof\",\n      \"voiceover_text\": \"string\",\n      \"estimated_start_seconds\": 0.0,\n      \"estimated_end_seconds\": 3.0,\n      \"visual_source\": \"reusable_ui_template|real_footage|supplied_image|generated_image|motion_graphic\",\n      \"ui_template\": \"dashboard|list|workflow|comparison|timeline|planner|tracker|story|none\",\n      \"content_variables\": {\"具体标签\": \"具体数值/状态/步骤值\"},\n      \"visual_brief\": \"描述组件名称、标签、数据、状态、视觉重点和空间关系，不规定固定模板\",\n      \"on_screen_text\": \"能一眼读完的主文案，必须包含具体问题、数据、动作或结果，禁止空泛短句\",\n      \"transition\": \"cut|dissolve|push|match_cut\",\n      \"avatar_pip\": {\n        \"visible\": true,\n        \"position\": \"composition|top_left|top_right|bottom_left|bottom_right|custom\",\n        \"behavior\": \"persistent|fade_during_dense_ui\"\n      },\n      \"sound\": {\n        \"voice_emotion\": \"string\",\n        \"music_energy\": \"low|medium|high\",\n        \"sfx\": \"none|click|data_reveal|transition\"\n      }\n    }\n  ]\n}\n```\n"
+        context:
+          enabled: false
+          variable_selector: []
+        vision:
+          enabled: false
+      position:
+        x: 3425
+        y: 295
+      positionAbsolute:
+        x: 3425
+        y: 295
+      sourcePosition: right
+      targetPosition: left
+      width: 310
+      height: 155
+    - id: a09
+      type: custom
+      data:
+        type: code
+        title: A09_整理分镜
+        code_language: python3
+        code: "def main(storyboard_text: str, script_json: str) -> dict:\n    import json\n    import re\n\n    def recover_objects(raw, key):\n        marker = raw.find('\"' + key + '\"')\n        if marker < 0:\n            return []\n        start = raw.find('[', marker)\n        if start < 0:\n            return []\n        items = []\n        depth = 0\n        in_str = False\n        esc = False\n        obj_start = None\n        for index in range(start, len(raw)):\n            ch = raw[index]\n            if in_str:\n                if esc:\n                    esc = False\n                elif ch == \"\\\\\":\n                    esc = True\n                elif ch == '\"':\n                    in_str = False\n                continue\n            if ch == '\"':\n                in_str = True\n            elif ch == \"{\":\n                if depth == 0:\n                    obj_start = index\n                depth += 1\n            elif ch == \"}\":\n                depth -= 1\n                if depth == 0 and obj_start is not None:\n                    try:\n                        items.append(json.loads(raw[obj_start:index + 1]))\n                    except Exception:\n                        pass\n                    obj_start = None\n        return items\n\n    def parse(raw, label):\n        value = str(raw or \"\").strip()\n        value = re.sub(r\"^```(?:json)?\\s*|\\s*```$\", \"\", value, flags=re.I)\n        value = value.replace(\"\\u201c\", '\"').replace(\"\\u201d\", '\"').replace(\"\\u2018\", \"'\").replace(\"\\u2019\", \"'\")\n        if not value:\n            return {\"__invalid_json__\": True, \"__label__\": label}, \"输出为空\"\n        try:\n            return json.loads(value), \"\"\n        except Exception as first_error:\n            start = value.find(\"{\")\n            if start >= 0:\n                depth = 0\n                in_str = False\n                esc = False\n                for index in range(start, len(value)):\n                    ch = value[index]\n                    if in_str:\n                        if esc:\n                            esc = False\n                        elif ch == \"\\\\\":\n                            esc = True\n                        elif ch == '\"':\n                            in_str = False\n                        continue\n                    if ch == '\"':\n                        in_str = True\n                    elif ch == \"{\":\n                        depth += 1\n                    elif ch == \"}\":\n                        depth -= 1\n                        if depth == 0:\n                            candidate = value[start:index + 1]\n                            candidate = re.sub(r\",\\s*([}\\]])\", r\"\\1\", candidate)\n                            try:\n                                return json.loads(candidate), \"\"\n                            except Exception:\n                                break\n            return {\"__invalid_json__\": True, \"__label__\": label}, \"%s；长度 %d；开头 %s；结尾 %s\" % (\n                str(first_error)[:80],\n                len(value),\n                value[:60].replace(\"\\n\", \" \"),\n                value[-60:].replace(\"\\n\", \" \"),\n            )\n\n    storyboard, storyboard_parse_error = parse(storyboard_text, \"分镜\")\n    script, _ = parse(script_json, \"文案\")\n    if not isinstance(script, dict):\n        script = {}\n    warnings = []\n    if not isinstance(storyboard, dict) or storyboard.get(\"__invalid_json__\"):\n        recovered = recover_objects(str(storyboard_text or \"\"), \"scenes\")\n        if len(recovered) >= 2:\n            storyboard = {\"scenes\": recovered}\n            warnings.append(\"分镜 JSON 被截断（\" + storyboard_parse_error + \"），已从中恢复 %d 个场景继续\" % len(recovered))\n        else:\n            warnings.append(\"分镜 JSON 无法解析（\" + storyboard_parse_error + \"），已按口播句子生成基础分镜继续\")\n            storyboard = {}\n    scenes = storyboard.get(\"scenes\")\n    if not isinstance(scenes, list) or not scenes:\n        sentences = [item for item in script.get(\"sentences\", []) if isinstance(item, dict) and str(item.get(\"text\", \"\")).strip()]\n        if not sentences:\n            sentences = [{\"id\": \"s01\", \"text\": str(script.get(\"voiceover_script\") or \"继续解释当前主题\")}]\n        scenes = [{\n            \"scene_id\": \"s%02d\" % (index + 1),\n            \"sentence_ids\": [str(item.get(\"id\") or \"s%02d\" % (index + 1))],\n            \"voiceover_text\": str(item.get(\"text\", \"\")),\n            \"purpose\": item.get(\"purpose\") if item.get(\"purpose\") in {\"hook\", \"context\", \"pain\", \"insight\", \"solution\", \"proof\", \"example\", \"ending\", \"summary\", \"cta\"} else (\"hook\" if index == 0 else (\"ending\" if index == len(sentences) - 1 else \"insight\")),\n            \"visual_source\": \"reusable_ui_template\",\n            \"ui_template\": \"workflow\",\n            \"on_screen_text\": re.sub(r\"\\s+\", \"\", str(item.get(\"text\", \"\"))),\n            \"visual_brief\": \"展示当前口播对应的可复用界面、步骤、清单或信息组件\",\n            \"motion\": \"关键信息逐项出现\",\n            \"transition\": \"cut\"\n        } for index, item in enumerate(sentences)]\n        storyboard = {\"scenes\": scenes}\n        if not storyboard_parse_error:\n            warnings.append(\"storyboard.scenes 为空，已生成基础分镜继续\")\n        scenes = storyboard[\"scenes\"]\n\n    sentence_ids = [str(item.get(\"id\")) for item in script.get(\"sentences\", []) if isinstance(item, dict) and item.get(\"id\")]\n    if not sentence_ids:\n        sentence_ids = [\"s%02d\" % i for i in range(1, len(scenes) + 1)]\n    seen_scene_ids = set()\n    purposes = set()\n\n    allowed_visual = {\n        \"reusable_ui_template\", \"real_footage\", \"supplied_image\",\n        \"generated_image\", \"motion_graphic\"\n    }\n    allowed_templates = {\n        \"dashboard\", \"list\", \"workflow\", \"comparison\", \"timeline\",\n        \"planner\", \"tracker\", \"story\", \"none\"\n    }\n    allowed_purposes = {\"hook\", \"context\", \"pain\", \"insight\", \"solution\", \"proof\", \"example\", \"ending\", \"summary\", \"cta\"}\n\n    normalized_scenes = []\n    for index, scene in enumerate(scenes, 1):\n        if not isinstance(scene, dict):\n            scene = {\"voiceover_text\": str(scene)}\n            warnings.append(\"第 %d 个 scene 不是对象，已转换为简单场景\" % index)\n\n        scene_id = str(scene.get(\"scene_id\") or \"s%02d\" % index)\n        original_scene_id = scene_id\n        while scene_id in seen_scene_ids:\n            scene_id += \"_dup\"\n        if scene_id != original_scene_id:\n            warnings.append(\"scene_id 重复，%s 已改为 %s\" % (original_scene_id, scene_id))\n        seen_scene_ids.add(scene_id)\n        scene[\"scene_id\"] = scene_id\n\n        refs = [str(x) for x in scene.get(\"sentence_ids\", []) if str(x).strip()]\n        valid_refs = [ref for ref in refs if ref in sentence_ids]\n        if not valid_refs:\n            fallback = sentence_ids[min(index - 1, len(sentence_ids) - 1)]\n            valid_refs = [fallback]\n            warnings.append(\"%s sentence_ids 缺失或无效，已绑定 %s\" % (scene_id, fallback))\n        elif len(valid_refs) != len(refs):\n            warnings.append(\"%s 部分 sentence_ids 无效，已移除\" % scene_id)\n        scene[\"sentence_ids\"] = valid_refs\n\n        purpose = str(scene.get(\"purpose\", \"\")).strip()\n        if purpose not in allowed_purposes:\n            old = purpose or \"empty\"\n            purpose = \"hook\" if index == 1 else (\"ending\" if index == len(scenes) else \"insight\")\n            warnings.append(\"%s purpose=%s 已归一化为 %s\" % (scene_id, old, purpose))\n        scene[\"purpose\"] = purpose\n        purposes.add(purpose)\n\n        template = str(scene.get(\"ui_template\", \"none\")).strip() or \"none\"\n        if template not in allowed_templates:\n            old = template\n            template = \"none\"\n            warnings.append(\"%s ui_template=%s 已归一化为 none\" % (scene_id, old))\n        source = str(scene.get(\"visual_source\", \"\")).strip()\n        if source not in allowed_visual:\n            old = source or \"empty\"\n            source = \"reusable_ui_template\" if template != \"none\" else \"motion_graphic\"\n            warnings.append(\"%s visual_source=%s 已归一化为 %s\" % (scene_id, old, source))\n        if source == \"generated_image\" and template != \"none\":\n            warnings.append(\"%s 生成图不能伪装为界面模板，ui_template 已改为 none\" % scene_id)\n            template = \"none\"\n        scene[\"visual_source\"] = source\n        scene[\"ui_template\"] = template\n\n        scene[\"on_screen_text\"] = re.sub(r\"\\s+\", \"\", str(scene.get(\"on_screen_text\", \"\")))\n\n        avatar = scene.get(\"avatar_pip\") if isinstance(scene.get(\"avatar_pip\"), dict) else {}\n        avatar[\"visible\"] = True\n        allowed_positions = {\"composition\", \"top_left\", \"top_right\", \"bottom_left\", \"bottom_right\", \"custom\"}\n        position = str(avatar.get(\"position\") or \"composition\").strip()\n        avatar[\"position\"] = position if position in allowed_positions else \"composition\"\n        avatar[\"behavior\"] = str(avatar.get(\"behavior\") or \"persistent\")\n        scene[\"avatar_pip\"] = avatar\n\n        variables = scene.get(\"content_variables\")\n        if variables is not None and not isinstance(variables, dict):\n            warnings.append(\"%s content_variables 不是对象，已改为空对象\" % scene_id)\n            variables = {}\n        if isinstance(variables, dict) and variables:\n            labels = str(scene.get(\"labeling\", \"\"))\n            if \"示例\" not in labels and \"场景演示\" not in labels:\n                scene[\"labeling\"] = \"场景演示\"\n                warnings.append(\"%s 已自动标记“场景演示”\" % scene_id)\n        scene[\"content_variables\"] = variables if isinstance(variables, dict) else {}\n\n        if not str(scene.get(\"voiceover_text\", \"\")).strip():\n            refs_text = [item.get(\"text\", \"\") for item in script.get(\"sentences\", []) if isinstance(item, dict) and str(item.get(\"id\")) in valid_refs]\n            scene[\"voiceover_text\"] = \" \".join(str(x) for x in refs_text if x).strip()\n        normalized_scenes.append(scene)\n\n    scenes = normalized_scenes\n    if \"hook\" not in purposes:\n        scenes[0][\"purpose\"] = \"hook\"\n        warnings.append(\"缺少 hook，已将第一个场景设为 hook\")\n    if not {\"ending\", \"summary\", \"cta\"} & purposes:\n        scenes[-1][\"purpose\"] = \"ending\"\n        warnings.append(\"缺少结尾角色，已将最后一个场景设为 ending\")\n    if not {\"insight\", \"solution\"} & {item[\"purpose\"] for item in scenes}:\n        scenes[min(1, len(scenes) - 1)][\"purpose\"] = \"insight\"\n        warnings.append(\"缺少核心内容角色，已将中间场景设为 insight\")\n\n    storyboard[\"scenes\"] = scenes\n    storyboard[\"validation\"] = {\"errors\": [], \"warnings\": warnings}\n    return {\n        \"storyboard_json\": json.dumps(storyboard, ensure_ascii=False),\n        \"scene_count\": len(scenes),\n        \"storyboard_valid\": True,\n        \"storyboard_errors_json\": \"[]\",\n        \"storyboard_warnings_json\": json.dumps(warnings, ensure_ascii=False)\n    }"
+        variables:
+        - variable: storyboard_text
+          value_selector:
+          - a08
+          - text
+          value_type: string
+        - variable: script_json
+          value_selector:
+          - a07
+          - script_json
+          value_type: string
+        outputs:
+          storyboard_json:
+            type: string
+            children: null
+          scene_count:
+            type: number
+            children: null
+          storyboard_valid:
+            type: boolean
+            children: null
+          storyboard_errors_json:
+            type: string
+            children: null
+          storyboard_warnings_json:
+            type: string
+            children: null
+      position:
+        x: 3780
+        y: 315
+      positionAbsolute:
+        x: 3780
+        y: 315
+      sourcePosition: right
+      targetPosition: left
+      width: 270
+      height: 177
+    - id: a09_gate
+      type: custom
+      data:
+        type: if-else
+        title: A09_分镜门禁
+        cases:
+        - id: storyboard_valid
+          case_id: storyboard_valid
+          logical_operator: and
+          conditions:
+          - id: storyboard_valid-condition
+            variable_selector:
+            - a09
+            - storyboard_valid
+            comparison_operator: is
+            value: 'true'
+            varType: boolean
+      position:
+        x: 4135
+        y: 335
+      positionAbsolute:
+        x: 4135
+        y: 335
+      sourcePosition: right
+      targetPosition: left
+      width: 270
+      height: 105
+    - id: a10
+      type: custom
+      data:
+        type: llm
+        title: A10_生成元素级动效
+        model:
+          provider: langgenius/mimo/mimo
+          name: mimo-v2.6-pro
+          mode: chat
+          completion_params:
+            temperature: 0.1
+            max_completion_tokens: 30000
+        prompt_template:
+        - id: a10-system
+          role: system
+          text: "# 动效导演\n\n你是界面与信息组件动效导演。把 storyboard 转换为确定性、可复用、由语音 cue 驱动的元素级动效计划。\n\n## 本次输入（必须全部使用）\n\n- `brief_json`：{{#a03.brief_json#}}\n- `script_json`：{{#a07.script_json#}}\n- `storyboard_json`：{{#a09.storyboard_json#}}\n- `recommended_motion_count_min`：{{#a07.recommended_motion_count_min#}}\n\n## 动作取用原则（不是清单）\n\n- 一条动作只回答一个问题：这一屏的什么，从什么变成什么。\n- 变化的种类就这几类：入场与揭露、量级、次序、位置、层级、阈值、归属、焦点、强调。具体做成什么组件形态，由这一屏的信息决定。\n- 同一种变化方式连续出现，说明你在套模板，换一种更贴语义的。\n- 不要求覆盖清单：宁可少而准，也不要为了齐而重复。\n\n## 禁止\n\n- 整张图片缓慢缩放\n- 循环呼吸、随机漂浮、无限粒子\n- 所有元素同时出现后静止\n- 仅换静态图片的幻灯片\n- 无语义的镜头推拉\n- `Math.random`、未固定随机种子、无明确结束时间的循环\n- 与口播无关的装饰动画\n\n## 组件级质量门禁\n\n- 不设动作条数：画面里每个组件都要有一次属于自己的变化，缺了哪一个就补哪一个，不用装饰凑数。`recommended_motion_count_min` 只作参考，不是必须达到的数量。\n- 每个 `target` 必须对应 storyboard 中真实存在的组件或元素 ID；不得使用 `root`、`screen`、`global`、`page` 等泛化目标。\n- 同一场景的动作必须有层次：先结构/标题，再主组件，再数据/状态，最后强调或 CTA；禁止所有元素同时出现。\n- `from_state`/`to_state` 必须表达可见状态变化，例如 `opacity/y/scale/strokeDashoffset/value/active`，不得只写空对象或泛泛的“出现”。\n- `transition` 只能发生在场景语义停顿处；动作结束时间不得越过所属句子的结束时间。\n- 输出前按 `motion_id` 逐条检查：有触发句、有目标、有状态、有缓动、有结束时间、有语义理由；缺一项就自行补全。\n\n## 枚举和边界\n\n- `action` 只能是：`enter`、`count_up`、`highlight`、`path_draw`、`cursor_move`、`click`、`state_change`、`zoom_focus`、`keyword_highlight`、`row_reveal`、`status_update`。\n- 不允许 `action=fade`。\n- `easing` 只能是：`power3.out`、`power2.inOut`、`expo.out`、`power2.out`。\n- 每条 `duration_ms` 必须是 250 到 2200 的整数。\n- `zoom_focus` 的 `target` 不能是 `root`、`screen` 或 `global`。\n- 输出前逐条检查上述规则，任何一条不满足都必须自行改正。\n\n## 时间规则\n\n- 每个动作必须绑定 `sentence_id` 或明确时间码。\n- 信息进入通常使用平滑长尾缓动和 stagger。\n- 转场速度匹配语音停顿和段落情绪。\n- 最终时间由真实语音时间码校准，模型不得伪造精确毫秒。\n\n## 输出格式（硬性）\n\n只输出 JSON 对象：第一个字符必须是 `{`，最后一个字符必须是 `}`；不要代码围栏，不要任何前后说明。\n\n## 输出 JSON\n\n```json\n{\n  \"motion_version\": \"1.0\",\n  \"global_rules\": {\n    \"timeline_source\": \"voice_timestamps\",\n    \"default_ease\": \"power3.out\",\n    \"transition_duration_ms\": 350\n  },\n  \"sequences\": [\n    {\n      \"motion_id\": \"m01\",\n      \"scene_id\": \"s01\",\n      \"sentence_id\": \"s01\",\n      \"target\": \"component_or_element_id\",\n      \"action\": \"enter|count_up|highlight|path_draw|cursor_move|click|state_change|zoom_focus|keyword_highlight|row_reveal|status_update\",\n      \"start_trigger\": \"sentence_start|word:关键词|explicit_time\",\n      \"duration_ms\": 600,\n      \"stagger_ms\": 80,\n      \"easing\": \"power3.out|power2.inOut|expo.out|power2.out\",\n      \"from_state\": {},\n      \"to_state\": {},\n      \"semantic_reason\": \"该动作与口播哪部分对应\",\n      \"sound_cue\": \"none|click|data_reveal|transition\"\n    }\n  ]\n}\n```\n\n"
+        context:
+          enabled: false
+          variable_selector: []
+        vision:
+          enabled: false
+      position:
+        x: 4430
+        y: 295
+      positionAbsolute:
+        x: 4430
+        y: 295
+      sourcePosition: right
+      targetPosition: left
+      width: 310
+      height: 155
+    - id: a11
+      type: custom
+      data:
+        type: code
+        title: A11_整理动效
+        code_language: python3
+        code: "def main(motion_text: str, storyboard_json: str, recommended_motion_count_min: int) -> dict:\n    import json\n    import re\n\n    def recover_objects(raw, key):\n        marker = raw.find('\"' + key + '\"')\n        if marker < 0:\n            return []\n        start = raw.find('[', marker)\n        if start < 0:\n            return []\n        items = []\n        depth = 0\n        in_str = False\n        esc = False\n        obj_start = None\n        for index in range(start, len(raw)):\n            ch = raw[index]\n            if in_str:\n                if esc:\n                    esc = False\n                elif ch == \"\\\\\":\n                    esc = True\n                elif ch == '\"':\n                    in_str = False\n                continue\n            if ch == '\"':\n                in_str = True\n            elif ch == \"{\":\n                if depth == 0:\n                    obj_start = index\n                depth += 1\n            elif ch == \"}\":\n                depth -= 1\n                if depth == 0 and obj_start is not None:\n                    try:\n                        items.append(json.loads(raw[obj_start:index + 1]))\n                    except Exception:\n                        pass\n                    obj_start = None\n        return items\n\n    def parse(raw, label):\n        value = str(raw or \"\").strip()\n        value = re.sub(r\"^```(?:json)?\\s*|\\s*```$\", \"\", value, flags=re.I)\n        value = value.replace(\"\\u201c\", '\"').replace(\"\\u201d\", '\"').replace(\"\\u2018\", \"'\").replace(\"\\u2019\", \"'\")\n        if not value:\n            return {\"__invalid_json__\": True, \"__label__\": label}, \"输出为空\"\n        try:\n            return json.loads(value), \"\"\n        except Exception as first_error:\n            start = value.find(\"{\")\n            if start >= 0:\n                depth = 0\n                in_str = False\n                esc = False\n                for index in range(start, len(value)):\n                    ch = value[index]\n                    if in_str:\n                        if esc:\n                            esc = False\n                        elif ch == \"\\\\\":\n                            esc = True\n                        elif ch == '\"':\n                            in_str = False\n                        continue\n                    if ch == '\"':\n                        in_str = True\n                    elif ch == \"{\":\n                        depth += 1\n                    elif ch == \"}\":\n                        depth -= 1\n                        if depth == 0:\n                            candidate = value[start:index + 1]\n                            candidate = re.sub(r\",\\s*([}\\]])\", r\"\\1\", candidate)\n                            try:\n                                return json.loads(candidate), \"\"\n                            except Exception:\n                                break\n            return {\"__invalid_json__\": True, \"__label__\": label}, \"%s；长度 %d；开头 %s；结尾 %s\" % (\n                str(first_error)[:80],\n                len(value),\n                value[:60].replace(\"\\n\", \" \"),\n                value[-60:].replace(\"\\n\", \" \"),\n            )\n\n    motion, motion_parse_error = parse(motion_text, \"动效\")\n    storyboard, _ = parse(storyboard_json, \"分镜\")\n    if not isinstance(storyboard, dict):\n        storyboard = {}\n    warnings = []\n    if not isinstance(motion, dict) or motion.get(\"__invalid_json__\"):\n        recovered = recover_objects(str(motion_text or \"\"), \"sequences\")\n        if len(recovered) >= 2:\n            motion = {\"sequences\": recovered}\n            warnings.append(\"动效 JSON 被截断（\" + motion_parse_error + \"），已从中恢复 %d 条动作继续\" % len(recovered))\n        else:\n            warnings.append(\"动效 JSON 无法解析（\" + motion_parse_error + \"），已按分镜生成基础动效继续\")\n            motion = {}\n    sequences = motion.get(\"sequences\")\n    if not isinstance(sequences, list) or not sequences:\n        raw_scenes = storyboard.get(\"scenes\", []) if isinstance(storyboard.get(\"scenes\"), list) else []\n        base_scenes = raw_scenes or [{\"scene_id\": \"s01\"}]\n        actions = [\"enter\", \"highlight\", \"state_change\"]\n        sequences = []\n        for index in range(max(6, len(base_scenes) * 2)):\n            scene = base_scenes[index % len(base_scenes)] if isinstance(base_scenes[index % len(base_scenes)], dict) else {}\n            sequences.append({\n                \"motion_id\": \"m%02d\" % (index + 1),\n                \"scene_id\": str(scene.get(\"scene_id\") or \"s01\"),\n                \"sentence_id\": str((scene.get(\"sentence_ids\") or [scene.get(\"sentence_id\") or \"s01\"])[0]),\n                \"action\": actions[index % len(actions)],\n                \"target\": \"focus_element\",\n                \"duration_ms\": 600,\n                \"easing\": \"power3.out\",\n                \"start_trigger\": \"sentence_start\",\n                \"semantic_reason\": \"与当前口播语义同步的基础动效\"\n            })\n        motion = {\"sequences\": sequences}\n        if not motion_parse_error:\n            warnings.append(\"motion.sequences 为空，已生成基础动效继续\")\n    scenes = [str(x.get(\"scene_id\")) for x in storyboard.get(\"scenes\", []) if isinstance(x, dict) and x.get(\"scene_id\")]\n    if not scenes:\n        scenes = [\"s01\"]\n    sentences = []\n    for scene in storyboard.get(\"scenes\", []):\n        if isinstance(scene, dict):\n            sentences.extend(str(x) for x in scene.get(\"sentence_ids\", []) if str(x).strip())\n    if not sentences:\n        sentences = [\"s01\"]\n\n    allowed_actions = {\n        \"enter\", \"count_up\", \"highlight\", \"path_draw\", \"cursor_move\",\n        \"click\", \"state_change\", \"zoom_focus\", \"keyword_highlight\",\n        \"row_reveal\", \"status_update\"\n    }\n    allowed_eases = {\"power3.out\", \"power2.inOut\", \"expo.out\", \"power2.out\"}\n    seen_ids = set()\n    normalized = []\n\n    for index, item in enumerate(sequences, 1):\n        if not isinstance(item, dict):\n            item = {\"target\": str(item)}\n            warnings.append(\"第 %d 条动效不是对象，已转换为简单动作\" % index)\n\n        motion_id = str(item.get(\"motion_id\") or \"m%02d\" % index)\n        while motion_id in seen_ids:\n            motion_id += \"_dup\"\n        seen_ids.add(motion_id)\n        item[\"motion_id\"] = motion_id\n\n        scene_id = str(item.get(\"scene_id\", \"\"))\n        if scene_id not in scenes:\n            old = scene_id or \"empty\"\n            scene_id = scenes[min(index - 1, len(scenes) - 1)]\n            item[\"scene_id\"] = scene_id\n            warnings.append(\"%s scene_id=%s 已归一化为 %s\" % (motion_id, old, scene_id))\n        sentence_id = str(item.get(\"sentence_id\", \"\"))\n        if sentence_id not in sentences:\n            old = sentence_id or \"empty\"\n            sentence_id = sentences[min(index - 1, len(sentences) - 1)]\n            item[\"sentence_id\"] = sentence_id\n            warnings.append(\"%s sentence_id=%s 已归一化为 %s\" % (motion_id, old, sentence_id))\n\n        action = str(item.get(\"action\", \"\")).strip()\n        if action == \"fade\":\n            item[\"action\"] = \"enter\"\n            warnings.append(\"%s action=fade 已改为 enter\" % motion_id)\n        elif action not in allowed_actions:\n            item[\"action\"] = \"state_change\"\n            warnings.append(\"%s action=%s 已改为 state_change\" % (motion_id, action or \"empty\"))\n\n        for key in (\"repeat\", \"loop\"):\n            if key in item:\n                item.pop(key)\n                warnings.append(\"%s 已移除禁止字段 %s\" % (motion_id, key))\n\n        try:\n            duration = int(item.get(\"duration_ms\") or 0)\n        except Exception:\n            duration = 0\n        clamped = max(250, min(2200, duration or 600))\n        if clamped != duration:\n            warnings.append(\"%s duration_ms=%s 已归一化为 %s\" % (motion_id, duration, clamped))\n        item[\"duration_ms\"] = clamped\n\n        easing = str(item.get(\"easing\", \"\")).strip()\n        if easing not in allowed_eases:\n            item[\"easing\"] = \"power3.out\"\n            warnings.append(\"%s easing=%s 已归一化为 power3.out\" % (motion_id, easing or \"empty\"))\n\n        if not str(item.get(\"start_trigger\", \"\")).strip():\n            item[\"start_trigger\"] = \"sentence_start\"\n            warnings.append(\"%s start_trigger 缺失，已设为 sentence_start\" % motion_id)\n\n        target = str(item.get(\"target\", \"\")).strip()\n        if item[\"action\"] == \"zoom_focus\" and target in {\"root\", \"screen\", \"global\", \"\"}:\n            item[\"action\"] = \"highlight\"\n            item[\"target\"] = target or \"focus_element\"\n            warnings.append(\"%s 整图 zoom_focus 已改为局部 highlight\" % motion_id)\n\n        if not str(item.get(\"semantic_reason\", \"\")).strip():\n            item[\"semantic_reason\"] = \"与当前句子的语义变化同步\"\n            warnings.append(\"%s semantic_reason 缺失，已生成默认说明\" % motion_id)\n\n        normalized.append(item)\n\n    minimum = max(6, int(recommended_motion_count_min or 0))\n    if len(normalized) < minimum:\n        warnings.append(\"动效数量少于建议值 %d，已继续输出\" % minimum)\n\n    motion[\"sequences\"] = normalized\n    motion[\"validation\"] = {\"errors\": [], \"warnings\": warnings}\n    return {\n        \"motion_plan_json\": json.dumps(motion, ensure_ascii=False),\n        \"motion_count\": len(normalized),\n        \"motion_valid\": True,\n        \"motion_errors_json\": \"[]\",\n        \"motion_warnings_json\": json.dumps(warnings, ensure_ascii=False)\n    }\n"
+        variables:
+        - variable: motion_text
+          value_selector:
+          - a10
+          - text
+          value_type: string
+        - variable: storyboard_json
+          value_selector:
+          - a09
+          - storyboard_json
+          value_type: string
+        - variable: recommended_motion_count_min
+          value_selector:
+          - a07
+          - recommended_motion_count_min
+          value_type: number
+        outputs:
+          motion_plan_json:
+            type: string
+            children: null
+          motion_count:
+            type: number
+            children: null
+          motion_valid:
+            type: boolean
+            children: null
+          motion_errors_json:
+            type: string
+            children: null
+          motion_warnings_json:
+            type: string
+            children: null
+      position:
+        x: 4785
+        y: 315
+      positionAbsolute:
+        x: 4785
+        y: 315
+      sourcePosition: right
+      targetPosition: left
+      width: 270
+      height: 177
+    - id: a11_gate
+      type: custom
+      data:
+        type: if-else
+        title: A11_动效门禁
+        cases:
+        - id: motion_valid
+          case_id: motion_valid
+          logical_operator: and
+          conditions:
+          - id: motion_valid-condition
+            variable_selector:
+            - a11
+            - motion_valid
+            comparison_operator: is
+            value: 'true'
+            varType: boolean
+      position:
+        x: 5140
+        y: 335
+      positionAbsolute:
+        x: 5140
+        y: 335
+      sourcePosition: right
+      targetPosition: left
+      width: 270
+      height: 105
+    - id: a12
+      type: custom
+      data:
+        type: llm
+        title: A12_事实与合规检查
+        model:
+          provider: langgenius/mimo/mimo
+          name: mimo-v2.6-pro
+          mode: chat
+          completion_params:
+            temperature: 0.1
+            max_completion_tokens: 2200
+        prompt_template:
+        - id: a12-system
+          role: system
+          text: "# 事实与合规审核\n\n你是内容事实和合规审核员。审核口播、字幕、标题、标签和分镜中的所有可验证陈述。主题可以是知识、经历、运动、赚钱、成长、生活或观点。\n\n## 本次输入（必须全部使用）\n\n- `brief_json`：{{#a03.brief_json#}}\n- `script_json`：{{#a07.script_json#}}\n- `storyboard_json`：{{#a09.storyboard_json#}}\n- `motion_plan_json`：{{#a11.motion_plan_json#}}\n\n## 检查\n\n- 主题、人物、组织、价格和行动建议是否与用户输入一致；用户没提到的主体不得自行补写\n- 数字、经历、案例、效果是否来自已确认来源\n- 是否存在绝对化承诺、保证结果、行业第一或无法验证的比较\n- 是否把示例、假设或场景演示误写成真实数据\n- 是否存在贬低他人、制造焦虑、误导或不安全建议\n- 英文词、数字和多音字是否有发音风险\n\n## 输出 JSON\n\n```json\n{\n  \"decision\": \"approved|needs_changes|rejected\",\n  \"risk_level\": \"low|medium|high\",\n  \"verified_claims\": [\n    {\"text\": \"string\", \"source\": \"string\"}\n  ],\n  \"unverified_claims\": [\n    {\"text\": \"string\", \"reason\": \"string\", \"required_action\": \"补充来源|删除|改写为待核验\"}\n  ],\n  \"violations\": [\n    {\"text\": \"string\", \"rule\": \"string\", \"severity\": \"low|medium|high\"}\n  ],\n  \"revision_instructions\": [\"需要修改的具体位置和建议\"]\n}\n```\n"
+        context:
+          enabled: false
+          variable_selector: []
+        vision:
+          enabled: false
+      position:
+        x: 5435
+        y: 295
+      positionAbsolute:
+        x: 5435
+        y: 295
+      sourcePosition: right
+      targetPosition: left
+      width: 310
+      height: 155
+    - id: a13
+      type: custom
+      data:
+        type: code
+        title: A13_整理合规结果
+        code_language: python3
+        code: "def main(review_text: str) -> dict:\n    import json\n    import re\n\n    raw = str(review_text or \"\").strip()\n    raw = re.sub(r\"^```(?:json)?\\s*|\\s*```$\", \"\", raw, flags=re.I)\n    try:\n        data = json.loads(raw)\n    except Exception:\n        start, end = raw.find(\"{\"), raw.rfind(\"}\")\n        data = {}\n        if start >= 0 and end > start:\n            try:\n                data = json.loads(raw[start:end + 1])\n            except Exception:\n                data = {}\n    if not isinstance(data, dict):\n        data = {}\n    if not data:\n        data = {\n            \"decision\": \"needs_changes\",\n            \"risk_level\": \"medium\",\n            \"violations\": [],\n            \"unverified_claims\": [],\n            \"normalization_warnings\": [\"合规 JSON 无法解析，已按 needs_changes 继续人工审核\"]\n        }\n\n    warnings = list(data.get(\"normalization_warnings\", [])) if isinstance(data.get(\"normalization_warnings\"), list) else []\n    decision = str(data.get(\"decision\", \"\")).strip().lower()\n    if decision not in {\"approved\", \"needs_changes\", \"rejected\"}:\n        decision = \"needs_changes\"\n        data[\"decision\"] = decision\n        warnings.append(\"decision 缺失或无效，已归一化为 needs_changes\")\n    risk_level = str(data.get(\"risk_level\", \"\")).strip().lower()\n    if risk_level not in {\"low\", \"medium\", \"high\"}:\n        risk_level = \"medium\"\n        data[\"risk_level\"] = risk_level\n        warnings.append(\"risk_level 缺失或无效，已归一化为 medium\")\n\n    violations = data.get(\"violations\")\n    if not isinstance(violations, list):\n        violations = []\n        data[\"violations\"] = violations\n    unverified = data.get(\"unverified_claims\")\n    if not isinstance(unverified, list):\n        unverified = []\n        data[\"unverified_claims\"] = unverified\n\n    error_count = len(unverified)\n    error_count += sum(1 for item in violations if isinstance(item, dict) and item.get(\"severity\") == \"error\")\n    if decision == \"rejected\":\n        error_count += 1\n    data[\"normalization_warnings\"] = warnings\n\n    return {\n        \"compliance_json\": json.dumps(data, ensure_ascii=False),\n        \"compliance_decision\": decision,\n        \"risk_level\": risk_level,\n        \"compliance_error_count\": error_count\n    }\n"
+        variables:
+        - variable: review_text
+          value_selector:
+          - a12
+          - text
+          value_type: string
+        outputs:
+          compliance_json:
+            type: string
+            children: null
+          compliance_decision:
+            type: string
+            children: null
+          risk_level:
+            type: string
+            children: null
+          compliance_error_count:
+            type: number
+            children: null
+      position:
+        x: 5790
+        y: 315
+      positionAbsolute:
+        x: 5790
+        y: 315
+      sourcePosition: right
+      targetPosition: left
+      width: 270
+      height: 158
+    - id: a14
+      type: custom
+      data:
+        type: code
+        title: A14_生成审核摘要
+        code_language: python3
+        code: "def main(strategy_json: str, script_json: str, storyboard_json: str, motion_plan_json: str, compliance_json: str) -> dict:\n    import json\n\n    def parse(raw):\n        try:\n            data = json.loads(raw or \"{}\")\n            return data if isinstance(data, dict) else {}\n        except Exception:\n            return {}\n\n    strategy = parse(strategy_json)\n    script = parse(script_json)\n    storyboard = parse(storyboard_json)\n    motion = parse(motion_plan_json)\n    compliance = parse(compliance_json)\n\n    lines = [\"# 自动生产摘要\", \"\"]\n    lines.append(\"## 内容角度\")\n    lines.append(\"- 核心结论：\" + str(strategy.get(\"core_message\") or script.get(\"hook\") or \"未填写\"))\n    hook = str(strategy.get(\"hook\") or script.get(\"hook\") or \"\")\n    if hook:\n        lines.append(\"- Hook：\" + hook)\n\n    lines.extend([\"\", \"## 口播草稿\", str(script.get(\"voiceover_script\") or \"未生成\")])\n    captions = script.get(\"burned_in_caption_lines\") or []\n    if captions:\n        lines.extend([\"\", \"## 字幕\"])\n        lines.extend(\"- \" + str(item) for item in captions)\n\n    lines.extend([\"\", \"## 分镜\"])\n    for index, scene in enumerate(storyboard.get(\"scenes\", []), 1):\n        if not isinstance(scene, dict):\n            continue\n        lines.append(\"%d. %s｜目的：%s｜画面：%s｜屏幕文字：%s\" % (\n            index,\n            scene.get(\"scene_id\", \"s%02d\" % index),\n            scene.get(\"purpose\", \"\"),\n            scene.get(\"visual_brief\", scene.get(\"ui_template\", \"\")),\n            scene.get(\"on_screen_text\", \"\")\n        ))\n\n    lines.extend([\"\", \"## 动效计划\"])\n    for index, item in enumerate(motion.get(\"sequences\", []), 1):\n        if not isinstance(item, dict):\n            continue\n        lines.append(\"%d. %s｜%s｜%s｜%sms｜%s\" % (\n            index,\n            item.get(\"motion_id\", \"m%02d\" % index),\n            item.get(\"scene_id\", \"\"),\n            item.get(\"action\", \"\"),\n            item.get(\"duration_ms\", \"\"),\n            item.get(\"semantic_reason\", \"\")\n        ))\n\n    lines.extend([\"\", \"## 合规提示\"])\n    lines.append(\"- 审核结论：%s\" % compliance.get(\"decision\", \"待人工确认\"))\n    lines.append(\"- 风险等级：%s\" % compliance.get(\"risk_level\", \"待人工确认\"))\n    for item in compliance.get(\"required_changes\", []) or []:\n        lines.append(\"- 需要修改：\" + str(item))\n    note = compliance.get(\"review_note_for_human\")\n    if note:\n        lines.append(\"- 审核重点：\" + str(note))\n\n    return {\"review_summary\": \"\\n\".join(lines)}\n"
+        variables:
+        - variable: strategy_json
+          value_selector:
+          - a05
+          - strategy_json
+          value_type: string
+        - variable: script_json
+          value_selector:
+          - a07
+          - script_json
+          value_type: string
+        - variable: storyboard_json
+          value_selector:
+          - a09
+          - storyboard_json
+          value_type: string
+        - variable: motion_plan_json
+          value_selector:
+          - a11
+          - motion_plan_json
+          value_type: string
+        - variable: compliance_json
+          value_selector:
+          - a13
+          - compliance_json
+          value_type: string
+        outputs:
+          review_summary:
+            type: string
+            children: null
+      position:
+        x: 6145
+        y: 315
+      positionAbsolute:
+        x: 6145
+        y: 315
+      sourcePosition: right
+      targetPosition: left
+      width: 270
+      height: 120
+    - id: a16
+      type: custom
+      data:
+        type: code
+        title: A16_打包批准内容
+        code_language: python3
+        code: "def main(brief_json: str, draft_script_json: str, storyboard_json: str, motion_plan_json: str, review_action: str) -> dict:\n    import hashlib\n    import json\n\n    def parse(raw, label):\n        try:\n            data = json.loads(raw or \"\")\n        except Exception:\n            raise ValueError(label + \" 不是合法 JSON\")\n        if not isinstance(data, dict):\n            raise ValueError(label + \" 必须是 JSON 对象\")\n        return data\n\n    brief = parse(brief_json, \"brief\")\n    script = parse(draft_script_json, \"原始脚本\")\n    storyboard = parse(storyboard_json, \"storyboard\")\n    motion = parse(motion_plan_json, \"motion_plan\")\n\n    voiceover = str(script.get(\"voiceover_script\", \"\")).strip()\n    if not voiceover:\n        raise ValueError(\"自动通过的口播不能为空\")\n\n    package = {\n        \"approval\": {\n            \"status\": \"approved\",\n            \"feedback\": \"自动生产模式：\" + str(review_action or \"approve\"),\n            \"approved_script_hash\": hashlib.sha256(voiceover.encode(\"utf-8\")).hexdigest()\n        },\n        \"brief\": brief,\n        \"approved_script\": script,\n        \"storyboard\": storyboard,\n        \"motion_plan\": motion\n    }\n    return {\n        \"approved_package_json\": json.dumps(package, ensure_ascii=False),\n        \"approved_voiceover_script\": voiceover,\n        \"approval_status\": \"approved\"\n    }\n"
+        variables:
+        - variable: brief_json
+          value_selector:
+          - a03
+          - brief_json
+          value_type: string
+        - variable: draft_script_json
+          value_selector:
+          - a07
+          - script_json
+          value_type: string
+        - variable: storyboard_json
+          value_selector:
+          - a09
+          - storyboard_json
+          value_type: string
+        - variable: motion_plan_json
+          value_selector:
+          - a11
+          - motion_plan_json
+          value_type: string
+        - variable: review_action
+          value_selector:
+          - a00
+          - request_id
+          value_type: string
+        outputs:
+          approved_package_json:
+            type: string
+            children: null
+          approved_voiceover_script:
+            type: string
+            children: null
+          approval_status:
+            type: string
+            children: null
+      position:
+        x: 6885
+        y: 385
+      positionAbsolute:
+        x: 6885
+        y: 385
+      sourcePosition: right
+      targetPosition: left
+      width: 270
+      height: 139
+    - id: a17
+      type: custom
+      data:
+        type: code
+        title: A17_生成自然语言结果
+        code_language: python3
+        code: "def main(approved_package_json: str, copy_warnings_json: str, storyboard_warnings_json: str, motion_warnings_json: str) -> dict:\n    import json\n\n    def parse(raw):\n        try:\n            data = json.loads(raw or \"{}\")\n            return data if isinstance(data, dict) else {}\n        except Exception:\n            return {}\n\n    def arr(raw):\n        try:\n            data = json.loads(raw or \"[]\")\n            return data if isinstance(data, list) else []\n        except Exception:\n            return []\n\n    package = parse(approved_package_json)\n    brief = package.get(\"brief\") if isinstance(package.get(\"brief\"), dict) else {}\n    script = package.get(\"approved_script\") if isinstance(package.get(\"approved_script\"), dict) else {}\n    storyboard = package.get(\"storyboard\") if isinstance(package.get(\"storyboard\"), dict) else {}\n    motion = package.get(\"motion_plan\") if isinstance(package.get(\"motion_plan\"), dict) else {}\n\n    lines = [\"# 视频内容生产资料\", \"\", \"审核状态：已批准\", \"\"]\n    strategy = storyboard.get(\"creative_strategy\") if isinstance(storyboard.get(\"creative_strategy\"), dict) else {}\n    info = []\n    topic = str(brief.get(\"topic\") or \"\").strip()\n    if topic:\n        info.append(\"- 主题：\" + topic)\n    duration = brief.get(\"target_duration_seconds\")\n    if duration:\n        info.append(\"- 目标时长：%s 秒\" % duration)\n    core_message = str(strategy.get(\"core_message\") or \"\").strip()\n    if core_message:\n        info.append(\"- 核心结论：\" + core_message)\n    if info:\n        lines.append(\"## 内容信息\")\n        lines.extend(info)\n\n    lines.extend([\"\", \"## 口播全文\", str(script.get(\"voiceover_script\") or \"未生成\")])\n    captions = script.get(\"burned_in_caption_lines\") or []\n    if captions:\n        lines.extend([\"\", \"## 字幕\"])\n        lines.extend(\"- \" + str(item) for item in captions)\n\n    title = script.get(\"title\")\n    if title:\n        lines.extend([\"\", \"## 发布标题\", str(title)])\n    hashtags = script.get(\"hashtags\") or []\n    if hashtags:\n        lines.extend([\"\", \"## 标签\", \" \".join(str(item) for item in hashtags)])\n\n    lines.extend([\"\", \"## 分镜\"])\n    for index, scene in enumerate(storyboard.get(\"scenes\", []), 1):\n        if not isinstance(scene, dict):\n            continue\n        lines.append(\"%d. 场景 %s｜目的：%s｜画面来源：%s｜模板：%s｜画面：%s｜屏幕文字：%s\" % (\n            index,\n            scene.get(\"scene_id\", \"s%02d\" % index),\n            scene.get(\"purpose\", \"\"),\n            scene.get(\"visual_source\", \"\"),\n            scene.get(\"ui_template\", \"\"),\n            scene.get(\"visual_brief\", \"\"),\n            scene.get(\"on_screen_text\", \"\")\n        ))\n\n    lines.extend([\"\", \"## 动效\"])\n    for index, item in enumerate(motion.get(\"sequences\", []), 1):\n        if not isinstance(item, dict):\n            continue\n        lines.append(\"%d. %s｜场景 %s｜动作：%s｜触发：%s｜时长：%sms｜原因：%s\" % (\n            index,\n            item.get(\"motion_id\", \"m%02d\" % index),\n            item.get(\"scene_id\", \"\"),\n            item.get(\"action\", \"\"),\n            item.get(\"start_trigger\", \"\"),\n            item.get(\"duration_ms\", \"\"),\n            item.get(\"semantic_reason\", \"\")\n        ))\n\n    warnings = []\n    warnings.extend(arr(copy_warnings_json))\n    warnings.extend(arr(storyboard_warnings_json))\n    warnings.extend(arr(motion_warnings_json))\n    if warnings:\n        lines.extend([\"\", \"## 需要注意\"])\n        lines.extend(\"- \" + str(item) for item in warnings)\n\n    return {\"result_summary\": \"\\n\".join(lines)}\n"
+        variables:
+        - variable: approved_package_json
+          value_selector:
+          - a16
+          - approved_package_json
+          value_type: string
+        - variable: copy_warnings_json
+          value_selector:
+          - a07
+          - copy_warnings_json
+          value_type: string
+        - variable: storyboard_warnings_json
+          value_selector:
+          - a09
+          - storyboard_warnings_json
+          value_type: string
+        - variable: motion_warnings_json
+          value_selector:
+          - a11
+          - motion_warnings_json
+          value_type: string
+        outputs:
+          result_summary:
+            type: string
+            children: null
+      position:
+        x: 7240
+        y: 385
+      positionAbsolute:
+        x: 7240
+        y: 385
+      sourcePosition: right
+      targetPosition: left
+      width: 270
+      height: 120
+    - id: a90_msg
+      type: custom
+      data:
+        type: template-transform
+        title: A90_生成未完成提示
+        variables: []
+        template: 内容生成未完成，请检查活动需求后重新运行。
+      position:
+        x: 3130
+        y: 650
+      positionAbsolute:
+        x: 3130
+        y: 650
+      sourcePosition: right
+      targetPosition: left
+      width: 270
+      height: 130
+    - id: a90
+      type: custom
+      data:
+        type: end
+        title: A90_输出未完成
+        outputs:
+        - variable: result_summary
+          value_selector:
+          - a90_msg
+          - output
+          value_type: string
+      position:
+        x: 3480
+        y: 650
+      positionAbsolute:
+        x: 3480
+        y: 650
+      sourcePosition: right
+      targetPosition: left
+      width: 270
+      height: 110
+    - id: mode_gate
+      type: custom
+      data:
+        type: if-else
+        title: M00_选择运行模式
+        cases:
+        - id: batch
+          case_id: batch
+          logical_operator: and
+          conditions:
+          - id: batch-condition-1
+            variable_selector:
+            - a00
+            - mode
+            comparison_operator: is
+            value: batch
+            varType: string
+      position:
+        x: 350
+        y: 700
+      positionAbsolute:
+        x: 350
+        y: 700
+      sourcePosition: right
+      targetPosition: left
+      width: 270
+      height: 105
+    - id: d01
+      type: custom
+      data:
+        type: llm
+        title: D01_批量HTML草稿
+        model:
+          provider: langgenius/mimo/mimo
+          name: mimo-v2.6-pro
+          mode: chat
+          completion_params:
+            temperature: 0.25
+            max_completion_tokens: 20000
+        prompt_template:
+        - id: d01-system
+          role: system
+          text: '# 批量 HTML 视频草稿
+
+
+            根据批量需求生成一个 HTML 文件，包含 6–10 个可独立复制的视频草稿卡片。
+
+
+            要求：
+
+
+            - 输出完整 HTML 文档，不输出 JSON 或 Markdown 围栏。
+
+            - 每个卡片包含：草稿编号、Hook、核心结论、口播草稿、镜头列表、CTA、风险提示。
+
+            - 使用 HTML/CSS 排版，不调用 Worker、HeyGen API 或 Webhook。
+
+            - 口播草稿约 120–138 个字符。
+
+            - 卡片中明确标记“草稿”和“待人工确认”。'
+        - id: d01-user
+          role: user
+          text: '批量需求：
+
+            {{#a00.batch_requests#}}
+
+
+            历史记录：
+
+            {{#a00.history_notes#}}
+
+
+            请输出完整 HTML 文档。'
+        context:
+          enabled: false
+          variable_selector: []
+        vision:
+          enabled: false
+      position:
+        x: 710
+        y: 680
+      positionAbsolute:
+        x: 710
+        y: 680
+      sourcePosition: right
+      targetPosition: left
+      width: 310
+      height: 155
+    - id: d02
+      type: custom
+      data:
+        type: end
+        title: D02_输出批量HTML
+        outputs:
+        - variable: html_gallery
+          value_selector:
+          - d01
+          - text
+          value_type: string
+      position:
+        x: 1070
+        y: 675
+      positionAbsolute:
+        x: 1070
+        y: 675
+      sourcePosition: right
+      targetPosition: left
+      width: 270
+      height: 110
+    - id: h01
+      type: custom
+      data:
+        type: llm
+        title: H01_生成HTML视频组合
+        model:
+          provider: langgenius/mimo/mimo
+          name: mimo-v2.6-pro
+          mode: chat
+          completion_params:
+            temperature: 0.6
+            max_completion_tokens: 60000
+        prompt_template:
+        - id: h01-system
+          role: system
+          text: "# HTML 视频编排\n\n你是负责画面质量最终交付的 HTML 动效导演。根据已批准内容，输出一个完整的、可直接放入 HyperFrames 项目的 HTML 文件。成片保留中文口播、字幕、背景音乐和数字人小窗。判断标准不是信息有没有放上去，而是这一屏是否值得被截图；排版、视觉风格、组件形态、字体、颜色、层级、构图和过场都按这个标准决定。本提示词只给约束和取舍方法，不给模板，也不给组件清单。\n\n## 输入数据（唯一内容真值）\n\n- `approved_package_json`：{{#a16.approved_package_json#}}\n- `request_id`：{{#a00.request_id#}}（只用于每次选择一个作者期创意变体）\n- `production_requirements`：{{#a00.production_requirements#}}\n\n优先使用 `storyboard.creative_strategy.title`、`subtitle`、`ending_line` 组织首尾信息；如果缺失，再从已批准内容提炼，但不得新增事实。\n\n必须把 `approved_package_json` 中的 `brief`、`approved_script`、`storyboard`、`motion_plan` 作为内容、文字、组件和动效的唯一真值；不得凭空补写主题外的实体、数字、案例或行动建议。\n\n## 技术契约（必须满足）\n\n- 输出完整 HTML 文档，不输出 Markdown 代码围栏，不输出解释。\n- 根 composition 直接挂在 `id=\"stage\"`，包含 `data-composition-id`、`data-width=\"1080\"`、`data-height=\"1920\"`、`data-duration`（用 `approved_script.estimated_duration_seconds`，本地会改成真实口播时长）、`data-caption-sync=\"transcript-required\"`。\n- 画布固定为 CSS `width: 1080px; height: 1920px`，普通浏览器打开时用 `fitRootToViewport` 整体等比缩放；具体页面构图不受本提示词约束。\n- 使用多个 `class=\"scene clip\"` 场景片段，每个场景包含稳定 `id`、`data-scene`、`data-sentence-ids`、`data-start`、`data-duration`。`data-sentence-ids` 必须精确列出该场景承接的 `approved_script.sentences[].id`。场景数量和分组方式由内容节奏决定，不设页数配额。\n- 字幕不归你写：不要在 HTML 里创建字幕容器、字幕条目或字幕样式，本地会在渲染前按真实时间码注入并统一排版。正文可以铺满整屏，不需要为字幕预留空白。\n- 版式完全自由：flex、grid、绝对定位、全出血、满屏插画都可以，正文可以铺满整屏；字幕是覆盖层，允许压住正文底部，不需要为它留白。只有两条结果要求：文字之间不要互相叠压；这一屏该看的都看得见。\n- 为避免 Dify 直接执行 HTML 时产生 `Network error`，本地脚本和媒体必须使用预览安全占位：外部脚本使用 `<script data-src=\"...\">`；媒体使用 `<template data-media-type=\"video|audio\" data-media-id=\"...\" data-media-src=\"...\">`。禁止在 H01 输出中直接使用本地 `src=\"媒体/...\"` 或 `src=\"素材/...\"`。口播占位固定写成 `<template data-media-type=\"audio\" data-media-id=\"voiceover-track\" data-audio-role=\"voiceover\" data-media-src=\"媒体/HeyGen口播.mp3\" data-start=\"0\" data-duration=\"30\"></template>`；背景音乐占位固定写成 `<template data-media-type=\"audio\" data-media-id=\"bgm-track\" data-audio-role=\"background-music\" data-media-src=\"媒体/背景音乐.mp3\" data-start=\"0\" data-duration=\"30\"></template>`。属性顺序按示例写。\n- 口播标记 `data-audio-role=\"voiceover\"`，背景音乐标记 `data-audio-role=\"background-music\"`。\n- 完整版必须保留数字人小窗，不得删除或替换成黑帧。必须输出预览安全占位 `<template data-media-type=\"video\" data-media-id=\"heygen_avatar\" data-video-role=\"avatar\" data-media-src=\"素材/avatar.mp4\" data-start=\"0\" data-duration=\"30\"></template>`，并用 `avatar-window`/等价小窗容器显示；窗口位置、尺寸和造型由本次构图决定，但必须持续可见、不得遮挡标题、数据、关键组件和字幕。禁止纯黑数字人窗口或空白保留区。\n- 使用一个暂停的 GSAP 时间线，并注册到 `window.__timelines`。定义 `const at = (seconds) => Number(seconds) * timelineScale`，所有 GSAP 时间位置使用 `at(seconds)`，例如 `timeline.from('.title', {opacity:0, y:24}, at(0.2));`。\n- 外部 GSAP 未加载时必须使用无报错的预览桩时间线，至少支持 `from/to/set/eventCallback/seek/time/duration`；禁止 raw HTML 预览抛出 `gsap is not defined`。\n- 禁止 `performance.now()`、`requestAnimationFrame()`、`Math.random`、随机时间和墙钟驱动。每次创意差异只发生在作者期选择的布局/组件/动效/过场变体，不在运行时随机。\n\n- 不要固定页眉、页脚、品牌角标、章节编号或水印层：画面只服务于当前这一屏的内容，全片不保留常驻的角落标识。\n\n## 设计定调（写代码前在心里完成，不要输出这部分）\n\n先决定这条片子用一个什么视觉隐喻承载主题，然后让全片每一屏都服从它：色彩、字阶、间距、形状、过场都从这一个隐喻里长出来，不要每屏换一套语言。\n\n## 创作要求（三条硬指标）\n\n- 足够多：多数屏要信息密集、层次完整、细节丰富；留白只留给真正需要停顿的一两屏。\n- 足够精致：对齐、间距、描边、层级、图层顺序都要经得起放大；不允许有的屏精雕、有的屏凑数。\n- 足够敢想：不要先想“该用什么组件”，先想“怎么让人一眼看懂并记住”；非常规构图、非常规层级、非常规动效都可以，只要每个选择都能解释它替这一屏说了什么。\n- 平庸比出错更糟：宁可冒一个能被内容解释的险，也不要交一张一眼见过的页面。\n\n## 组件与密度：不设配额\n\n- 本提示词不给组件清单和视觉风格清单：用什么组件、什么风格、什么动效，全部由你按这一屏的需要决定。\n- 不规定一屏放几个组件、几句文字、几层标题、几个场景。密度跟着证据走：证据多就排满；证据少就留白，但留白不等于空白，必须有一个足够重的视觉主体撑住整屏。\n- 每一屏都要做到值得截图：该有的信息层次一个都不能缺，不承载信息的装饰一个都不要。\n- 组件形态从这一屏要给出的证据推导，用最能承载它的形态，不要套用现成骨架。\n- 同一支片子的组件语法必须统一；不同视频之间不要复用同一套骨架和配色。\n\n## 排版\n\n- 靠字号、字重、明度、间距、位置一起拉开层级，不要只靠放大。\n- 中文断行按语义断，不出现单字成行，不把词组拆开。\n- 数字与文字分开处理，该重的重、该轻的轻。\n- 文字不要压在复杂纹理或高频图案上；对比不够就加底板。\n- 四周留安全边，不贴边；底部区域照常使用，字幕会叠在画面之上。\n\n## 动效\n\n- 画面里出现的**每一个组件**都要有自己的动作：进入是一次，之后至少还有一次属于它的状态变化；只有整屏淡入、组件全程不动，等于没做动效。\n- 动作要铺满整场：任意 2 秒内至少有一次可见变化，场景中段必须有第二个节拍，不能只有开场入场动画。\n- 每一屏都当成独立作品打磨：组件形态、层级、间距、字重、留白和动效节奏都要为这一屏重新决定，不要复用一个通用布局再往里塞字。\n- 同一场景内的状态切换必须重叠：新内容先进场、旧内容后离场，任何时刻都不允许出现只有背景的空屏，哪怕只有一帧。\n- 每个动作都要能说出它对应口播里的哪个词、哪个状态变化；说不出来就不要做。\n- 场景里至少有一个动作是状态变化，不能只有位移加淡入。\n- 动作按语义铺开，不要全挤在开头；同一时刻只让一个元素抢注意力。\n- 入场位移克制、缓动带长尾；禁止无限循环、呼吸、无意义漂移。\n\n## 过场\n\n- 过场只发生在语义停顿处，形式自定；整片过场语言统一，不要每屏换花招。\n\n## 内容与叙事\n\n- 每一屏承担一个叙事任务，可以用多个组件共同完成。\n- 优先用具体数字、步骤、状态、对比、案例和动作支撑观点；没有确认来源的数字、案例、价格和结果不得编造。\n- 首屏直接进 Hook，不做空白封面；末屏给出有力收束。\n- 禁止“首先、其次、最后”式模板、空洞口号、鸡汤、时间线流水账。\n\n## 输出前自检\n\n1. 这屏的视觉焦点是否正好是口播此刻的重点？\n2. 遮住文字后，画面结构本身是否仍在表达这一屏的意思？\n3. 组件形态是否从证据推导出来，而不是套用现成骨架？\n4. 每个动效能否对应到具体的一个词或一次状态变化？\n5. 这屏是否值得截图，而不是把内容塞进一个容器里糊过去？\n6. 内容是否严格来自 approved_package_json，没有新增未经确认的事实？\n7. 这一屏布局是否有话可说？文字有没有互相叠压、有没有出界？\n8. 是否存在两层文字相互叠压（大数字、标签、强调各自占位，不要叠字）？\n9. 字幕相关的容器、条目和样式是否已经完全没写（字幕由本地注入）？\n10. 把时间线按 2 秒切片，是否每一片都有可见变化？\n11. 技术契约（时间线、媒体占位、无运行时随机）是否全部满足？\n- 所有 GSAP 时间位置必须用 `at(秒)`；禁止写 `Number(65.98)` 这类绝对秒数，超出片长的动画会永远播不到。\n"
+        context:
+          enabled: false
+          variable_selector: []
+        vision:
+          enabled: false
+      position:
+        x: 7600
+        y: 365
+      positionAbsolute:
+        x: 7600
+        y: 365
+      sourcePosition: right
+      targetPosition: left
+      width: 310
+      height: 155
+    - id: h02
+      type: custom
+      data:
+        type: code
+        title: H02_检查HTML组合
+        code_language: python3
+        code: "def main(html_document: str, production_requirements: str) -> dict:\n    import json\n    import re\n\n    html = str(html_document or \"\")\n    errors = []\n    warnings = []\n    if not re.search(r'<div\\b[^>]*\\bid=[\"\\']stage[\"\\']', html, re.I):\n        errors.append(\"缺少 #stage 根画布（本地无法渲染）\")\n    elif not re.search(r'<div\\b[^>]*\\bid=[\"\\']stage[\"\\'][^>]*\\bdata-composition-id=', html, re.I):\n        warnings.append(\"#stage 没有 data-composition-id（本地会补齐，不拦截）\")\n    if \"performance.now(\" in html or \"requestAnimationFrame(\" in html:\n        errors.append(\"禁止 performance.now/requestAnimationFrame，必须由 HyperFrames 时间线驱动\")\n    if \"Math.random(\" in html:\n        warnings.append(\"禁止运行时 Math.random，随机性只能是作者期变体选择\")\n    if not re.search(r'window\\.__timelines', html):\n        errors.append(\"缺少 window.__timelines 注册的可寻址时间线\")\n    if not re.search(r'(?:^|[\\s;{}])(?:[A-Za-z_$][\\w$]*\\.)*(?:from|fromTo|to|set)\\s*\\(', html):\n        errors.append(\"缺少时间线驱动的 GSAP from/fromTo/to/set 动作调用\")\n    if not re.search(r'(?:const|var)\\s+at\\s*=', html) or not re.search(r'\\}\\s*,\\s*at\\(', html):\n        warnings.append(\"所有 GSAP 时间位置必须使用 at()\")\n    if \"<!doctype html>\" not in html.lower():\n        errors.append(\"缺少完整 HTML 文档头\")\n    for token in [\"CAPTIONS_START\", \"CAPTIONS_END\"]:\n        if token not in html:\n            warnings.append(\"缺少字幕占位 \" + token + \"（本地会注入字幕容器，不拦截）\")\n    for token in [\"data-composition-id\", \"data-duration\"]:\n        if token not in html:\n            warnings.append(\"缺少 \" + token + \"（本地会补齐，不拦截）\")\n    # 以下由本地 sync_video.py 在渲染前补齐，Dify 阶段只提示，避免挡掉可渲染的 HTML\n    for token in [\"data-width\", \"data-height\", \"data-caption-sync\"]:\n        if token not in html:\n            warnings.append(\"缺少 \" + token + \"（本地会补齐，不拦截）\")\n    # fitRootToViewport / data-authoring-duration / data-timeline-scale 由本地 sync_video.py\n    # 在渲染前注入，Dify 阶段不拦截，避免每次运行都刷屏假错误。\n    for token in [\"fitRootToViewport\", \"data-authoring-duration\", \"data-timeline-scale\"]:\n        if token not in html:\n            warnings.append(\"缺少 \" + token + \"（本地渲染前会注入，不拦截）\")\n    if not re.search(r\"width:\\s*1080px[\\s\\S]*height:\\s*1920px\", html):\n        warnings.append(\"根画布必须固定为 CSS 1080×1920\")\n    if re.search(r'width\\s*:\\s*1920px|height\\s*:\\s*1080px|data-width=\"1920\"|data-height=\"1080\"', html):\n        warnings.append(\"禁止横屏/16:9 画布，必须是 1080×1920 竖屏\")\n    for token in (\n        \"bottom:15%\", \"font-size:40px\", \"line-height:1.35\", \"font-weight:700\",\n        \"background:rgba(6,10,20,.42)\",\n    ):\n        if token not in html:\n            warnings.append(\"字幕契约缺少 \" + token)\n    if not re.search(r\"(?:max-)?width\\s*:\\s*70%\", html):\n        warnings.append(\"字幕契约缺少 70% 宽度\")\n    if \"data-start\" not in html or \"data-duration\" not in html:\n        warnings.append(\"缺少时间片段属性\")\n    if not re.search(r'class=[\"\\'][^\\'\"]*\\bscene\\b', html):\n        warnings.append(\"缺少 scene 时间片段\")\n    def scene_is(tag):\n        match = re.search(r'class=[\"\\']([^\"\\']*)[\"\\']', tag)\n        return bool(match) and \"scene\" in match.group(1).split()\n\n    scene_tags = [tag for tag in re.findall(r'<(?:section|div)\\b[^>]*>', html, flags=re.I) if scene_is(tag)]\n    if any(not re.search(r'(?<![\\w-])id=\"[^\"]+\"', tag) for tag in scene_tags):\n        warnings.append(\"每个 scene 必须有稳定 id\")\n    if any(not re.search(r'\\bdata-sentence-ids=\"[^\"]+\"', tag) for tag in scene_tags):\n        warnings.append(\"每个 scene 必须包含 data-sentence-ids\")\n    if not re.search(r'class=[\"\\'][^\"\\']*\\bcaption\\b[^\"\\']*[\"\\'][^>]*data-sentence-id=', html, re.I):\n        warnings.append(\"字幕必须包含 data-sentence-id\")\n    avatar_template = r'<template\\b[^>]*data-media-type=\"video\"[^>]*data-video-role=\"avatar\"[^>]*>'\n    avatar_window = r'class=\"[^\"]*avatar-window[^\"]*\"'\n    if not re.search(avatar_template, html, re.I) or not re.search(avatar_window, html, re.I):\n        warnings.append(\"完整版必须保留数字人 avatar 占位和可见小窗容器\")\n    if 'data-render-mode=\"black-frame\"' in html:\n        warnings.append(\"完整版不得使用无数字人 black-frame 模式\")\n    if re.search(r'(?<!data-)(?<!data-media-)src\\s*=\\s*[\"\\'](?:媒体|素材)/[^\"\\']*\\.(?:mp3|mp4|m4a|wav|png|jpe?g|webp|gif)', html, re.I):\n        warnings.append(\"H01 输出不得直接引用本地媒体，必须使用 data-media-src 占位\")\n    if not re.search(r'<template[^>]+data-media-type=\"audio\"[^>]+data-audio-role=\"voiceover\"[^>]*>', html, re.I):\n        warnings.append(\"口播必须使用预览安全的 template 媒体占位\")\n    if 'data-audio-role=\"voiceover\"' not in html:\n        warnings.append(\"必须保留独立口播音频图层 data-audio-role=\\\"voiceover\\\"\")\n    if 'data-audio-role=\"background-music\"' not in html:\n        warnings.append(\"未发现背景音乐图层\")\n    for token in [\"VIDEO_WORKER\", \"production-jobs\", \"webhook\"]:\n        if token.lower() in html.lower():\n            warnings.append(\"HTML 中不应引用 Worker/生产接口：\" + token)\n    if len(html) > 800000:\n        warnings.append(\"HTML 体积较大，建议拆分为模板和数据\")\n\n    return {\n        \"html_valid\": not errors,\n        \"html_errors_json\": json.dumps(errors, ensure_ascii=False),\n        \"html_warnings_json\": json.dumps(warnings, ensure_ascii=False),\n        \"production_requirements\": str(production_requirements or \"\")\n    }"
+        variables:
+        - variable: html_document
+          value_selector:
+          - h01
+          - text
+          value_type: string
+        - variable: production_requirements
+          value_selector:
+          - a00
+          - production_requirements
+          value_type: string
+        outputs:
+          html_valid:
+            type: boolean
+            children: null
+          html_errors_json:
+            type: string
+            children: null
+          html_warnings_json:
+            type: string
+            children: null
+          production_requirements:
+            type: string
+            children: null
+      position:
+        x: 7960
+        y: 365
+      positionAbsolute:
+        x: 7960
+        y: 365
+      sourcePosition: right
+      targetPosition: left
+      width: 270
+      height: 158
+    - id: h03
+      type: custom
+      data:
+        type: code
+        title: H03_生成HeyGen请求
+        code_language: python3
+        code: "def main(request_id: str, approved_package_json: str, production_requirements: str, avatar_id: str, voice_id: str) -> dict:\n    import json\n\n    try:\n        package = json.loads(approved_package_json or \"{}\")\n    except Exception:\n        raise ValueError(\"approved_package_json 不是合法 JSON\")\n    if not isinstance(package, dict):\n        raise ValueError(\"approved_package_json 必须是对象\")\n\n    script = package.get(\"approved_script\") if isinstance(package.get(\"approved_script\"), dict) else {}\n    brief = package.get(\"brief\") if isinstance(package.get(\"brief\"), dict) else {}\n    voiceover = str(script.get(\"voiceover_script\") or \"\").strip()\n    if not voiceover:\n        raise ValueError(\"缺少已批准口播\")\n\n    title = str(request_id or \"\").strip() or str(brief.get(\"topic\") or brief.get(\"source_text\") or \"video\")\n    payload = {\n        \"type\": \"avatar\",\n        \"title\": title,\n        \"avatar_id\": str(avatar_id or \"\").strip(),\n        \"voice_id\": str(voice_id or \"\").strip(),\n        \"script\": voiceover,\n        \"resolution\": \"1080p\",\n        \"aspect_ratio\": \"9:16\",\n        \"output_format\": \"mp4\"\n    }\n    return {\"heygen_request_json\": json.dumps(payload, ensure_ascii=False)}\n"
+        variables:
+        - variable: request_id
+          value_selector:
+          - a00
+          - request_id
+          value_type: string
+        - variable: approved_package_json
+          value_selector:
+          - a16
+          - approved_package_json
+          value_type: string
+        - variable: production_requirements
+          value_selector:
+          - a00
+          - production_requirements
+          value_type: string
+        - variable: avatar_id
+          value_selector:
+          - env
+          - HEYGEN_AVATAR_ID
+          value_type: string
+        - variable: voice_id
+          value_selector:
+          - env
+          - HEYGEN_VOICE_ID
+          value_type: string
+        outputs:
+          heygen_request_json:
+            type: string
+            children: null
+      position:
+        x: 8320
+        y: 365
+      positionAbsolute:
+        x: 8320
+        y: 365
+      sourcePosition: right
+      targetPosition: left
+      width: 270
+      height: 120
+    - id: h04
+      type: custom
+      data:
+        type: http-request
+        title: H04_调用HeyGen创建数字人
+        method: post
+        url: '{{#env.HEYGEN_API_BASE#}}/v3/videos'
+        headers: 'Content-Type: application/json
+
+          X-Api-Key: {{#env.HEYGEN_API_KEY#}}'
+        params: ''
+        body:
+          type: raw-text
+          data:
+          - id: h04-body-1
+            key: ''
+            type: text
+            value: '{{#h03.heygen_request_json#}}'
+        authorization:
+          type: no-auth
+          config: null
+        timeout:
+          max_connect_timeout: 10
+          max_read_timeout: 60
+          max_write_timeout: 30
+        retry_config:
+          retry_enabled: true
+          max_retries: 3
+          retry_interval: 3
+        variables: []
+      position:
+        x: 8680
+        y: 355
+      positionAbsolute:
+        x: 8680
+        y: 355
+      sourcePosition: right
+      targetPosition: left
+      width: 305
+      height: 145
+    - id: h05
+      type: custom
+      data:
+        type: code
+        title: H05_解析HeyGen响应
+        code_language: python3
+        code: "def main(response_json: str) -> dict:\n    import json\n\n    try:\n        data = json.loads(response_json or \"{}\")\n    except Exception:\n        raise ValueError(\"HeyGen 响应不是合法 JSON\")\n    if not isinstance(data, dict):\n        raise ValueError(\"HeyGen 响应必须是对象\")\n\n    def path_value(root, *path):\n        value = root\n        for key in path:\n            if not isinstance(value, dict) or key not in value:\n                return None\n            value = value[key]\n        return value if value not in (None, \"\") else None\n\n    def find_key(value, names):\n        if isinstance(value, dict):\n            for name in names:\n                candidate = value.get(name)\n                if candidate not in (None, \"\"):\n                    return candidate\n            for child in value.values():\n                found = find_key(child, names)\n                if found not in (None, \"\"):\n                    return found\n        elif isinstance(value, list):\n            for child in value:\n                found = find_key(child, names)\n                if found not in (None, \"\"):\n                    return found\n        return None\n\n    def find_url(names):\n        candidate = find_key(data, names)\n        return str(candidate) if isinstance(candidate, str) and candidate.startswith((\"http://\", \"https://\")) else \"\"\n\n    video_id = str(\n        path_value(data, \"data\", \"id\") or path_value(data, \"data\", \"video_id\") or\n        path_value(data, \"data\", \"videoId\") or path_value(data, \"id\") or\n        path_value(data, \"video_id\") or path_value(data, \"videoId\") or \"\"\n    ).strip()\n    status = str(\n        path_value(data, \"data\", \"status\") or path_value(data, \"data\", \"state\") or\n        path_value(data, \"status\") or path_value(data, \"state\") or \"\"\n    ).strip().lower()\n    error = data.get(\"error\") or path_value(data, \"data\", \"error\")\n    error_message = str(error.get(\"message\") if isinstance(error, dict) else error or \"\")\n\n    video_url = find_url([\"video_url\", \"videoUrl\"])\n    if video_url and video_id and video_id not in video_url:\n        raise ValueError(\"HeyGen video_url 与 video_id 不一致，拒绝返回可能串片的旧视频\")\n    if status == \"completed\" and not video_url:\n        raise ValueError(\"HeyGen completed 响应缺少明确 video_url\")\n\n    return {\n        \"heygen_video_id\": video_id,\n        \"heygen_status\": status,\n        \"heygen_video_url\": video_url,\n        \"heygen_audio_url\": find_url([\"audio_url\", \"audioUrl\"]),\n        \"heygen_transcript_url\": find_url([\n            \"transcript_url\", \"transcriptUrl\", \"caption_url\", \"captionUrl\",\n            \"subtitle_url\", \"subtitleUrl\", \"srt_url\", \"srtUrl\",\n        ]),\n        \"heygen_error_message\": error_message,\n        \"heygen_response_json\": json.dumps(data, ensure_ascii=False)\n    }\n"
+        variables:
+        - variable: response_json
+          value_selector:
+          - h04
+          - body
+          value_type: string
+        outputs: &id001
+          heygen_video_id:
+            type: string
+            children: null
+          heygen_status:
+            type: string
+            children: null
+          heygen_video_url:
+            type: string
+            children: null
+          heygen_audio_url:
+            type: string
+            children: null
+          heygen_error_message:
+            type: string
+            children: null
+          heygen_response_json:
+            type: string
+            children: null
+          heygen_transcript_url:
+            type: string
+            children: null
+      position:
+        x: 9040
+        y: 365
+      positionAbsolute:
+        x: 9040
+        y: 365
+      sourcePosition: right
+      targetPosition: left
+      width: 270
+      height: 196
+    - id: a18
+      type: custom
+      data:
+        type: end
+        title: H06_输出HTML与HeyGen结果
+        outputs:
+        - variable: build_package_json
+          value_selector:
+          - h12_build_package
+          - build_package_json
+          value_type: string
+        - variable: result_summary
+          value_selector:
+          - a17
+          - result_summary
+          value_type: string
+        - variable: html_document
+          value_selector:
+          - h01
+          - text
+          value_type: string
+        - variable: html_valid
+          value_selector:
+          - h02
+          - html_valid
+          value_type: boolean
+        - variable: html_warnings_json
+          value_selector:
+          - h02
+          - html_warnings_json
+          value_type: string
+        - variable: heygen_video_id
+          value_selector:
+          - h11_final_response
+          - heygen_video_id
+          value_type: string
+        - variable: heygen_status
+          value_selector:
+          - h11_final_response
+          - heygen_status
+          value_type: string
+        - variable: heygen_video_url
+          value_selector:
+          - h11_final_response
+          - heygen_video_url
+          value_type: string
+        - variable: heygen_audio_url
+          value_selector:
+          - h11_final_response
+          - heygen_audio_url
+          value_type: string
+        - variable: heygen_response_json
+          value_selector:
+          - h11_final_response
+          - heygen_response_json
+          value_type: string
+        - variable: heygen_transcript_url
+          value_selector:
+          - h11_final_response
+          - heygen_transcript_url
+          value_type: string
+        - variable: voiceover_script
+          value_selector:
+          - h12_build_package
+          - voiceover_script
+          value_type: string
+      position:
+        x: 9400
+        y: 355
+      positionAbsolute:
+        x: 9400
+        y: 355
+      sourcePosition: right
+      targetPosition: left
+      width: 270
+      height: 360
+    - id: a06_retry
+      type: custom
+      data:
+        type: llm
+        title: A06R_按错误自动改写口播
+        model:
+          provider: langgenius/mimo/mimo
+          name: mimo-v2.6-pro
+          mode: chat
+          completion_params:
+            temperature: 0.2
+            max_completion_tokens: 2200
+        prompt_template:
+        - id: a06_retry-system
+          role: system
+          text: "# 口播自动扩写修订\n\n把未通过门禁的口播修到能过门禁，同时保留原来的观点和论证顺序。需求只是种子：不要退回原始输入的时间顺序，也不要加入推广口吻。\n\n## 先读错误类型，再动手改\n\n- `口播是时间线流水账`：把过程句整句删掉，不是换连接词。保留结论和论点，用“因为/代价是/本质上是/换句话说”这类因果与判断衔接。\n- `口播过度照搬原始素材`：把照抄的句子整句重写，改用自己的话讲同一个论点。\n- `论点没讲全，缺 aX`：按 `brief_json.distill.arguments` 找到该论点的 `claim`，讲清它并同步补进 `argument_coverage`；论点讲不完就合并，不要靠加长来解决。\n- `JSON 无法解析`：只输出严格 JSON，不要代码围栏、不要解释。\n\n## 结构要求（与首次生成一致）\n\n- 第一句落在结论或反常识断言上；可以有场景或人称，但不能只有过程。\n- 按 `strategy_json.argument_order` 讲论点，先论点后证据。\n- 句数和字数由内容决定，不设上限也不设下限；讲透就停。\n- 不要复述对话过程，不把“他说/我说”写进成稿；不保留聊天轮次结构。\n- 不得编造数字、经历、案例、价格或效果承诺。\n- 必须输出 `argument_coverage`，覆盖 `argument_order` 的全部 id。\n- 每个完整句子单独成为一条字幕，不设置字幕字数上限，不截断，不把两个半句拼成一条。\n- 只有 `。！？!?` 表示完整句子结束。\n- 只输出严格合法 JSON。\n\n原口播 JSON：\n\n{{#a07.script_json#}}\n\n门禁错误：\n\n{{#a07.copy_errors_json#}}\n\n已批准 Brief：\n\n{{#a03.brief_json#}}\n\n请直接输出修正后的完整 JSON。\n"
+        context:
+          enabled: false
+          variable_selector: []
+        vision:
+          enabled: false
+      position:
+        x: 2420
+        y: 650
+      positionAbsolute:
+        x: 2420
+        y: 650
+      sourcePosition: right
+      targetPosition: left
+      width: 310
+      height: 155
+    - id: a07_retry
+      type: custom
+      data:
+        type: code
+        title: A07R_复查自动改写口播
+        code_language: python3
+        code: "def main(copy_text: str, brief_json: str) -> dict:\n    import hashlib\n    import json\n    import math\n    import re\n\n    def parse(raw, label):\n        value = str(raw or \"\").strip()\n        value = re.sub(r\"^```(?:json)?\\s*|\\s*```$\", \"\", value, flags=re.I)\n        try:\n            return json.loads(value)\n        except Exception:\n            start, end = value.find(\"{\"), value.rfind(\"}\")\n            if start >= 0 and end > start:\n                try:\n                    return json.loads(value[start:end + 1])\n                except Exception:\n                    pass\n            return {\"__invalid_json__\": True, \"__label__\": label, \"__excerpt__\": value[:1000]}\n\n    brief = parse(brief_json, \"brief\")\n    data = parse(copy_text, \"文案\")\n    if not isinstance(data, dict):\n        data = {\"__invalid_json__\": True, \"__label__\": \"文案\", \"__excerpt__\": str(copy_text)[:1000]}\n    if data.get(\"__invalid_json__\"):\n        excerpt = str(data.get(\"__excerpt__\") or \"\")\n        return {\n            \"script_json\": json.dumps({\"voiceover_script\": excerpt, \"sentences\": [], \"validation\": {\"errors\": [\"JSON 无法解析\"]}}, ensure_ascii=False),\n            \"voiceover_script\": excerpt,\n            \"estimated_duration_seconds\": 0.0,\n            \"script_hash\": hashlib.sha256(excerpt.encode(\"utf-8\")).hexdigest(),\n            \"copy_valid\": False,\n            \"copy_errors_json\": json.dumps([\"口播 JSON 无法解析，请自动改写为严格 JSON\"], ensure_ascii=False),\n            \"copy_warnings_json\": \"[]\",\n            \"recommended_motion_count_min\": 6\n        }\n    warnings = []\n    errors = []\n\n    supplied_sentences = data.get(\"sentences\")\n    if not isinstance(supplied_sentences, list):\n        supplied_sentences = []\n    script = str(data.get(\"voiceover_script\", \"\")).strip()\n    if not script and supplied_sentences:\n        script = \" \".join(str(item.get(\"text\", \"\") if isinstance(item, dict) else item).strip() for item in supplied_sentences).strip()\n    if not script:\n        raise ValueError(\"voiceover_script 和 sentences 不能同时为空\")\n    data[\"voiceover_script\"] = script\n\n    # The final script is the text truth. Rebuild captions by complete sentences,\n    # preserving terminal punctuation and never splitting or joining fragments.\n    sentence_texts = [match.group(0).strip() for match in re.finditer(r\".*?(?:[。！？!?]+|$)\", script, flags=re.S) if match.group(0).strip()]\n    sentences = [{\"id\": \"s%02d\" % (i + 1), \"text\": text} for i, text in enumerate(sentence_texts)]\n    if not sentences:\n        errors.append(\"口播里没有完整句子，无法生成逐句字幕\")\n        sentences = [{\"id\": \"s01\", \"text\": script}]\n\n    compact = re.sub(r\"\\s+\", \"\", script)\n    target_duration = float(brief.get(\"target_duration_seconds\") or 0) or 30.0\n\n    banned = [\"保证出单\", \"百分百\", \"马上爆单\", \"行业第一\", \"绝对第一\", \"最强\", \"最先进\"]\n    for word in banned:\n        if word in script:\n            warnings.append(\"口播包含待合规复核表达: \" + word)\n\n    # ---------------- 内容诊断：只提示，不限制长度和结构 ----------------\n    distill = brief.get(\"distill\") if isinstance(brief.get(\"distill\"), dict) else {}\n    thesis = str(distill.get(\"thesis\") or \"\").strip()\n    arguments = [item for item in (distill.get(\"arguments\") or [])\n                 if isinstance(item, dict) and str(item.get(\"claim\") or \"\").strip()]\n    source_text = str(brief.get(\"source_text\") or \"\")\n    compact_source = re.sub(r\"\\s+\", \"\", source_text)\n\n    def shingles(text, size=6):\n        return {text[index:index + size] for index in range(max(0, len(text) - size + 1))}\n\n    chronology_words = [\"然后\", \"接着\", \"后来\", \"再后来\", \"之后\", \"当天\", \"第二天\", \"隔天\", \"那时候\", \"当时\", \"再往后\"]\n    chronology_count = sum(script.count(word) for word in chronology_words)\n\n    verbatim_ratio = 0.0\n    if len(compact_source) >= 400:\n        script_shingles = shingles(compact, 8)\n        source_shingles = shingles(compact_source, 8)\n        verbatim_ratio = len(script_shingles & source_shingles) / float(max(1, len(script_shingles)))\n\n    dialogue_marks = [\"他说\", \"她说\", \"我说\", \"对方说\", \"他问\", \"我问\", \"有人问\"]\n    dialogue_count = sum(script.count(word) for word in dialogue_marks)\n\n    argument_ids = [str(item.get(\"id\") or \"a%d\" % (index + 1)) for index, item in enumerate(arguments)]\n    coverage = data.get(\"argument_coverage\")\n    covered_ids = []\n    if isinstance(coverage, list):\n        for item in coverage:\n            token = \"\"\n            if isinstance(item, dict):\n                token = str(item.get(\"id\") or item.get(\"argument_id\") or \"\").strip()\n            else:\n                token = str(item or \"\").strip()\n            if token and token not in covered_ids:\n                covered_ids.append(token)\n    unknown_ids = [token for token in covered_ids if token not in argument_ids]\n    if unknown_ids:\n        warnings.append(\"argument_coverage 出现未知论点：\" + \"、\".join(unknown_ids) + \"（只提示，不拦截）\")\n    elif argument_ids and covered_ids:\n        missing = [token for token in argument_ids if token not in covered_ids]\n        if missing:\n            warnings.append(\"自报覆盖里没提到论点 \" + \"、\".join(missing) + \"：可能是合并或略讲，按内容判断是否需要补（只提示，不拦截）\")\n\n    if len(re.sub(r\"\\s+\", \"\", thesis)) >= 6:\n        thesis_shingles = shingles(re.sub(r\"\\s+\", \"\", thesis), 2)\n        if thesis_shingles and not any(token in compact for token in thesis_shingles):\n            warnings.append(\"全文没有明显回应 distill.thesis，检查是否换题了（只提示）\")\n\n    # 唯一的内容拦截：时间连接词成串说明在按过程复述。不设字数/句数配额。\n    if chronology_count >= 5:\n        errors.append(\"口播在按时间顺序复述（时间连接词 %d 处：%s）：改成论点结构，删掉过程衔接\" % (\n            chronology_count, \"、\".join(sorted({word for word in chronology_words if word in script}))))\n    elif chronology_count >= 3:\n        warnings.append(\"时间连接词 %d 处，偏多则可能在复述过程（只提示）\" % chronology_count)\n\n    data[\"sentences\"] = sentences\n\n    allowed_purposes = {\"hook\", \"context\", \"pain\", \"insight\", \"solution\", \"proof\", \"example\", \"ending\", \"summary\", \"cta\"}\n    normalized_sentences = []\n    seen_ids = set()\n    cursor = 0.0\n    for index, item in enumerate(sentences, 1):\n        if not isinstance(item, dict):\n            item = {\"text\": str(item)}\n        text = str(item.get(\"text\", \"\")).strip()\n        if not text:\n            continue\n        sentence_id = str(item.get(\"id\") or \"s%02d\" % index)\n        while sentence_id in seen_ids:\n            sentence_id = sentence_id + \"_dup\"\n        seen_ids.add(sentence_id)\n        purpose = str(item.get(\"purpose\") or \"\").strip()\n        if purpose not in allowed_purposes:\n            old = purpose or \"empty\"\n            purpose = \"hook\" if index == 1 else (\"ending\" if index == len(sentences) else \"insight\")\n            warnings.append(\"%s purpose=%s 已归一化为 %s\" % (sentence_id, old, purpose))\n        estimated = max(1.2, len(re.sub(r\"\\s+\", \"\", text)) / 4.35)\n        normalized_sentences.append({\n            \"id\": sentence_id,\n            \"text\": text,\n            \"purpose\": purpose,\n            \"estimated_start_seconds\": round(cursor, 2),\n            \"estimated_end_seconds\": round(cursor + estimated, 2)\n        })\n        cursor += estimated\n\n    if not normalized_sentences:\n        raise ValueError(\"sentences 中没有有效文本\")\n    normalized_sentences[0][\"purpose\"] = \"hook\"\n    if normalized_sentences[-1][\"purpose\"] not in {\"ending\", \"summary\", \"cta\"}:\n        normalized_sentences[-1][\"purpose\"] = \"ending\"\n    if not any(item[\"purpose\"] in {\"insight\", \"solution\"} for item in normalized_sentences):\n        normalized_sentences[min(1, len(normalized_sentences) - 1)][\"purpose\"] = \"insight\"\n\n    normalized_captions = [item[\"text\"] for item in normalized_sentences]\n    supplied_captions = data.get(\"burned_in_caption_lines\")\n    if isinstance(supplied_captions, list) and supplied_captions:\n        supplied_clean = [re.sub(r\"\\s+\", \"\", str(line)) for line in supplied_captions]\n        expected_clean = [re.sub(r\"\\s+\", \"\", line) for line in normalized_captions]\n        if supplied_clean != expected_clean:\n            warnings.append(\"burned_in_caption_lines 与完整句子不一致，已强制改为逐句完整字幕\")\n    data[\"burned_in_caption_lines\"] = normalized_captions\n\n    estimated_duration = round(cursor, 2)\n\n    data[\"sentences\"] = normalized_sentences\n    data[\"estimated_duration_seconds\"] = estimated_duration\n    data[\"argument_coverage\"] = coverage if isinstance(coverage, list) else []\n    data[\"content_diagnostics\"] = {\n        \"thesis\": thesis,\n        \"argument_ids\": argument_ids,\n        \"covered_argument_ids\": covered_ids,\n        \"chronology_words\": chronology_count,\n        \"verbatim_ratio\": round(verbatim_ratio, 3),\n        \"dialogue_marks\": dialogue_count,\n        \"characters\": len(compact),\n        \"sentences\": len(normalized_sentences),\n    }\n    data[\"validation\"] = {\"errors\": errors, \"warnings\": warnings}\n    script_hash = hashlib.sha256(re.sub(r\"\\s+\", \"\", script).encode(\"utf-8\")).hexdigest()\n    return {\n        \"script_json\": json.dumps(data, ensure_ascii=False),\n        \"voiceover_script\": script,\n        \"estimated_duration_seconds\": estimated_duration,\n        \"script_hash\": script_hash,\n        \"copy_valid\": not errors,\n        \"copy_errors_json\": json.dumps(errors, ensure_ascii=False),\n        \"copy_warnings_json\": json.dumps(warnings, ensure_ascii=False),\n        \"recommended_motion_count_min\": max(6, int(math.ceil(target_duration / 2.5)))\n    }"
+        variables:
+        - variable: copy_text
+          value_selector:
+          - a06_retry
+          - text
+          value_type: string
+        - variable: brief_json
+          value_selector:
+          - a03
+          - brief_json
+          value_type: string
+        outputs:
+          script_json:
+            type: string
+            children: null
+          voiceover_script:
+            type: string
+            children: null
+          estimated_duration_seconds:
+            type: number
+            children: null
+          script_hash:
+            type: string
+            children: null
+          copy_valid:
+            type: boolean
+            children: null
+          copy_errors_json:
+            type: string
+            children: null
+          copy_warnings_json:
+            type: string
+            children: null
+          recommended_motion_count_min:
+            type: number
+            children: null
+      position:
+        x: 2775
+        y: 650
+      positionAbsolute:
+        x: 2775
+        y: 650
+      sourcePosition: right
+      targetPosition: left
+      width: 270
+      height: 234
+    - id: a07_retry_gate
+      type: custom
+      data:
+        type: if-else
+        title: A07R_口播复查门禁
+        cases:
+        - id: copy_valid
+          case_id: copy_valid
+          logical_operator: and
+          conditions:
+          - id: copy_valid-condition
+            variable_selector:
+            - a07_retry
+            - copy_valid
+            comparison_operator: is
+            value: 'true'
+            varType: boolean
+      position:
+        x: 3130
+        y: 650
+      positionAbsolute:
+        x: 3130
+        y: 650
+      sourcePosition: right
+      targetPosition: left
+      width: 270
+      height: 105
+    - id: a07_error_msg
+      type: custom
+      data:
+        type: template-transform
+        title: A07_输出口播门禁原因
+        variables:
+        - variable: copy_errors_json
+          value_selector:
+          - a07_retry
+          - copy_errors_json
+        - variable: copy_warnings_json
+          value_selector:
+          - a07_retry
+          - copy_warnings_json
+        - variable: estimated_duration_seconds
+          value_selector:
+          - a07_retry
+          - estimated_duration_seconds
+        template: '口播门禁未通过，已自动改写一次仍未达标。
+
+
+          具体错误：
+
+          {{ copy_errors_json }}
+
+
+          警告：
+
+          {{ copy_warnings_json }}
+
+
+          当前口播估算时长：{{ estimated_duration_seconds }} 秒。请检查活动需求中是否缺少核心方法、步骤、已确认事实或 CTA，补充后重新运行。'
+      position:
+        x: 3480
+        y: 650
+      positionAbsolute:
+        x: 3480
+        y: 650
+      sourcePosition: right
+      targetPosition: left
+      width: 310
+      height: 190
+    - id: a07_error
+      type: custom
+      data:
+        type: end
+        title: A07_输出口播错误
+        outputs:
+        - variable: result_summary
+          value_selector:
+          - a07_error_msg
+          - output
+          value_type: string
+        - variable: copy_errors_json
+          value_selector:
+          - a07_retry
+          - copy_errors_json
+          value_type: string
+        - variable: copy_warnings_json
+          value_selector:
+          - a07_retry
+          - copy_warnings_json
+          value_type: string
+        - variable: voiceover_script
+          value_selector:
+          - a07_retry
+          - voiceover_script
+          value_type: string
+        - variable: estimated_duration_seconds
+          value_selector:
+          - a07_retry
+          - estimated_duration_seconds
+          value_type: number
+      position:
+        x: 3840
+        y: 650
+      positionAbsolute:
+        x: 3840
+        y: 650
+      sourcePosition: right
+      targetPosition: left
+      width: 270
+      height: 220
+    - id: h06_wait_loop
+      type: custom
+      data:
+        type: loop
+        title: H06_等待HeyGen完成
+        loop_count: 180
+        logical_operator: and
+        loop_variables:
+        - id: final-response-json
+          label: final_response_json
+          value: ''
+          value_type: constant
+          var_type: string
+        break_conditions:
+        - id: heygen-done
+          variable_selector:
+          - h08_status_parse
+          - done
+          comparison_operator: is
+          value: 'true'
+          varType: boolean
+        start_node_id: h06_loop_start
+        width: 520
+        height: 230
+      position:
+        x: 9040
+        y: 650
+      positionAbsolute:
+        x: 9040
+        y: 650
+      sourcePosition: right
+      targetPosition: left
+      width: 520
+      height: 230
+      zIndex: 1
+    - id: h06_loop_start
+      parentId: h06_wait_loop
+      type: custom-loop-start
+      draggable: false
+      selectable: false
+      data:
+        type: loop-start
+        title: ''
+        isInLoop: true
+      position:
+        x: 60
+        y: 85
+      positionAbsolute:
+        x: 9100
+        y: 735
+      sourcePosition: right
+      targetPosition: left
+      width: 44
+      height: 48
+      zIndex: 1002
+    - id: h07_status_http
+      parentId: h06_wait_loop
+      type: custom
+      data:
+        type: http-request
+        title: H07_查询HeyGen状态
+        method: get
+        url: '{{#env.HEYGEN_API_BASE#}}/v3/videos/{{#h05.heygen_video_id#}}'
+        headers: 'X-Api-Key: {{#env.HEYGEN_API_KEY#}}
+
+          Accept: application/json'
+        params: ''
+        body:
+          type: none
+          data: []
+        authorization:
+          type: no-auth
+          config: null
+        timeout:
+          max_connect_timeout: 10
+          max_read_timeout: 30
+          max_write_timeout: 10
+        retry_config:
+          retry_enabled: true
+          max_retries: 2
+          retry_interval: 2
+        variables: []
+        isInLoop: true
+        loop_id: h06_wait_loop
+      position:
+        x: 190
+        y: 55
+      positionAbsolute:
+        x: 9230
+        y: 705
+      sourcePosition: right
+      targetPosition: left
+      width: 270
+      height: 130
+      zIndex: 1002
+    - id: h08_status_parse
+      parentId: h06_wait_loop
+      type: custom
+      data:
+        type: code
+        title: H08_判断HeyGen状态
+        code_language: python3
+        code: "def main(response_json: str) -> dict:\n    import json\n\n    try:\n        data = json.loads(response_json or \"{}\")\n    except Exception:\n        data = {}\n    if not isinstance(data, dict):\n        data = {}\n\n    def find_value(value, names):\n        if isinstance(value, dict):\n            for name in names:\n                if value.get(name) not in (None, \"\"):\n                    return value[name]\n            for child in value.values():\n                found = find_value(child, names)\n                if found not in (None, \"\"):\n                    return found\n        elif isinstance(value, list):\n            for child in value:\n                found = find_value(child, names)\n                if found not in (None, \"\"):\n                    return found\n        return None\n\n    status = str(find_value(data, [\"status\", \"state\"]) or \"\").strip().lower()\n    done = status in {\"completed\", \"failed\", \"cancelled\"}\n    return {\n        \"status\": status,\n        \"done\": done,\n        \"response_json\": json.dumps(data, ensure_ascii=False)\n    }\n"
+        variables:
+        - variable: response_json
+          value_selector:
+          - h07_status_http
+          - body
+          value_type: string
+        outputs:
+          status:
+            type: string
+            children: null
+          done:
+            type: boolean
+            children: null
+          response_json:
+            type: string
+            children: null
+        isInLoop: true
+        loop_id: h06_wait_loop
+      position:
+        x: 510
+        y: 55
+      positionAbsolute:
+        x: 9550
+        y: 705
+      sourcePosition: right
+      targetPosition: left
+      width: 270
+      height: 190
+      zIndex: 1002
+    - id: h10_store_response
+      parentId: h06_wait_loop
+      type: custom
+      data:
+        type: assigner
+        title: H10_保存最新响应
+        version: '2'
+        isInLoop: true
+        loop_id: h06_wait_loop
+        items:
+        - variable_selector:
+          - h06_wait_loop
+          - final_response_json
+          input_type: variable
+          operation: over-write
+          value:
+          - h08_status_parse
+          - response_json
+          write_mode: over-write
+      position:
+        x: 830
+        y: 55
+      positionAbsolute:
+        x: 9870
+        y: 705
+      sourcePosition: right
+      targetPosition: left
+      width: 270
+      height: 110
+      zIndex: 1002
+    - id: h09_wait_delay
+      parentId: h06_wait_loop
+      type: custom
+      data:
+        type: code
+        title: H09_等待10秒
+        code_language: python3
+        code: "def main(should_wait: bool) -> dict:\n    import time\n    if not should_wait:\n        time.sleep(10)\n    return {\"waited\": not bool(should_wait)}\n"
+        variables:
+        - variable: should_wait
+          value_selector:
+          - h08_status_parse
+          - done
+          value_type: boolean
+        outputs:
+          waited:
+            type: boolean
+            children: null
+        isInLoop: true
+        loop_id: h06_wait_loop
+      position:
+        x: 1150
+        y: 55
+      positionAbsolute:
+        x: 10190
+        y: 705
+      sourcePosition: right
+      targetPosition: left
+      width: 244
+      height: 110
+      zIndex: 1002
+    - id: h11_final_response
+      type: custom
+      data:
+        type: code
+        title: H11_解析最终HeyGen响应
+        code_language: python3
+        code: "def main(response_json: str) -> dict:\n    import json\n\n    try:\n        data = json.loads(response_json or \"{}\")\n    except Exception:\n        raise ValueError(\"HeyGen 响应不是合法 JSON\")\n    if not isinstance(data, dict):\n        raise ValueError(\"HeyGen 响应必须是对象\")\n\n    def path_value(root, *path):\n        value = root\n        for key in path:\n            if not isinstance(value, dict) or key not in value:\n                return None\n            value = value[key]\n        return value if value not in (None, \"\") else None\n\n    def find_key(value, names):\n        if isinstance(value, dict):\n            for name in names:\n                candidate = value.get(name)\n                if candidate not in (None, \"\"):\n                    return candidate\n            for child in value.values():\n                found = find_key(child, names)\n                if found not in (None, \"\"):\n                    return found\n        elif isinstance(value, list):\n            for child in value:\n                found = find_key(child, names)\n                if found not in (None, \"\"):\n                    return found\n        return None\n\n    def find_url(names):\n        candidate = find_key(data, names)\n        return str(candidate) if isinstance(candidate, str) and candidate.startswith((\"http://\", \"https://\")) else \"\"\n\n    video_id = str(\n        path_value(data, \"data\", \"id\") or path_value(data, \"data\", \"video_id\") or\n        path_value(data, \"data\", \"videoId\") or path_value(data, \"id\") or\n        path_value(data, \"video_id\") or path_value(data, \"videoId\") or \"\"\n    ).strip()\n    status = str(\n        path_value(data, \"data\", \"status\") or path_value(data, \"data\", \"state\") or\n        path_value(data, \"status\") or path_value(data, \"state\") or \"\"\n    ).strip().lower()\n    error = data.get(\"error\") or path_value(data, \"data\", \"error\")\n    error_message = str(error.get(\"message\") if isinstance(error, dict) else error or \"\")\n\n    video_url = find_url([\"video_url\", \"videoUrl\"])\n    if video_url and video_id and video_id not in video_url:\n        raise ValueError(\"HeyGen video_url 与 video_id 不一致，拒绝返回可能串片的旧视频\")\n    if status == \"completed\" and not video_url:\n        raise ValueError(\"HeyGen completed 响应缺少明确 video_url\")\n\n    return {\n        \"heygen_video_id\": video_id,\n        \"heygen_status\": status,\n        \"heygen_video_url\": video_url,\n        \"heygen_audio_url\": find_url([\"audio_url\", \"audioUrl\"]),\n        \"heygen_transcript_url\": find_url([\n            \"transcript_url\", \"transcriptUrl\", \"caption_url\", \"captionUrl\",\n            \"subtitle_url\", \"subtitleUrl\", \"srt_url\", \"srtUrl\",\n        ]),\n        \"heygen_error_message\": error_message,\n        \"heygen_response_json\": json.dumps(data, ensure_ascii=False)\n    }\n"
+        variables:
+        - variable: response_json
+          value_selector:
+          - h06_wait_loop
+          - final_response_json
+          value_type: string
+        outputs: *id001
+        isInLoop: false
+      position:
+        x: 9620
+        y: 650
+      positionAbsolute:
+        x: 9620
+        y: 650
+      sourcePosition: right
+      targetPosition: left
+      width: 270
+      height: 196
+    - id: h12_build_package
+      type: custom
+      data:
+        type: code
+        title: H12_打包单一构建输出
+        code_language: python3
+        code: "def main(request_id: str, html_document: str, voiceover_script: str, heygen_response_json: str) -> dict:\n    import json\n\n    html = str(html_document or \"\").strip()\n    voiceover = str(voiceover_script or \"\").strip()\n    if \"<!doctype html>\" not in html.lower():\n        raise ValueError(\"html_document 不是完整 HTML\")\n    if not voiceover:\n        raise ValueError(\"voiceover_script 已批准口播不能为空；字幕必须以它为文字真值\")\n    try:\n        response = json.loads(heygen_response_json or \"{}\")\n    except Exception as exc:\n        raise ValueError(\"heygen_response_json 不是合法 JSON\") from exc\n    if not isinstance(response, dict):\n        raise ValueError(\"heygen_response_json 必须是对象\")\n\n    data = response.get(\"data\") if isinstance(response.get(\"data\"), dict) else {}\n    video_id = str(data.get(\"id\") or data.get(\"video_id\") or data.get(\"videoId\") or response.get(\"video_id\") or \"\").strip()\n    status = str(data.get(\"status\") or data.get(\"state\") or response.get(\"status\") or response.get(\"state\") or \"\").strip().lower()\n    video_url = str(data.get(\"video_url\") or data.get(\"videoUrl\") or response.get(\"video_url\") or response.get(\"videoUrl\") or \"\").strip()\n    if status != \"completed\":\n        raise ValueError(\"HeyGen 未完成，禁止输出 processing/failed 的最终构建包：status=\" + status)\n    if not video_url:\n        raise ValueError(\"HeyGen completed 响应缺少明确 video_url\")\n    if video_id and video_id not in video_url:\n        raise ValueError(\"video_url 与 video_id 不一致，拒绝输出可能串片的构建包\")\n\n    package = {\n        \"request_id\": str(request_id or \"\").strip(),\n        \"html_document\": html,\n        \"voiceover_script\": voiceover,\n        \"heygen_response_json\": response,\n        \"heygen_video_id\": video_id,\n        \"heygen_status\": status,\n        \"heygen_video_url\": video_url,\n    }\n    return {\n        \"build_package_json\": json.dumps(package, ensure_ascii=False),\n        \"voiceover_script\": voiceover,\n    }\n"
+        variables:
+        - variable: request_id
+          value_selector:
+          - a00
+          - request_id
+          value_type: string
+        - variable: html_document
+          value_selector:
+          - h01
+          - text
+          value_type: string
+        - variable: voiceover_script
+          value_selector:
+          - a16
+          - approved_voiceover_script
+          value_type: string
+        - variable: heygen_response_json
+          value_selector:
+          - h11_final_response
+          - heygen_response_json
+          value_type: string
+        outputs:
+          build_package_json:
+            type: string
+            children: null
+          voiceover_script:
+            type: string
+            children: null
+      position:
+        x: 9700
+        y: 355
+      positionAbsolute:
+        x: 9700
+        y: 355
+      sourcePosition: right
+      targetPosition: left
+      width: 270
+      height: 158
+    edges:
+    - id: a01-source-a02
+      source: a01
+      sourceHandle: source
+      target: a02
+      targetHandle: target
+      type: custom
+      data:
+        sourceType: llm
+        targetType: code
+        isInIteration: false
+        isInLoop: false
+    - id: a02-source-a03
+      source: a02
+      sourceHandle: source
+      target: a03
+      targetHandle: target
+      type: custom
+      data:
+        sourceType: code
+        targetType: code
+        isInIteration: false
+        isInLoop: false
+    - id: a03-source-a03_gate
+      source: a03
+      sourceHandle: source
+      target: a03_gate
+      targetHandle: target
+      type: custom
+      data:
+        sourceType: code
+        targetType: if-else
+        isInIteration: false
+        isInLoop: false
+    - id: a03_gate-valid-a04
+      source: a03_gate
+      sourceHandle: valid
+      target: a04
+      targetHandle: target
+      type: custom
+      data:
+        sourceType: if-else
+        targetType: llm
+        isInIteration: false
+        isInLoop: false
+    - id: a03_gate-false-a90_msg
+      source: a03_gate
+      sourceHandle: 'false'
+      target: a90_msg
+      targetHandle: target
+      type: custom
+      data:
+        sourceType: if-else
+        targetType: template-transform
+        isInIteration: false
+        isInLoop: false
+    - id: a04-source-a05
+      source: a04
+      sourceHandle: source
+      target: a05
+      targetHandle: target
+      type: custom
+      data:
+        sourceType: llm
+        targetType: code
+        isInIteration: false
+        isInLoop: false
+    - id: a05-source-a06
+      source: a05
+      sourceHandle: source
+      target: a06
+      targetHandle: target
+      type: custom
+      data:
+        sourceType: code
+        targetType: llm
+        isInIteration: false
+        isInLoop: false
+    - id: a06-source-a07
+      source: a06
+      sourceHandle: source
+      target: a07
+      targetHandle: target
+      type: custom
+      data:
+        sourceType: llm
+        targetType: code
+        isInIteration: false
+        isInLoop: false
+    - id: a07-source-a07_gate
+      source: a07
+      sourceHandle: source
+      target: a07_gate
+      targetHandle: target
+      type: custom
+      data:
+        sourceType: code
+        targetType: if-else
+        isInIteration: false
+        isInLoop: false
+    - id: a07_gate-copy_valid-a08
+      source: a07_gate
+      sourceHandle: copy_valid
+      target: a08
+      targetHandle: target
+      type: custom
+      data:
+        sourceType: if-else
+        targetType: llm
+        isInIteration: false
+        isInLoop: false
+    - id: a07_gate-false-a06_retry
+      source: a07_gate
+      sourceHandle: 'false'
+      target: a06_retry
+      targetHandle: target
+      type: custom
+      data:
+        sourceType: if-else
+        targetType: llm
+        isInIteration: false
+        isInLoop: false
+    - id: a08-source-a09
+      source: a08
+      sourceHandle: source
+      target: a09
+      targetHandle: target
+      type: custom
+      data:
+        sourceType: llm
+        targetType: code
+        isInIteration: false
+        isInLoop: false
+    - id: a09-source-a09_gate
+      source: a09
+      sourceHandle: source
+      target: a09_gate
+      targetHandle: target
+      type: custom
+      data:
+        sourceType: code
+        targetType: if-else
+        isInIteration: false
+        isInLoop: false
+    - id: a09_gate-storyboard_valid-a10
+      source: a09_gate
+      sourceHandle: storyboard_valid
+      target: a10
+      targetHandle: target
+      type: custom
+      data:
+        sourceType: if-else
+        targetType: llm
+        isInIteration: false
+        isInLoop: false
+    - id: a09_gate-false-a90_msg
+      source: a09_gate
+      sourceHandle: 'false'
+      target: a90_msg
+      targetHandle: target
+      type: custom
+      data:
+        sourceType: if-else
+        targetType: template-transform
+        isInIteration: false
+        isInLoop: false
+    - id: a10-source-a11
+      source: a10
+      sourceHandle: source
+      target: a11
+      targetHandle: target
+      type: custom
+      data:
+        sourceType: llm
+        targetType: code
+        isInIteration: false
+        isInLoop: false
+    - id: a11-source-a11_gate
+      source: a11
+      sourceHandle: source
+      target: a11_gate
+      targetHandle: target
+      type: custom
+      data:
+        sourceType: code
+        targetType: if-else
+        isInIteration: false
+        isInLoop: false
+    - id: a11_gate-motion_valid-a12
+      source: a11_gate
+      sourceHandle: motion_valid
+      target: a12
+      targetHandle: target
+      type: custom
+      data:
+        sourceType: if-else
+        targetType: llm
+        isInIteration: false
+        isInLoop: false
+    - id: a11_gate-false-a90_msg
+      source: a11_gate
+      sourceHandle: 'false'
+      target: a90_msg
+      targetHandle: target
+      type: custom
+      data:
+        sourceType: if-else
+        targetType: template-transform
+        isInIteration: false
+        isInLoop: false
+    - id: a12-source-a13
+      source: a12
+      sourceHandle: source
+      target: a13
+      targetHandle: target
+      type: custom
+      data:
+        sourceType: llm
+        targetType: code
+        isInIteration: false
+        isInLoop: false
+    - id: a13-source-a14
+      source: a13
+      sourceHandle: source
+      target: a14
+      targetHandle: target
+      type: custom
+      data:
+        sourceType: code
+        targetType: code
+        isInIteration: false
+        isInLoop: false
+    - id: a16-source-a17
+      source: a16
+      sourceHandle: source
+      target: a17
+      targetHandle: target
+      type: custom
+      data:
+        sourceType: code
+        targetType: code
+        isInIteration: false
+        isInLoop: false
+    - id: a90_msg-source-a90
+      source: a90_msg
+      sourceHandle: source
+      target: a90
+      targetHandle: target
+      type: custom
+      data:
+        sourceType: template-transform
+        targetType: end
+        isInIteration: false
+        isInLoop: false
+    - id: a00-source-mode_gate
+      source: a00
+      sourceHandle: source
+      target: mode_gate
+      targetHandle: target
+      type: custom
+      data:
+        sourceType: start
+        targetType: if-else
+        isInIteration: false
+        isInLoop: false
+    - id: mode_gate-batch-d01
+      source: mode_gate
+      sourceHandle: batch
+      target: d01
+      targetHandle: target
+      type: custom
+      data:
+        sourceType: if-else
+        targetType: llm
+        isInIteration: false
+        isInLoop: false
+    - id: d01-source-d02
+      source: d01
+      sourceHandle: source
+      target: d02
+      targetHandle: target
+      type: custom
+      data:
+        sourceType: llm
+        targetType: end
+        isInIteration: false
+        isInLoop: false
+    - id: mode_gate-false-a01
+      source: mode_gate
+      sourceHandle: 'false'
+      target: a01
+      targetHandle: target
+      type: custom
+      data:
+        sourceType: if-else
+        targetType: llm
+        isInIteration: false
+        isInLoop: false
+    - id: a17-source-h01
+      source: a17
+      sourceHandle: source
+      target: h01
+      targetHandle: target
+      type: custom
+      data:
+        sourceType: code
+        targetType: llm
+        isInIteration: false
+        isInLoop: false
+    - id: h01-source-h02
+      source: h01
+      sourceHandle: source
+      target: h02
+      targetHandle: target
+      type: custom
+      data:
+        sourceType: llm
+        targetType: code
+        isInIteration: false
+        isInLoop: false
+    - id: h02-source-h03
+      source: h02
+      sourceHandle: source
+      target: h03
+      targetHandle: target
+      type: custom
+      data:
+        sourceType: code
+        targetType: code
+        isInIteration: false
+        isInLoop: false
+    - id: h03-source-h04
+      source: h03
+      sourceHandle: source
+      target: h04
+      targetHandle: target
+      type: custom
+      data:
+        sourceType: code
+        targetType: http-request
+        isInIteration: false
+        isInLoop: false
+    - id: h04-source-h05
+      source: h04
+      sourceHandle: source
+      target: h05
+      targetHandle: target
+      type: custom
+      data:
+        sourceType: http-request
+        targetType: code
+        isInIteration: false
+        isInLoop: false
+    - id: a06_retry-source-a07_retry
+      source: a06_retry
+      sourceHandle: source
+      target: a07_retry
+      targetHandle: target
+      type: custom
+      data:
+        sourceType: llm
+        targetType: code
+        isInIteration: false
+        isInLoop: false
+    - id: a07_retry-source-a07_retry_gate
+      source: a07_retry
+      sourceHandle: source
+      target: a07_retry_gate
+      targetHandle: target
+      type: custom
+      data:
+        sourceType: code
+        targetType: if-else
+        isInIteration: false
+        isInLoop: false
+    - id: a07_retry_gate-copy_valid-a08
+      source: a07_retry_gate
+      sourceHandle: copy_valid
+      target: a08
+      targetHandle: target
+      type: custom
+      data:
+        sourceType: if-else
+        targetType: llm
+        isInIteration: false
+        isInLoop: false
+    - id: a07_retry_gate-false-a07_error_msg
+      source: a07_retry_gate
+      sourceHandle: 'false'
+      target: a07_error_msg
+      targetHandle: target
+      type: custom
+      data:
+        sourceType: if-else
+        targetType: template-transform
+        isInIteration: false
+        isInLoop: false
+    - id: a07_error_msg-source-a07_error
+      source: a07_error_msg
+      sourceHandle: source
+      target: a07_error
+      targetHandle: target
+      type: custom
+      data:
+        sourceType: template-transform
+        targetType: end
+        isInIteration: false
+        isInLoop: false
+    - id: h05-source-h06_wait_loop
+      source: h05
+      sourceHandle: source
+      target: h06_wait_loop
+      targetHandle: target
+      type: custom
+      data:
+        sourceType: code
+        targetType: loop
+        isInIteration: false
+        isInLoop: false
+        loop_id: null
+    - id: h06_loop_start-source-h07_status_http
+      source: h06_loop_start
+      sourceHandle: source
+      target: h07_status_http
+      targetHandle: target
+      type: custom
+      data:
+        sourceType: loop-start
+        targetType: http-request
+        isInIteration: false
+        isInLoop: true
+        loop_id: h06_wait_loop
+    - id: h07_status_http-source-h08_status_parse
+      source: h07_status_http
+      sourceHandle: source
+      target: h08_status_parse
+      targetHandle: target
+      type: custom
+      data:
+        sourceType: http-request
+        targetType: code
+        isInIteration: false
+        isInLoop: true
+        loop_id: h06_wait_loop
+    - id: h08_status_parse-source-h10_store_response
+      source: h08_status_parse
+      sourceHandle: source
+      target: h10_store_response
+      targetHandle: target
+      type: custom
+      data:
+        sourceType: code
+        targetType: assigner
+        isInIteration: false
+        isInLoop: true
+        loop_id: h06_wait_loop
+    - id: h10_store_response-source-h09_wait_delay
+      source: h10_store_response
+      sourceHandle: source
+      target: h09_wait_delay
+      targetHandle: target
+      type: custom
+      data:
+        sourceType: assigner
+        targetType: code
+        isInIteration: false
+        isInLoop: true
+        loop_id: h06_wait_loop
+    - id: h06_wait_loop-source-h11_final_response
+      source: h06_wait_loop
+      sourceHandle: source
+      target: h11_final_response
+      targetHandle: target
+      type: custom
+      data:
+        sourceType: loop
+        targetType: code
+        isInIteration: false
+        isInLoop: false
+        loop_id: null
+    - id: a14-source-a16
+      source: a14
+      sourceHandle: source
+      target: a16
+      targetHandle: target
+      type: custom
+      data:
+        sourceType: code
+        targetType: code
+        isInIteration: false
+        isInLoop: false
+    - id: h11_final_response-source-h12_build_package
+      source: h11_final_response
+      sourceHandle: source
+      target: h12_build_package
+      targetHandle: target
+      type: custom
+      data:
+        sourceType: code
+        targetType: code
+        isInIteration: false
+        isInLoop: false
+        loop_id: null
+    - id: h12_build_package-source-a18
+      source: h12_build_package
+      sourceHandle: source
+      target: a18
+      targetHandle: target
+      type: custom
+      data:
+        sourceType: code
+        targetType: end
+        isInIteration: false
+        isInLoop: false
+        loop_id: null
+    viewport:
+      x: 0
+      y: 0
+      zoom: 0.72

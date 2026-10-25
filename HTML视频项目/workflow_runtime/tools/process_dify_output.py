@@ -182,8 +182,22 @@ def main() -> None:
         raise SystemExit("输入内容不是合法 Dify JSON，也不是完整 HTML")
     package = unwrap_package(data)
     html = clean_html_document(package.get("html_document", package.get("html", "")))
+    if "<!doctype html>" not in html.lower() and "<html" in text.lower():
+        salvaged = clean_html_document(text)
+        if "<!doctype html>" in salvaged.lower():
+            html = salvaged
+            if isinstance(package, dict):
+                package["html_document"] = salvaged
+            print(f"输出中 html_document 字段为空，已从正文 HTML 中回收 {len(salvaged)} 字符")
     if "<!doctype html>" not in html.lower():
         raise SystemExit("Dify 输出缺少完整 html_document")
+    if isinstance(package, dict):
+        approved_script = package.get("approved_script")
+        if isinstance(approved_script, dict) and not str(package.get("voiceover_script") or "").strip():
+            lifted = str(approved_script.get("voiceover_script") or "").strip()
+            if lifted:
+                package["voiceover_script"] = lifted
+                print(f"已从 approved_script 提取口播 {len(lifted)} 字符")
     response = get_response(package)
 
     tts_args = (args.voice_file, args.tts_provider, args.tts_base_url, args.tts_model, args.tts_voice)

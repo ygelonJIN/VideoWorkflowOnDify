@@ -52,23 +52,73 @@ def main(copy_text: str, brief_json: str) -> dict:
     sentence_texts = [match.group(0).strip() for match in re.finditer(r".*?(?:[。！？!?]+|$)", script, flags=re.S) if match.group(0).strip()]
     sentences = [{"id": "s%02d" % (i + 1), "text": text} for i, text in enumerate(sentence_texts)]
     if not sentences:
-        raise ValueError("口播中没有完整句子")
+        errors.append("口播里没有完整句子，无法生成逐句字幕")
+        sentences = [{"id": "s01", "text": script}]
 
     compact = re.sub(r"\s+", "", script)
-    target_duration = float(brief.get("target_duration_seconds", 30))
-    min_voice_chars = int(target_duration * 2.67)
-    max_voice_chars = int(target_duration * 16.67)
-    if len(compact) < min_voice_chars:
-        errors.append("口播偏短（%d 字，放行范围 %d-%d 字）" % (
-            len(compact), min_voice_chars, max_voice_chars))
-    if len(compact) > max_voice_chars:
-        errors.append("口播偏长（%d 字，放行范围 %d-%d 字），请删减而不是加速" % (
-            len(compact), min_voice_chars, max_voice_chars))
+    target_duration = float(brief.get("target_duration_seconds") or 0) or 30.0
 
     banned = ["保证出单", "百分百", "马上爆单", "行业第一", "绝对第一", "最强", "最先进"]
     for word in banned:
         if word in script:
             warnings.append("口播包含待合规复核表达: " + word)
+
+    # ---------------- 内容诊断：只提示，不限制长度和结构 ----------------
+    distill = brief.get("distill") if isinstance(brief.get("distill"), dict) else {}
+    thesis = str(distill.get("thesis") or "").strip()
+    arguments = [item for item in (distill.get("arguments") or [])
+                 if isinstance(item, dict) and str(item.get("claim") or "").strip()]
+    source_text = str(brief.get("source_text") or "")
+    compact_source = re.sub(r"\s+", "", source_text)
+
+    def shingles(text, size=6):
+        return {text[index:index + size] for index in range(max(0, len(text) - size + 1))}
+
+    chronology_words = ["然后", "接着", "后来", "再后来", "之后", "当天", "第二天", "隔天", "那时候", "当时", "再往后"]
+    chronology_count = sum(script.count(word) for word in chronology_words)
+
+    verbatim_ratio = 0.0
+    if len(compact_source) >= 400:
+        script_shingles = shingles(compact, 8)
+        source_shingles = shingles(compact_source, 8)
+        verbatim_ratio = len(script_shingles & source_shingles) / float(max(1, len(script_shingles)))
+
+    dialogue_marks = ["他说", "她说", "我说", "对方说", "他问", "我问", "有人问"]
+    dialogue_count = sum(script.count(word) for word in dialogue_marks)
+
+    argument_ids = [str(item.get("id") or "a%d" % (index + 1)) for index, item in enumerate(arguments)]
+    coverage = data.get("argument_coverage")
+    covered_ids = []
+    if isinstance(coverage, list):
+        for item in coverage:
+            token = ""
+            if isinstance(item, dict):
+                token = str(item.get("id") or item.get("argument_id") or "").strip()
+            else:
+                token = str(item or "").strip()
+            if token and token not in covered_ids:
+                covered_ids.append(token)
+    unknown_ids = [token for token in covered_ids if token not in argument_ids]
+    if unknown_ids:
+        warnings.append("argument_coverage 出现未知论点：" + "、".join(unknown_ids) + "（只提示，不拦截）")
+    elif argument_ids and covered_ids:
+        missing = [token for token in argument_ids if token not in covered_ids]
+        if missing:
+            warnings.append("自报覆盖里没提到论点 " + "、".join(missing) + "：可能是合并或略讲，按内容判断是否需要补（只提示，不拦截）")
+
+    if len(re.sub(r"\s+", "", thesis)) >= 6:
+        thesis_shingles = shingles(re.sub(r"\s+", "", thesis), 2)
+        if thesis_shingles and not any(token in compact for token in thesis_shingles):
+            warnings.append("全文没有明显回应 distill.thesis，检查是否换题了（只提示）")
+
+    # 唯一的内容拦截：时间连接词成串说明在按过程复述。不设字数/句数配额。
+    if chronology_count >= 5:
+        errors.append("口播在按时间顺序复述（时间连接词 %d 处：%s）：改成论点结构，删掉过程衔接" % (
+            chronology_count, "、".join(sorted({word for word in chronology_words if word in script}))))
+    elif chronology_count >= 3:
+        warnings.append("时间连接词 %d 处，偏多则可能在复述过程（只提示）" % chronology_count)
+
+    data["sentences"] = sentences
 
     allowed_purposes = {"hook", "context", "pain", "insight", "solution", "proof", "example", "ending", "summary", "cta"}
     normalized_sentences = []
@@ -101,8 +151,6 @@ def main(copy_text: str, brief_json: str) -> dict:
 
     if not normalized_sentences:
         raise ValueError("sentences 中没有有效文本")
-    if len(normalized_sentences) < 3:
-        errors.append("口播至少需要 3 个完整句子")
     normalized_sentences[0]["purpose"] = "hook"
     if normalized_sentences[-1]["purpose"] not in {"ending", "summary", "cta"}:
         normalized_sentences[-1]["purpose"] = "ending"
@@ -119,13 +167,20 @@ def main(copy_text: str, brief_json: str) -> dict:
     data["burned_in_caption_lines"] = normalized_captions
 
     estimated_duration = round(cursor, 2)
-    if estimated_duration > target_duration * 1.10:
-        warnings.append("估算口播时长超过目标 10%，已继续输出供人工删减")
-    elif estimated_duration > target_duration:
-        warnings.append("估算口播略超目标，应在真实时间码阶段删减而非加速")
 
     data["sentences"] = normalized_sentences
     data["estimated_duration_seconds"] = estimated_duration
+    data["argument_coverage"] = coverage if isinstance(coverage, list) else []
+    data["content_diagnostics"] = {
+        "thesis": thesis,
+        "argument_ids": argument_ids,
+        "covered_argument_ids": covered_ids,
+        "chronology_words": chronology_count,
+        "verbatim_ratio": round(verbatim_ratio, 3),
+        "dialogue_marks": dialogue_count,
+        "characters": len(compact),
+        "sentences": len(normalized_sentences),
+    }
     data["validation"] = {"errors": errors, "warnings": warnings}
     script_hash = hashlib.sha256(re.sub(r"\s+", "", script).encode("utf-8")).hexdigest()
     return {

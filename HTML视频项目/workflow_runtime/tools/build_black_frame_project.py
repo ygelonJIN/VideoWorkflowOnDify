@@ -280,7 +280,38 @@ def main() -> None:
         shutil.copy2(voice_path, ascii_media / "voice.mp3")
         shutil.copy2(project_dir / "媒体" / "背景音乐.mp3", ascii_media / "bgm.mp3")
         shutil.copy2(RUNTIME_DIR / "assets" / "vendor" / "gsap.min.js", ascii_assets / "gsap.min.js")
-        subprocess.run(["bash", str(project_dir / "render.sh")], cwd=project_dir, check=True)
+        log_lines: list[str] = []
+        proc = subprocess.Popen(
+            ["bash", str(project_dir / "render.sh")],
+            cwd=project_dir,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            bufsize=1,
+        )
+        assert proc.stdout is not None
+        for line in proc.stdout:
+            print(line, end="")
+            log_lines.append(line.rstrip())
+        proc.wait()
+        if proc.returncode != 0:
+            stage = next(
+                (item for item in reversed(log_lines) if item.startswith("❌ 失败关卡")),
+                "未知关卡（没有捕获到阶段标记）",
+            )
+            reason = "\n".join([
+                stage,
+                "时间：" + time.strftime("%Y-%m-%d %H:%M:%S"),
+                "项目：" + str(project_dir),
+                "",
+                "最后 40 行日志：",
+                *log_lines[-40:],
+            ])
+            (project_dir / "失败原因.txt").write_text(reason + "\n", encoding="utf-8")
+            print("")
+            print("❌ 渲染失败，原因已写入 失败原因.txt：")
+            print(reason)
+            raise SystemExit(2)
     except (Exception, SystemExit):
         failed_root = BASE / "失败项目"
         if project_dir.exists():

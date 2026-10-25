@@ -2,28 +2,101 @@ def main(storyboard_text: str, script_json: str) -> dict:
     import json
     import re
 
+    def recover_objects(raw, key):
+        marker = raw.find('"' + key + '"')
+        if marker < 0:
+            return []
+        start = raw.find('[', marker)
+        if start < 0:
+            return []
+        items = []
+        depth = 0
+        in_str = False
+        esc = False
+        obj_start = None
+        for index in range(start, len(raw)):
+            ch = raw[index]
+            if in_str:
+                if esc:
+                    esc = False
+                elif ch == "\\":
+                    esc = True
+                elif ch == '"':
+                    in_str = False
+                continue
+            if ch == '"':
+                in_str = True
+            elif ch == "{":
+                if depth == 0:
+                    obj_start = index
+                depth += 1
+            elif ch == "}":
+                depth -= 1
+                if depth == 0 and obj_start is not None:
+                    try:
+                        items.append(json.loads(raw[obj_start:index + 1]))
+                    except Exception:
+                        pass
+                    obj_start = None
+        return items
+
     def parse(raw, label):
         value = str(raw or "").strip()
         value = re.sub(r"^```(?:json)?\s*|\s*```$", "", value, flags=re.I)
+        value = value.replace("\u201c", '"').replace("\u201d", '"').replace("\u2018", "'").replace("\u2019", "'")
+        if not value:
+            return {"__invalid_json__": True, "__label__": label}, "输出为空"
         try:
-            return json.loads(value)
-        except Exception:
-            start, end = value.find("{"), value.rfind("}")
-            if start >= 0 and end > start:
-                try:
-                    return json.loads(value[start:end + 1])
-                except Exception:
-                    pass
-            return {"__invalid_json__": True, "__label__": label}
+            return json.loads(value), ""
+        except Exception as first_error:
+            start = value.find("{")
+            if start >= 0:
+                depth = 0
+                in_str = False
+                esc = False
+                for index in range(start, len(value)):
+                    ch = value[index]
+                    if in_str:
+                        if esc:
+                            esc = False
+                        elif ch == "\\":
+                            esc = True
+                        elif ch == '"':
+                            in_str = False
+                        continue
+                    if ch == '"':
+                        in_str = True
+                    elif ch == "{":
+                        depth += 1
+                    elif ch == "}":
+                        depth -= 1
+                        if depth == 0:
+                            candidate = value[start:index + 1]
+                            candidate = re.sub(r",\s*([}\]])", r"\1", candidate)
+                            try:
+                                return json.loads(candidate), ""
+                            except Exception:
+                                break
+            return {"__invalid_json__": True, "__label__": label}, "%s；长度 %d；开头 %s；结尾 %s" % (
+                str(first_error)[:80],
+                len(value),
+                value[:60].replace("\n", " "),
+                value[-60:].replace("\n", " "),
+            )
 
-    storyboard = parse(storyboard_text, "分镜")
-    script = parse(script_json, "文案")
+    storyboard, storyboard_parse_error = parse(storyboard_text, "分镜")
+    script, _ = parse(script_json, "文案")
     if not isinstance(script, dict):
         script = {}
     warnings = []
     if not isinstance(storyboard, dict) or storyboard.get("__invalid_json__"):
-        warnings.append("分镜 JSON 无法解析，已按口播句子生成基础分镜继续")
-        storyboard = {}
+        recovered = recover_objects(str(storyboard_text or ""), "scenes")
+        if len(recovered) >= 2:
+            storyboard = {"scenes": recovered}
+            warnings.append("分镜 JSON 被截断（" + storyboard_parse_error + "），已从中恢复 %d 个场景继续" % len(recovered))
+        else:
+            warnings.append("分镜 JSON 无法解析（" + storyboard_parse_error + "），已按口播句子生成基础分镜继续")
+            storyboard = {}
     scenes = storyboard.get("scenes")
     if not isinstance(scenes, list) or not scenes:
         sentences = [item for item in script.get("sentences", []) if isinstance(item, dict) and str(item.get("text", "")).strip()]
@@ -36,16 +109,15 @@ def main(storyboard_text: str, script_json: str) -> dict:
             "purpose": item.get("purpose") if item.get("purpose") in {"hook", "context", "pain", "insight", "solution", "proof", "example", "ending", "summary", "cta"} else ("hook" if index == 0 else ("ending" if index == len(sentences) - 1 else "insight")),
             "visual_source": "reusable_ui_template",
             "ui_template": "workflow",
-            "on_screen_text": re.sub(r"\s+", "", str(item.get("text", "")))[:160],
+            "on_screen_text": re.sub(r"\s+", "", str(item.get("text", ""))),
             "visual_brief": "展示当前口播对应的可复用界面、步骤、清单或信息组件",
             "motion": "关键信息逐项出现",
             "transition": "cut"
-        } for index, item in enumerate(sentences[:7])]
+        } for index, item in enumerate(sentences)]
         storyboard = {"scenes": scenes}
-        warnings.append("storyboard.scenes 为空，已生成基础分镜继续")
+        if not storyboard_parse_error:
+            warnings.append("storyboard.scenes 为空，已生成基础分镜继续")
         scenes = storyboard["scenes"]
-    if not 4 <= len(scenes) <= 7:
-        warnings.append("30 秒左右视频建议 4-7 个场景，当前 %d 个，已继续输出" % len(scenes))
 
     sentence_ids = [str(item.get("id")) for item in script.get("sentences", []) if isinstance(item, dict) and item.get("id")]
     if not sentence_ids:
@@ -112,11 +184,7 @@ def main(storyboard_text: str, script_json: str) -> dict:
         scene["visual_source"] = source
         scene["ui_template"] = template
 
-        on_screen = re.sub(r"\s+", "", str(scene.get("on_screen_text", "")))
-        if len(on_screen) > 160:
-            warnings.append("%s 屏幕主文案超过 160 字，已截断；这不影响完整句子字幕" % scene_id)
-            on_screen = on_screen[:160]
-        scene["on_screen_text"] = on_screen
+        scene["on_screen_text"] = re.sub(r"\s+", "", str(scene.get("on_screen_text", "")))
 
         avatar = scene.get("avatar_pip") if isinstance(scene.get("avatar_pip"), dict) else {}
         avatar["visible"] = True

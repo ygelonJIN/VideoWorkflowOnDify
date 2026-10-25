@@ -2,28 +2,101 @@ def main(motion_text: str, storyboard_json: str, recommended_motion_count_min: i
     import json
     import re
 
+    def recover_objects(raw, key):
+        marker = raw.find('"' + key + '"')
+        if marker < 0:
+            return []
+        start = raw.find('[', marker)
+        if start < 0:
+            return []
+        items = []
+        depth = 0
+        in_str = False
+        esc = False
+        obj_start = None
+        for index in range(start, len(raw)):
+            ch = raw[index]
+            if in_str:
+                if esc:
+                    esc = False
+                elif ch == "\\":
+                    esc = True
+                elif ch == '"':
+                    in_str = False
+                continue
+            if ch == '"':
+                in_str = True
+            elif ch == "{":
+                if depth == 0:
+                    obj_start = index
+                depth += 1
+            elif ch == "}":
+                depth -= 1
+                if depth == 0 and obj_start is not None:
+                    try:
+                        items.append(json.loads(raw[obj_start:index + 1]))
+                    except Exception:
+                        pass
+                    obj_start = None
+        return items
+
     def parse(raw, label):
         value = str(raw or "").strip()
         value = re.sub(r"^```(?:json)?\s*|\s*```$", "", value, flags=re.I)
+        value = value.replace("\u201c", '"').replace("\u201d", '"').replace("\u2018", "'").replace("\u2019", "'")
+        if not value:
+            return {"__invalid_json__": True, "__label__": label}, "输出为空"
         try:
-            return json.loads(value)
-        except Exception:
-            start, end = value.find("{"), value.rfind("}")
-            if start >= 0 and end > start:
-                try:
-                    return json.loads(value[start:end + 1])
-                except Exception:
-                    pass
-            return {"__invalid_json__": True, "__label__": label}
+            return json.loads(value), ""
+        except Exception as first_error:
+            start = value.find("{")
+            if start >= 0:
+                depth = 0
+                in_str = False
+                esc = False
+                for index in range(start, len(value)):
+                    ch = value[index]
+                    if in_str:
+                        if esc:
+                            esc = False
+                        elif ch == "\\":
+                            esc = True
+                        elif ch == '"':
+                            in_str = False
+                        continue
+                    if ch == '"':
+                        in_str = True
+                    elif ch == "{":
+                        depth += 1
+                    elif ch == "}":
+                        depth -= 1
+                        if depth == 0:
+                            candidate = value[start:index + 1]
+                            candidate = re.sub(r",\s*([}\]])", r"\1", candidate)
+                            try:
+                                return json.loads(candidate), ""
+                            except Exception:
+                                break
+            return {"__invalid_json__": True, "__label__": label}, "%s；长度 %d；开头 %s；结尾 %s" % (
+                str(first_error)[:80],
+                len(value),
+                value[:60].replace("\n", " "),
+                value[-60:].replace("\n", " "),
+            )
 
-    motion = parse(motion_text, "动效")
-    storyboard = parse(storyboard_json, "分镜")
+    motion, motion_parse_error = parse(motion_text, "动效")
+    storyboard, _ = parse(storyboard_json, "分镜")
     if not isinstance(storyboard, dict):
         storyboard = {}
     warnings = []
     if not isinstance(motion, dict) or motion.get("__invalid_json__"):
-        warnings.append("动效 JSON 无法解析，已按分镜生成基础动效继续")
-        motion = {}
+        recovered = recover_objects(str(motion_text or ""), "sequences")
+        if len(recovered) >= 2:
+            motion = {"sequences": recovered}
+            warnings.append("动效 JSON 被截断（" + motion_parse_error + "），已从中恢复 %d 条动作继续" % len(recovered))
+        else:
+            warnings.append("动效 JSON 无法解析（" + motion_parse_error + "），已按分镜生成基础动效继续")
+            motion = {}
     sequences = motion.get("sequences")
     if not isinstance(sequences, list) or not sequences:
         raw_scenes = storyboard.get("scenes", []) if isinstance(storyboard.get("scenes"), list) else []
@@ -35,7 +108,7 @@ def main(motion_text: str, storyboard_json: str, recommended_motion_count_min: i
             sequences.append({
                 "motion_id": "m%02d" % (index + 1),
                 "scene_id": str(scene.get("scene_id") or "s01"),
-                "sentence_id": str(scene.get("sentence_id") or "s01"),
+                "sentence_id": str((scene.get("sentence_ids") or [scene.get("sentence_id") or "s01"])[0]),
                 "action": actions[index % len(actions)],
                 "target": "focus_element",
                 "duration_ms": 600,
@@ -44,7 +117,8 @@ def main(motion_text: str, storyboard_json: str, recommended_motion_count_min: i
                 "semantic_reason": "与当前口播语义同步的基础动效"
             })
         motion = {"sequences": sequences}
-        warnings.append("motion.sequences 为空，已生成基础动效继续")
+        if not motion_parse_error:
+            warnings.append("motion.sequences 为空，已生成基础动效继续")
     scenes = [str(x.get("scene_id")) for x in storyboard.get("scenes", []) if isinstance(x, dict) and x.get("scene_id")]
     if not scenes:
         scenes = ["s01"]

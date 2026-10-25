@@ -33,6 +33,23 @@ def main(brief_json: str, draft_script_json: str, storyboard_json: str, motion_p
         "model": str(tts_model or "").strip(),
         "voice": str(tts_voice or "").strip(),
     }
+    scenes = storyboard.get("scenes") if isinstance(storyboard.get("scenes"), list) else []
+    normalized_scenes = []
+    for index, scene in enumerate(scenes):
+        if isinstance(scene, dict) and str(scene.get("visual_source", "")).strip() == "generated_image":
+            scene = dict(scene)
+            scene["visual_source"] = "reusable_ui_template"
+            if str(scene.get("ui_template") or "").strip() in ("", "none"):
+                scene["ui_template"] = "story"
+            scenes[index] = scene
+            normalized_scenes.append(str(scene.get("scene_id") or index))
+    if normalized_scenes:
+        validation = storyboard.get("validation") if isinstance(storyboard.get("validation"), dict) else {}
+        warnings = validation.get("warnings") if isinstance(validation.get("warnings"), list) else []
+        warnings.append("黑帧模式没有出图能力，" + "、".join(normalized_scenes) + " 的 generated_image 已归一为 reusable_ui_template")
+        validation["warnings"] = warnings
+        storyboard["validation"] = validation
+
     package = {
         "approval": {
             "status": "approved",

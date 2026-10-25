@@ -23,22 +23,51 @@ def main(campaign_json: str, creative_json: str, brand_json: str, history_json: 
     if not str(campaign.get("topic") or "").strip():
         normalization_warnings.append("topic 缺失，已使用 source_text/当前主题作为主题")
 
-    try:
-        duration = float(campaign.get("duration_seconds") or 30)
-    except Exception:
+    distill = campaign.get("distill") if isinstance(campaign.get("distill"), dict) else {}
+    arguments = [item for item in (distill.get("arguments") or []) if isinstance(item, dict) and str(item.get("claim") or "").strip()]
+    thesis = str(distill.get("thesis") or "").strip()
+    source_form = str(distill.get("source_form") or "").strip() or "mixed"
+    if not thesis:
+        thesis = topic
+        normalization_warnings.append("distill.thesis 缺失，已回落到主题句")
+    if not arguments:
+        normalization_warnings.append("distill.arguments 为空，本次只能按单一论点展开")
+    distill = {
+        "source_form": source_form,
+        "thesis": thesis,
+        "thesis_source": str(distill.get("thesis_source") or "").strip() or "inferred_from_facts",
+        "thesis_type": str(distill.get("thesis_type") or "").strip() or "judgment",
+        "arguments": arguments,
+        "counterpoints": [str(item).strip() for item in (distill.get("counterpoints") or []) if str(item).strip()],
+        "dropped": [str(item).strip() for item in (distill.get("dropped") or []) if str(item).strip()],
+        "open_questions": [str(item).strip() for item in (distill.get("open_questions") or []) if str(item).strip()],
+    }
+    argument_count = len(distill["arguments"])
+    source_chars = len(re.sub(r"\s+", "", source_text))
+
+    raw_duration = str(campaign.get("duration_seconds") or "").strip()
+    duration = 0.0
+    if raw_duration:
+        try:
+            duration = max(1.0, float(raw_duration))
+        except Exception:
+            duration = 0.0
+    if duration <= 0:
         duration = 30.0
-        normalization_warnings.append("duration_seconds 无法解析，已使用默认 30 秒")
-    duration = max(25.0, min(35.0, duration))
+        normalization_warnings.append("未指定时长，编排参考时长取 30 秒；最终以真实口播为准")
 
     brief = {
         "topic": topic,
         "source_text": source_text,
+        "source_chars": source_chars,
         "audience_hint": audience_hint,
         "context": context,
         "facts_confirmed": facts_confirmed,
         "constraints": constraints,
         "creative": creative,
         "history": history,
+        "distill": distill,
+        "argument_count": argument_count,
         "language": "zh-CN",
         "aspect_ratio": "9:16",
         "resolution": "1080x1920",
@@ -49,7 +78,12 @@ def main(campaign_json: str, creative_json: str, brand_json: str, history_json: 
             "one_angle_per_video": True,
             "voice_chars_per_second": 4.2,
             "caption_unit": "complete_sentence",
-            "content_assumptions": "none"
+            "content_assumptions": "none",
+            "argument_spine": True,
+            "no_chronology_retelling": True,
+            "source_text_is_material_only": True,
+            "duration_is_reference_only": True,
+            "no_length_quota": True,
         }
     }
     for key in ("brand", "product", "audience", "pain", "offer", "cta", "tone", "platform", "proof"):
@@ -61,8 +95,6 @@ def main(campaign_json: str, creative_json: str, brand_json: str, history_json: 
     return {
         "brief_json": json.dumps(brief, ensure_ascii=False),
         "target_duration_seconds": duration,
-        "max_voice_chars": int(duration * 4.6),
-        "min_voice_chars": int(duration * 4.0),
         "proof_fingerprint": normalized_text,
         "validation_ok": True
     }

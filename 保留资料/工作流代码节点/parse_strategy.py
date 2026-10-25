@@ -41,6 +41,33 @@ def main(strategy_text: str) -> dict:
     if not str(data.get("angle_id", "")).strip():
         data["angle_id"] = "angle_generated"
         warnings.append("angle_id 缺失，已生成 angle_generated")
+
+    claims_raw = data.get("argument_claims")
+    claims = {}
+    if isinstance(claims_raw, dict):
+        for key, value in claims_raw.items():
+            text = str(value or "").strip()
+            if text:
+                claims[str(key).strip()] = text
+    order_raw = data.get("argument_order")
+    order = []
+    if isinstance(order_raw, list):
+        for item in order_raw:
+            token = str(item or "").strip()
+            if token and token not in order:
+                order.append(token)
+    if not order:
+        order = list(claims.keys())
+        if order:
+            warnings.append("argument_order 缺失，已按 argument_claims 顺序展开")
+    missing_claims = [token for token in order if token not in claims]
+    if missing_claims:
+        warnings.append("argument_order 中的 " + "、".join(missing_claims) + " 没有对应 argument_claims")
+    data["argument_order"] = order
+    data["argument_claims"] = claims
+    if not order:
+        warnings.append("本次没有论点排序，视频只能按单一论点展开")
+
     data["normalization_warnings"] = warnings
 
     return {

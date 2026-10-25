@@ -62,13 +62,13 @@ PRODUCTION_LAYOUT_CSS = """
   html,body{width:100%;height:100%;margin:0;padding:0;overflow:hidden;background:#000;}
   #stage{position:relative!important;width:1080px!important;height:1920px!important;overflow:hidden!important;}
   [data-composition-id]{position:absolute!important;inset:0!important;width:1080px!important;height:1920px!important;overflow:hidden!important;}
-  #captions,.caption-layer{position:absolute!important;left:50%!important;right:auto!important;bottom:24%!important;top:auto!important;
-    width:62%!important;max-width:62%!important;transform:translateX(-50%)!important;z-index:70!important;pointer-events:none!important;}
-  .clip.caption,.caption{box-sizing:border-box!important;display:none!important;width:100%!important;max-width:100%!important;
-    background:rgba(6,10,20,.72)!important;border:1px solid rgba(120,150,200,.25)!important;border-radius:14px!important;
-    padding:14px 26px!important;font-family:"PingFang SC","Microsoft YaHei","Noto Sans CJK SC","Source Han Sans SC","Hiragino Sans GB",sans-serif!important;
-    font-size:37px!important;line-height:1.35!important;font-weight:700!important;color:#fff!important;text-align:center!important;white-space:normal!important;}
-  .clip.caption.show,.caption.show{display:block!important;}
+  #captions,.caption-layer{position:absolute!important;left:50%!important;right:auto!important;bottom:15%!important;top:auto!important;
+    width:70%!important;max-width:70%!important;transform:translateX(-50%)!important;z-index:70!important;pointer-events:none!important;text-align:center!important;}
+  .clip.caption,.caption{box-sizing:border-box!important;display:none!important;width:auto!important;max-width:100%!important;
+    background:rgba(6,10,20,.42)!important;border:1px solid rgba(120,150,200,.25)!important;border-radius:14px!important;
+    padding:14px 16px!important;font-family:"PingFang SC","Microsoft YaHei","Noto Sans CJK SC","Source Han Sans SC","Hiragino Sans GB",sans-serif!important;
+    font-size:40px!important;line-height:1.35!important;font-weight:700!important;color:#fff!important;text-align:center!important;white-space:normal!important;}
+  .clip.caption.show,.caption.show{display:inline-block!important;}
   .caption .cap-inner{display:inline!important;padding:0!important;background:transparent!important;border:0!important;backdrop-filter:none!important;}
   video[data-video-role="avatar"]{object-fit:cover!important;}
 </style>
@@ -315,8 +315,45 @@ def cues_from_reference(reference: str, entries: list[dict]) -> tuple[list[dict]
             end = (char_times[end_index - 1] + char_times[end_index]) / 2
         if end <= start:
             end = start + 0.2
-        cues.append({"text": text, "start": round(start, 3), "end": round(end, 3)})
-    return cues, match_ratio
+        cues.append({"text": text, "start": round(start, 3), "end": round(end, 3),
+                     "sentence_id": "s%02d" % (span_index + 1)})
+    merged: list[dict] = []
+    for cue in cues:
+        if merged:
+            previous = merged[-1]
+            combined = previous["text"] + cue["text"]
+            if len(re.sub(r"\s+", "", combined)) <= 20 and len(merged) and previous["text"].count("。") + previous["text"].count("！") + previous["text"].count("？") < 2:
+                previous["text"] = combined
+                previous["end"] = cue["end"]
+                continue
+        merged.append(dict(cue))
+    return merged, match_ratio
+
+
+def split_long_cue(cue: dict, max_chars: int = 20) -> list[dict]:
+    """Split an over-long sentence at clause punctuation; never inside a word."""
+    text = str(cue.get("text", ""))
+    compact = re.sub(r"\s+", "", text)
+    if len(compact) <= max_chars:
+        return [cue]
+    parts = [part for part in re.findall(r"[^，,、；;：:]*[，,、；;：:]?", text) if part.strip()]
+    if len(parts) <= 1:
+        return [cue]
+    # 一句太长时按逗号逐条切开：一条一行，不在词中间截断
+    chunks = [part for part in parts if part.strip()]
+    if len(chunks) <= 1:
+        return [cue]
+    total = sum(len(re.sub(r"\s+", "", chunk)) for chunk in chunks) or 1
+    start, end = float(cue["start"]), float(cue["end"])
+    span = max(0.2, end - start)
+    output: list[dict] = []
+    cursor = start
+    for chunk in chunks:
+        share = span * len(re.sub(r"\s+", "", chunk)) / total
+        output.append({**cue, "text": chunk, "start": round(cursor, 3), "end": round(min(end, cursor + share), 3)})
+        cursor += share
+    output[-1]["end"] = round(end, 3)
+    return output
 
 
 def group_entries_into_sentences(entries: list[dict]) -> list[dict]:
@@ -333,7 +370,7 @@ def format_srt_time(seconds: float) -> str:
 
 
 def scale_cues(cues: list[dict], factor: float) -> list[dict]:
-    return [{"text": c["text"], "start": round(c["start"] * factor, 3), "end": round(c["end"] * factor, 3)} for c in cues]
+    return [{**c, "start": round(c["start"] * factor, 3), "end": round(c["end"] * factor, 3)} for c in cues]
 
 
 def fit_cues_to_duration(cues: list[dict], duration: float) -> list[dict]:
@@ -496,58 +533,115 @@ def normalize_timeline_registration(document: str) -> str:
     return document
 
 
+SCENE_TAG_RE = re.compile(r"<(?:section|div)\b[^>]*>", re.I)
+
+
+def class_tokens(tag: str) -> list[str]:
+    match = re.search(r'class="([^"]*)"', tag, re.I)
+    return match.group(1).split() if match else []
+
+
+def scene_matches(document: str) -> list[re.Match[str]]:
+    """页面级 scene：class 里必须有独立成词的 scene，排除 gA-scene 这类前缀类名。"""
+    return [match for match in SCENE_TAG_RE.finditer(document) if "scene" in class_tokens(match.group(0))]
+
+
+def scene_tags(document: str) -> list[str]:
+    return [match.group(0) for match in scene_matches(document)]
+
+
 def scene_timeline_span(document: str) -> float:
-    pattern = re.compile(r'<(?:section|div)\b(?=[^>]*\bclass="[^"]*\bscene\b)[^>]*>', re.I)
-    end = 0.0
-    for tag in pattern.findall(document):
+    """作者期时间轴跨度。模型常把所有 scene 的 start 写成 0，这时按 duration 求和才是真实跨度。"""
+    spans: list[tuple[float, float]] = []
+    for tag in scene_tags(document):
         start_match = re.search(r'\bdata-start="([0-9.]+)"', tag)
         duration_match = re.search(r'\bdata-duration="([0-9.]+)"', tag)
         if start_match and duration_match:
-            end = max(end, float(start_match.group(1)) + float(duration_match.group(1)))
-    return end
+            spans.append((float(start_match.group(1)), float(duration_match.group(1))))
+    if not spans:
+        return 0.0
+    starts = [start for start, _ in spans]
+    end = max(start + duration for start, duration in spans)
+    total = sum(duration for _, duration in spans)
+    increasing = all(b > a for a, b in zip(starts, starts[1:]))
+    if not increasing or end < total * 0.5:
+        return round(total, 3)
+    return round(end, 3)
 
 
 def scale_scene_timings(document: str, factor: float) -> str:
-    pattern = re.compile(r'<(?:section|div)\b(?=[^>]*\bclass="[^"]*\bscene\b)[^>]*>', re.I)
-
-    def scale_tag(match: re.Match[str]) -> str:
+    replacements: list[tuple[re.Match[str], str]] = []
+    for match in scene_matches(document):
         tag = match.group(0)
         for name in ("data-start", "data-duration"):
             found = re.search(rf'\s{name}="([0-9.]+)"', tag)
             if found:
                 tag = set_attribute(tag, name, f"{float(found.group(1)) * factor:.3f}")
-        return tag
-
-    return pattern.sub(scale_tag, document)
+        replacements.append((match, tag))
+    for match, tag in reversed(replacements):
+        document = document[:match.start()] + tag + document[match.end():]
+    return document
 
 
 def align_scenes_to_caption_cues(document: str, cues: list[dict], duration: float) -> str:
     """Anchor each scene transition to the first real speech cue it represents."""
     if not cues:
         return document
-    scene_pattern = re.compile(r'<(?:section|div)\b(?=[^>]*\bclass="[^"]*\bscene\b)[^>]*>', re.I)
-    matches = list(scene_pattern.finditer(document))
+    matches = scene_matches(document)
     if not matches:
         return document
-    cue_ids = [f"s{index:02d}" for index in range(1, len(cues) + 1)]
-    cue_index = {cue_id: index for index, cue_id in enumerate(cue_ids)}
+    cue_ids = [str(cue.get("sentence_id") or f"s{index:02d}") for index, cue in enumerate(cues, 1)]
+
+    def sentence_number(value: str):
+        found = re.search(r"(\d+)", str(value or ""))
+        return int(found.group(1)) if found else None
+
+    # 一句可能被切成多条字幕，这里只取该句的第一条作为场景锚点
+    first_cue_by_sentence: dict[int, int] = {}
+    for index, cue in enumerate(cues):
+        number = sentence_number(cue.get("sentence_id"))
+        if number is not None:
+            first_cue_by_sentence.setdefault(number, index)
+    total_sentences = max(first_cue_by_sentence) if first_cue_by_sentence else 1
+
     scene_cue_indices: list[int] = []
     for scene_index, match in enumerate(matches, 1):
         tag = match.group(0)
         refs = re.search(r'\bdata-sentence-ids="([^"]+)"', tag)
-        candidates = re.findall(r's\d+', refs.group(1), flags=re.I) if refs else []
-        if not candidates:
+        numbers = [sentence_number(item) for item in re.findall(r's\d+', refs.group(1), flags=re.I)] if refs else []
+        numbers = [number for number in numbers if number]
+        if not numbers:
             scene_match = re.search(r'\bdata-scene="s(\d+)"', tag, flags=re.I)
-            candidates = [f"s{int(scene_match.group(1)):02d}"] if scene_match else []
-        indices = [cue_index[item.lower()] for item in candidates if item.lower() in cue_index]
-        scene_cue_indices.append(min(indices) if indices else min(scene_index - 1, len(cues) - 1))
+            if scene_match:
+                numbers = [int(scene_match.group(1))]
+        if numbers:
+            target = min(numbers)
+        else:
+            target = max(1, round((scene_index - 1) * (total_sentences - 1) / max(1, len(matches) - 1)) + 1)
+        index = first_cue_by_sentence.get(target)
+        if index is None:
+            index = min((scene_index - 1) * len(cues) // max(1, len(matches)), len(cues) - 1)
+        scene_cue_indices.append(index)
+
+    # 场景必须串行：后一场的开场不得早于前一场结束，且每场至少保留 0.6 秒
+    if len(cues) < len(matches):
+        # 场景比字幕多时，按总时长均分，避免把多余场景压成 0.6 秒的闪屏
+        starts = [duration * index / len(matches) for index in range(len(matches))]
+    else:
+        starts = [0.0]
+        for scene_index in range(1, len(matches)):
+            candidate = float(cues[scene_cue_indices[scene_index]]["start"])
+            starts.append(max(candidate, starts[-1] + 0.6))
+        for index in range(1, len(starts)):
+            starts[index] = max(starts[index], starts[index - 1] + 0.6)
+    for index in range(len(starts) - 1, -1, -1):
+        starts[index] = min(starts[index], duration - 0.6 * (len(matches) - index))
 
     replacements: list[tuple[re.Match[str], str]] = []
     for scene_index, match in enumerate(matches):
         cue_start_index = scene_cue_indices[scene_index]
-        next_scene_index = scene_cue_indices[scene_index + 1] if scene_index + 1 < len(matches) else len(cues)
-        start = 0.0 if scene_index == 0 else float(cues[cue_start_index]["start"])
-        end = duration if scene_index + 1 == len(matches) else float(cues[next_scene_index]["start"])
+        start = starts[scene_index]
+        end = duration if scene_index + 1 == len(matches) else starts[scene_index + 1]
         tag = match.group(0)
         scene_name_match = re.search(r'\bdata-scene="([^"]+)"', tag)
         scene_name = scene_name_match.group(1) if scene_name_match else f"{scene_index:02d}"
@@ -607,12 +701,18 @@ def extract_html_captions(document: str) -> list[dict]:
 
 def caption_block(cues: list[dict]) -> str:
     rows = []
-    for index, cue in enumerate(cues, 1):
-        duration = max(0.2, cue["end"] - cue["start"])
-        rows.append(f'    <div id="caption-{index}" class="clip caption" data-sentence-id="s{index:02d}" data-start="{cue["start"]:.3f}" '
-                    f'data-duration="{duration:.3f}" data-track-index="4" data-layout-allow-occlusion>'
-                    f'{html.escape(cue["text"], quote=False)}</div>')
-    return CAPTION_START + "\n" + "\n".join(rows) + "\n    " + CAPTION_END
+    index = 0
+    for cue_index, cue in enumerate(cues, 1):
+        sentence_id = str(cue.get("sentence_id") or ("s%02d" % cue_index))
+        for part in split_long_cue(cue):
+            index += 1
+            duration = max(0.2, part["end"] - part["start"])
+            rows.append(f'    <div id="caption-{index}" class="clip caption" data-sentence-id="{sentence_id}" data-start="{part["start"]:.3f}" '
+                        f'data-duration="{duration:.3f}" data-track-index="4" data-layout-allow-occlusion>'
+                        f'{html.escape(part["text"], quote=False)}</div>')
+    body = "\n".join(rows)
+    return (CAPTION_START + '\n    <div id="captions" class="caption-layer">\n'
+            + body + "\n    </div>\n    " + CAPTION_END)
 
 
 FIT_ROOT_RUNTIME_SCRIPT = """
@@ -796,6 +896,7 @@ STATE_CONTROLLER_JS = r"""
           scene.classList.toggle('is-active',active);
           scene.classList.toggle('active',active);
           scene.style.visibility=active?'visible':'hidden';
+          scene.style.opacity=active?'1':'0';
         });
         captions.forEach(function(cap){
           var start=Number(cap.getAttribute('data-start')||0);
@@ -813,9 +914,158 @@ STATE_CONTROLLER_JS = r"""
         onUpdate:function(){window.__hfRenderState(tl.time());}},0);
       var prior=window.__seekTo;
       window.__seekTo=function(sec){if(prior)prior(sec);else if(tl.seek)tl.seek(Number(sec)||0);window.__hfRenderState(tl.time());};
+      var nativeSeek=tl.seek?tl.seek.bind(tl):null;
+      if(nativeSeek){
+        tl.seek=function(sec,suppress){var r=nativeSeek(sec,suppress);try{window.__hfRenderState(tl.time());}catch(e){}return r;};
+      }
       window.__hfRenderState(tl.time());
     }
   })();
+"""
+
+
+
+VERTICAL_CENTER_SCRIPT = """
+<script id="vertical-center-runtime">
+(function(){
+  function visibleBoxes(root){
+    var boxes=[];
+    root.querySelectorAll('*').forEach(function(el){
+      var s=getComputedStyle(el);
+      if(s.display==='none'||s.visibility==='hidden'||Number(s.opacity)<0.05)return;
+      var r=el.getBoundingClientRect();
+      if(r.width<2||r.height<2)return;
+      if(!el.textContent.trim()&&!el.querySelector('svg,img,canvas,video'))return;
+      boxes.push(r);
+    });
+    return boxes;
+  }
+  function seek(t){
+    if(typeof window.__seekTo==='function'){window.__seekTo(t);return;}
+    var tl=Object.values(window.__timelines||{})[0];
+    if(tl&&tl.seek)tl.seek(t);
+    if(window.__hfRenderState)window.__hfRenderState(t);
+  }
+  function recenter(){
+    document.querySelectorAll('.scene').forEach(function(scene){
+      var inner=scene.querySelector('.stage-inner')||scene.firstElementChild;
+      if(!inner||!inner.style)return;
+      var start=Number(scene.getAttribute('data-start')||0);
+      var dur=Number(scene.getAttribute('data-duration')||0);
+      seek(start+dur*0.85);
+      var boxes=visibleBoxes(inner);
+      if(!boxes.length)return;
+      var top=Math.min.apply(null,boxes.map(function(r){return r.top;}));
+      var bottom=Math.max.apply(null,boxes.map(function(r){return r.bottom;}));
+      var center=(top+bottom)/2;
+      var delta=Math.max(-220,Math.min(220,900-center));
+      if(Math.abs(delta)>=12){inner.style.transform='translateY('+Math.round(delta)+'px)';}
+    });
+    seek(0);
+  }
+  document.addEventListener('DOMContentLoaded',recenter);
+  window.addEventListener('load',recenter);
+  window.__recenterScenes=recenter;
+})();
+</script>
+"""
+
+SCENE_OFFSET_SCRIPT = """
+<script id="scene-offset-runtime">
+(function(){
+  var list = window.__sceneBuilders = window.__sceneBuilders || [];
+  if (list.__sceneOffsetPatched) { return; }
+  list.__sceneOffsetPatched = true;
+  var originalPush = Array.prototype.push;
+  function sceneStartOf(selector){
+    if (typeof selector !== 'string') { return null; }
+    var element = null;
+    try { element = document.querySelector(selector); } catch (error) { return null; }
+    if (!element || !element.closest) { return null; }
+    var scene = element.closest('.scene');
+    return scene ? Number(scene.getAttribute('data-start') || 0) : null;
+  }
+  function resolveTarget(selector){
+    if (typeof selector !== 'string') { return selector; }
+    var found = 0;
+    try { found = document.querySelectorAll(selector).length; } catch (error) { found = 0; }
+    if (found > 0) { return selector; }
+    var sceneMatch = selector.match(/\\[data-scene="([^"]+)"\\]/);
+    if (!sceneMatch) { return selector; }
+    var scene = document.querySelector('.scene[data-scene="' + sceneMatch[1] + '"]');
+    if (!scene) { return selector; }
+    var rest = selector.replace(/^.*?\\[data-scene="[^"]+"\\]/, '').trim();
+    var fixed = '[data-scene="' + sceneMatch[1] + '"]' + (rest ? ' ' + rest : '');
+    try { return document.querySelectorAll(fixed).length ? fixed : selector; } catch (error) { return selector; }
+  }
+  function normalizeSceneStarts(timeline){
+    if (!timeline || timeline.__sceneStartsNormalized) { return; }
+    timeline.__sceneStartsNormalized = true;
+    var groups = [];
+    var lookup = {};
+    var children = timeline.getChildren ? timeline.getChildren(true, true, false) : [];
+    children.forEach(function(child){
+      var targets = child.targets ? child.targets() : [];
+      var element = targets && targets[0];
+      var scene = element && element.closest ? element.closest('.scene') : null;
+      if (!scene) { return; }
+      if (!lookup[scene.id]) {
+        lookup[scene.id] = { scene: scene, children: [] };
+        groups.push(lookup[scene.id]);
+      }
+      lookup[scene.id].children.push({ tween: child, start: Number(child.startTime()) });
+    });
+    var shifted = 0;
+    groups.forEach(function(group){
+      var sceneStart = Number(group.scene.getAttribute('data-start') || 0);
+      var first = Math.min.apply(null, group.children.map(function(item){ return item.start; }));
+      if (first - sceneStart <= 0.8) { return; }
+      var delta = first - (sceneStart + 0.15);
+      group.children.forEach(function(item){
+        item.tween.startTime(Math.max(0, item.start - delta));
+      });
+      shifted += 1;
+    });
+    if (shifted) { console.log('[scene-offset] 前移了 ' + shifted + ' 个场景的首个动作'); }
+  }
+  var patched = [];
+  function patchTimeline(timeline){
+    if (!timeline || patched.indexOf(timeline) >= 0) { return; }
+    patched.push(timeline);
+    ['from', 'to', 'fromTo', 'set'].forEach(function(method){
+      var original = timeline[method];
+      if (typeof original !== 'function') { return; }
+      timeline[method] = function(){
+        var args = Array.prototype.slice.call(arguments);
+        args[0] = resolveTarget(args[0]);
+        var start = sceneStartOf(args[0]);
+        if (start !== null && start > 0) {
+          var position = null;
+          for (var index = args.length - 1; index >= 1; index -= 1) {
+            if (typeof args[index] === 'number') { position = index; break; }
+          }
+          if (position === null) { args.push(start); }
+          else if (args[position] < start) { args[position] = args[position] + start; }
+        }
+        return original.apply(timeline, args);
+      };
+    });
+  }
+  var normalized = false;
+  list.push = function(builder){
+    if (typeof builder !== 'function') { return originalPush.call(list, builder); }
+    return originalPush.call(list, function(timeline, at){
+      patchTimeline(timeline);
+      var result = builder(timeline, at);
+      if (!normalized) {
+        normalized = true;
+        setTimeout(function(){ normalizeSceneStarts(timeline); }, 0);
+      }
+      return result;
+    });
+  };
+})();
+</script>
 """
 
 
@@ -829,17 +1079,95 @@ def install_state_controller(document: str) -> str:
 
 
 
+CHROME_OVERRIDE_STYLE = (
+    '<style id="production-chrome-overrides">'
+    '.masthead,.mast-rule,.depth-band,.progress,.progress-label{display:none!important}'
+    '.scene{display:flex!important;flex-direction:column!important;align-items:center!important;justify-content:center!important}'
+    '</style>'
+)
+
+
+def apply_chrome_overrides(document: str) -> str:
+    """Hide fixed mastheads, watermarks and progress bars without touching DOM structure."""
+    document = re.sub(r'<style id="production-chrome-overrides">.*?</style>', '', document, flags=re.S)
+    if '</body>' in document:
+        return document.replace('</body>', CHROME_OVERRIDE_STYLE + '\n</body>', 1)
+    return document + '\n' + CHROME_OVERRIDE_STYLE
+
+
+def install_scene_offset_runtime(document: str) -> str:
+    """把每个 builder 里的相对动效时间加上所属场景的 data-start。
+
+    模型的 at() 写的是场景内相对时间，但 GSAP 只有一条全局时间线；不加偏移，
+    所有动画都会堆在 0 附近，后面的场景永远不会动。
+    """
+    if 'scene-offset-runtime' in document:
+        return document
+    if "</head>" in document:
+        return document.replace("</head>", SCENE_OFFSET_SCRIPT + "</head>", 1)
+    return SCENE_OFFSET_SCRIPT + document
+
+
+def ensure_runtime_scripts(document: str) -> str:
+    """Make sure GSAP is actually loaded; without it every scene builder is a no-op."""
+    if "gsap.min.js" in document:
+        return document
+    tag = '<script src="素材/vendor/gsap.min.js"></script>'
+    if "</head>" in document:
+        return document.replace("</head>", tag + "\n</head>", 1)
+    return document.replace("<body>", "<body>\n" + tag, 1)
+
+
+def ensure_media_placeholders(document: str) -> str:
+    """Inject voiceover/BGM placeholders when the generated HTML forgot them."""
+    voice = ('<template data-media-type="audio" data-media-id="voiceover-track" '
+             'data-audio-role="voiceover" data-media-src="媒体/口播.mp3" data-start="0" data-duration="30"></template>')
+    music = ('<template data-media-type="audio" data-media-id="bgm-track" '
+             'data-audio-role="background-music" data-media-src="媒体/背景音乐.mp3" data-start="0" data-duration="30"></template>')
+    # 丢掉属性不全的占位（例如只写了 data-role/data-src 的 template）
+    document = re.sub(r'<template\b(?![^>]*data-media-id=)[^>]*>\s*</template>', '', document, flags=re.I)
+    additions = []
+    if 'data-audio-role="voiceover"' not in document:
+        additions.append(voice)
+    if 'data-audio-role="background-music"' not in document:
+        additions.append(music)
+    if not additions:
+        return document
+    block = "\n    " + "\n    ".join(additions) + "\n    "
+    if CAPTION_START in document:
+        return document.replace(CAPTION_START, block + CAPTION_START, 1)
+    return document.replace("</body>", block + "</body>", 1)
+
+
+def ensure_caption_container(document: str) -> str:
+    """字幕由本地注入：模型不用写字幕块。缺容器时补一个标准容器。"""
+    if CAPTION_START in document and CAPTION_END in document:
+        return document
+    container = (CAPTION_START + '\n    <div id="captions" class="caption-layer"></div>\n    ' + CAPTION_END)
+    for anchor in ('<div id="scenes"', '<div id="stage"'):
+        if anchor in document:
+            end = document.find(">", document.find(anchor)) + 1
+            return document[:end] + "\n  " + container + document[end:]
+    if "</body>" in document:
+        return document.replace("</body>", "  " + container + "\n</body>", 1)
+    return document + container
+
+
 def rewrite_html(path: Path, cues: list[dict], target_duration: float, transcript_path: Path, avatar_required: bool = True) -> None:
-    document = activate_media_placeholders(path.read_text(encoding="utf-8"), black_frame=not avatar_required)
+    document = ensure_runtime_scripts(path.read_text(encoding="utf-8"))
+    document = install_scene_offset_runtime(document)
+    document = ensure_media_placeholders(document)
+    document = activate_media_placeholders(document, black_frame=not avatar_required)
     document = normalize_audio_roles(document)
     if not avatar_required:
         document = sanitize_no_avatar_composition(document)
     document = normalize_wall_clock_controller(document)
     document = normalize_timeline_registration(document)
+    document = ensure_caption_container(document)
     if CAPTION_START in document and CAPTION_END in document:
         document = re.sub(re.escape(CAPTION_START) + r".*?" + re.escape(CAPTION_END), lambda _: caption_block(cues), document, count=1, flags=re.S)
     else:
-        raise SystemExit("HTML 缺少 CAPTIONS_START/CAPTIONS_END 字幕标记")
+        raise SystemExit("HTML 缺少字幕容器，且本地注入失败")
     authoring_match = re.search(r'\bdata-authoring-duration="([0-9.]+)"', document)
     declared_authoring_duration = float(authoring_match.group(1)) if authoring_match else 30.0
     scene_span = scene_timeline_span(document)
@@ -858,6 +1186,9 @@ def rewrite_html(path: Path, cues: list[dict], target_duration: float, transcrip
         document = scale_scene_timings(document, timeline_factor)
     document = normalize_scaled_scene_positions(document)
     document = align_scenes_to_caption_cues(document, cues, target_duration)
+    # 第二遍保证幂等：第一遍可能刚补上 data-sentence-ids，再对齐一次才稳定
+    document = align_scenes_to_caption_cues(document, cues, target_duration)
+    print(f"scene_tags={len(scene_matches(document))} caption_cues={len(cues)} scene_span={scene_timeline_span(document):.3f} timeline_scale={timeline_factor:.4f}")
     document = set_timeline_scale(document, timeline_factor, target_duration)
     document = set_role_duration(document, "audio", "voiceover", target_duration)
     document = set_role_duration(document, "video", "avatar", target_duration, allow_missing=not avatar_required)
@@ -879,6 +1210,7 @@ def rewrite_html(path: Path, cues: list[dict], target_duration: float, transcrip
     document = document[:root_match.start()] + root_tag + document[root_match.end():]
     document = enforce_production_layout(document, avatar_required=avatar_required)
     document = install_state_controller(document)
+    document = apply_chrome_overrides(document)
     path.write_text(document, encoding="utf-8")
 
 
@@ -920,6 +1252,7 @@ def main() -> None:
     parser.add_argument("--target-duration", type=float, help="兼容参数；最终时钟始终以口播实际时长为准")
     parser.add_argument("--duration-tolerance", type=float, default=0.25)
     parser.add_argument("--reference-script", type=Path, help="已批准口播原文；字幕文字以此为唯一真值")
+    parser.add_argument("--captions-srt", type=Path, help="手写字幕：给定时完全以该 SRT 为准，不再自动切句")
     parser.add_argument("--skip-media-normalization", action="store_true")
     args = parser.parse_args()
     for path in (args.html, args.voice):
@@ -929,12 +1262,20 @@ def main() -> None:
         raise SystemExit(f"缺少文件：{args.avatar_video}")
     if not args.black_frame and args.avatar_video is None:
         raise SystemExit("完整版必须提供 --avatar-video；黑帧模式请使用 --black-frame")
+    handwritten_cues = []
+    if args.captions_srt is not None:
+        if not args.captions_srt.exists():
+            raise SystemExit(f"缺少手写字幕文件：{args.captions_srt}")
+        handwritten_cues = parse_srt(args.captions_srt)
+        if not handwritten_cues:
+            raise SystemExit("手写字幕为空或格式不是标准 SRT")
+        print(f"handwritten_captions={len(handwritten_cues)} source={args.captions_srt}")
     transcript = args.transcript
     if transcript is None:
         candidates = sorted(Path("字幕").glob("HeyGen转写.*")) + sorted(Path("字幕").glob("口播时间码.json"))
         transcript = candidates[0] if candidates else None
     fallback = False
-    if transcript is None and args.auto_transcribe:
+    if transcript is None and args.auto_transcribe and not handwritten_cues:
         node, cli = resolve_hyperframes()
         transcript = Path("字幕/口播.srt")
         try:
@@ -942,7 +1283,9 @@ def main() -> None:
         except Exception as exc:
             print("本地 ASR 不可用，改用 HTML 自带字幕时间码：" + str(exc).splitlines()[0])
             transcript = None
-    if transcript is None or not transcript.exists():
+    if handwritten_cues:
+        cues = [{"text": clean_text(str(item["text"])), "start": float(item["start"]), "end": float(item["end"])} for item in handwritten_cues]
+    elif transcript is None or not transcript.exists():
         cues = extract_html_captions(args.html.read_text(encoding="utf-8"))
         fallback = True
         if not cues:
@@ -953,12 +1296,10 @@ def main() -> None:
         cue_level_transcript = bool(entries) and sum(1 for item in entries if visible_length(str(item.get("text", ""))) >= 6) >= max(1, len(entries) // 2)
         if reference.strip():
             Path("字幕/口播文案.txt").write_text(reference.strip() + "\n", encoding="utf-8")
-            if cue_level_transcript:
-                cues = [{"text": clean_text(str(item.get("text", ""))), "start": float(item.get("start", 0.0)), "end": float(item.get("end", 0.0))} for item in entries if clean_text(str(item.get("text", "")))]
-                print("caption_reference_alignment=cue-level")
-            else:
-                cues, match_ratio = cues_from_reference(reference, entries)
-                print(f"caption_reference_alignment={match_ratio:.3f}")
+            cues, match_ratio = cues_from_reference(reference, entries)
+            print(f"caption_reference_alignment={match_ratio:.3f}")
+            if match_ratio < 0.35:
+                print("警告：批准口播与 ASR 文本差异较大，字幕文字仍以批准口播为准，时间码按比例分配")
         else:
             cues = group_entries_into_sentences(entries)
     if not cues:
