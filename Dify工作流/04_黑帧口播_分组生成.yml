@@ -111,9 +111,6 @@ workflow:
           provider: langgenius/mimo/mimo
           name: mimo-v2.6-pro
           mode: chat
-          completion_params:
-            temperature: 0.1
-            max_completion_tokens: 1800
         prompt_template:
         - id: a01-system
           role: system
@@ -256,9 +253,6 @@ workflow:
           provider: langgenius/mimo/mimo
           name: mimo-v2.6-pro
           mode: chat
-          completion_params:
-            temperature: 0.2
-            max_completion_tokens: 1200
         prompt_template:
         - id: a04-system
           role: system
@@ -326,9 +320,6 @@ workflow:
           provider: langgenius/mimo/mimo
           name: mimo-v2.6-pro
           mode: chat
-          completion_params:
-            temperature: 0.2
-            max_completion_tokens: 10000
         prompt_template:
         - id: a06-system
           role: system
@@ -437,9 +428,6 @@ workflow:
           provider: langgenius/mimo/mimo
           name: mimo-v2.6-pro
           mode: chat
-          completion_params:
-            temperature: 0.15
-            max_completion_tokens: 30000
         prompt_template:
         - id: a08-system
           role: system
@@ -539,9 +527,6 @@ workflow:
           provider: langgenius/mimo/mimo
           name: mimo-v2.6-pro
           mode: chat
-          completion_params:
-            temperature: 0.1
-            max_completion_tokens: 30000
         prompt_template:
         - id: a10-system
           role: system
@@ -646,9 +631,6 @@ workflow:
           provider: langgenius/mimo/mimo
           name: mimo-v2.6-pro
           mode: chat
-          completion_params:
-            temperature: 0.1
-            max_completion_tokens: 2200
         prompt_template:
         - id: a12-system
           role: system
@@ -955,9 +937,6 @@ workflow:
           provider: langgenius/mimo/mimo
           name: mimo-v2.6-pro
           mode: chat
-          completion_params:
-            temperature: 0.35
-            max_completion_tokens: 20000
         prompt_template:
         - id: h01s-system
           role: system
@@ -986,9 +965,6 @@ workflow:
           provider: langgenius/mimo/mimo
           name: mimo-v2.6-pro
           mode: chat
-          completion_params:
-            temperature: 0.45
-            max_completion_tokens: 30000
         prompt_template:
         - id: h02a-system
           role: system
@@ -1017,9 +993,6 @@ workflow:
           provider: langgenius/mimo/mimo
           name: mimo-v2.6-pro
           mode: chat
-          completion_params:
-            temperature: 0.45
-            max_completion_tokens: 30000
         prompt_template:
         - id: h02b-system
           role: system
@@ -1048,9 +1021,6 @@ workflow:
           provider: langgenius/mimo/mimo
           name: mimo-v2.6-pro
           mode: chat
-          completion_params:
-            temperature: 0.45
-            max_completion_tokens: 30000
         prompt_template:
         - id: h02c-system
           role: system
@@ -1079,9 +1049,6 @@ workflow:
           provider: langgenius/mimo/mimo
           name: mimo-v2.6-pro
           mode: chat
-          completion_params:
-            temperature: 0.45
-            max_completion_tokens: 30000
         prompt_template:
         - id: h02d-system
           role: system
@@ -1242,9 +1209,6 @@ workflow:
           provider: langgenius/mimo/mimo
           name: mimo-v2.6-pro
           mode: chat
-          completion_params:
-            temperature: 0.2
-            max_completion_tokens: 2200
         prompt_template:
         - id: a06_retry-system
           role: system
