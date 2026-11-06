@@ -1,0 +1,8 @@
+{
+  "name": "workflow-runtime-vendor",
+  "private": true,
+  "description": "Pinned renderer CLI for the HTML video runtime",
+  "dependencies": {
+    "hyperframes": "^0.9.15"
+  }
+}

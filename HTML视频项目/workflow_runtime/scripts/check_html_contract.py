@@ -135,13 +135,42 @@ def main() -> None:
                 f"BGM 实际时长不足：文件 {actual_duration:.3f}s，成片需要 {declared_duration:.3f}s"
             )
 
+    # ---- 结构完整性：残缺 HTML（截断、标签没闭合、丢场景）不放行 ----
+    blocking: list[str] = []
+    if "</html>" not in doc.lower():
+        blocking.append("HTML 结尾不完整（缺少 </html>），产物可能被截断")
+    for tag in ("style", "script"):
+        opens = len(re.findall(r"<%s\b" % tag, doc, flags=re.I))
+        closes = len(re.findall(r"</%s\s*>" % tag, doc, flags=re.I))
+        if opens != closes:
+            blocking.append("<%s> 开闭不配对（%d 开 / %d 闭），标签后面整段内容会被吞掉" % (tag, opens, closes))
+    markup = re.sub(r"<script\b.*?</script\s*>|<style\b.*?</style\s*>", " ", doc, flags=re.I | re.S)
+    cursor = markup.find("<")
+    while cursor >= 0:
+        end = markup.find(">", cursor)
+        if end < 0:
+            blocking.append("标记在 char %d 处断了（没有闭合的 >）" % cursor)
+            break
+        if markup.find("<", cursor + 1, end) >= 0:
+            blocking.append("char %d 起的标签里出现未闭合的属性引号，后面的标记会被当成属性值" % cursor)
+            break
+        cursor = markup.find("<", end + 1)
+    caption_ids = {item.strip() for item in re.findall(r'\bdata-sentence-id="([^"]+)"', doc) if item.strip()}
+    scene_sentence_ids: set[str] = set()
+    for attr in re.findall(r'\bdata-sentence-ids="([^"]+)"', doc):
+        scene_sentence_ids.update(part for part in re.split(r"[\s,]+", attr.strip()) if part)
+    uncovered = sorted(caption_ids - scene_sentence_ids)
+    if uncovered:
+        blocking.append("有 %d 句口播没有对应场景：%s" % (len(uncovered), "、".join(uncovered[:8])))
+    if not re.search(r'\b(?:master|timeline)\.(?:from|fromTo|to|set)\s*\(|\bgsap\.set\s*\(', doc):
+        blocking.append("HTML 里没有任何 GSAP 动作，成片会是静止的")
+
     body = doc[doc.lower().find("<body"):] if "<body" in doc.lower() else doc
     text = re.sub(r"<script.*?</script>|<style.*?</style>", " ", body, flags=re.I | re.S)
     text = re.sub(r"<[^>]+>", " ", text)
     text = html_lib.unescape(re.sub(r"\s+", " ", text)).strip()
-    # 只有"渲染器找不到 composition"这一类问题才致命；其余一律报告不拦截，
-    # 因为成片优先，版面/密度问题留给人工复核。
-    fatal = [item for item in errors if any(key in item for key in (
+    # 渲染器找不到 composition、或产物结构残缺时致命；版面/密度问题只报告。
+    fatal = blocking + [item for item in errors if any(key in item for key in (
         "缺少完整 HTML 文档头", "data-composition-id", "data-duration",
     ))]
     if fatal:

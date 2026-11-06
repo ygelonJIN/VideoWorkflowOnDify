@@ -43,12 +43,13 @@ def main(motion_text: str, storyboard_json: str, recommended_motion_count_min: i
     def parse(raw, label):
         value = str(raw or "").strip()
         value = re.sub(r"^```(?:json)?\s*|\s*```$", "", value, flags=re.I)
-        value = value.replace("\u201c", '"').replace("\u201d", '"').replace("\u2018", "'").replace("\u2019", "'")
+        repaired = value.replace("\u201c", '"').replace("\u201d", '"').replace("\u2018", "'").replace("\u2019", "'")
         if not value:
             return {"__invalid_json__": True, "__label__": label}, "输出为空"
         try:
             return json.loads(value), ""
         except Exception as first_error:
+            value = repaired  # 中文引号在 JSON 字符串里合法，先按原文解析；失败才退到替换版
             start = value.find("{")
             if start >= 0:
                 depth = 0

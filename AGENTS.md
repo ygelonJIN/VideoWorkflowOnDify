@@ -18,7 +18,7 @@
 Dify工作流/                         # 可导入的 Dify Workflow
 HTML视频项目/333/                   # 当前唯一正式项目
 HTML视频项目/Dify输出/               # Dify 原始 TXT、JSON、HTML 和 HeyGen 响应
-HTML视频项目/workflow_runtime/       # 可复用模板、脚本、运行资产和工具
+HTML视频项目/workflow_runtime/       # 可复用模板、脚本、运行资产、渲染器 vendor 和工具
 保留资料/                           # 提示词、代码节点、用户输入事实和生产标准
 经验文档/                           # 操作经验，一个领域一篇
 ```
@@ -34,7 +34,7 @@ bash /Volumes/TUF ESD-T1A Media/视频工作流/HTML视频项目/workflow_runtim
 - `Dify工作流/*.yml`：实际导入 Dify 的唯一运行版本。
 - `保留资料/工作流提示词/`：YAML 内提示词的可读镜像。
 - `保留资料/工作流代码节点/`：YAML 内 Code 节点的可读镜像。
-- `HTML视频项目/workflow_runtime/`：可复用模板、GSAP、渲染脚本和工具。
+- `HTML视频项目/workflow_runtime/`：可复用模板、GSAP、渲染脚本、工具，以及钉死的 HyperFrames CLI（`vendor/`，`node_modules` 不进仓库）。
 - `HTML视频项目/333/`：当前项目成品和项目内运行脚本，不作为新项目模板直接修改。
 - `保留资料/项目文档/`：任意主题通用的用户输入事实、内容规则、视频需求与质量标准；不保存固定产品故事。
 - `经验文档/`：怎么做、怎么维护、踩过的坑。新增经验并入已有文件，不轻易新建。
@@ -87,7 +87,7 @@ bash /Volumes/TUF ESD-T1A Media/视频工作流/HTML视频项目/workflow_runtim
 
 ### 经验文档/使用说明.md
 - 什么时候读：跑一次完整流程、导 Dify、重渲染、改配置、加新项目之前
-- 包含：当前方案、输入怎么进、目录结构、推荐入口、从文件处理、黑帧 TTS、字幕、检查策略、重渲染、Dify 导入、模板边界、项目归档
+- 包含：当前方案、输入怎么进、目录结构、推荐入口、从文件处理、黑帧 TTS、渲染器 CLI 与 vendor、字幕、检查策略、Dify 输出超限、失败定位与续跑、重渲染、Dify 导入、已知未修、模板边界、项目归档
 - 不用读：只改一句提示词、只调样式
 
 ## 禁止

@@ -1227,11 +1227,25 @@ def resolve_hyperframes() -> tuple[Path, Path]:
     cli_value = os.environ.get("HYPERFRAMES_CLI")
     cli = Path(cli_value) if cli_value else None
     if cli is None or not cli.is_file():
+        # 优先用仓库内钉死的 CLI：从当前目录向上找 vendor/，覆盖项目和失败项目两种位置。
+        here = Path.cwd().resolve()
+        for base in [here, *list(here.parents)[:4]]:
+            for rel in ("vendor", "workflow_runtime/vendor"):
+                candidate = base / rel / "node_modules/hyperframes/bin/hyperframes.mjs"
+                if candidate.is_file():
+                    cli = candidate
+                    break
+            if cli is not None:
+                break
+    if cli is None or not cli.is_file():
         candidates = sorted(Path.home().joinpath(".npm/_npx").glob("*/node_modules/hyperframes/bin/hyperframes.mjs"))
         resolved = candidates[-1] if candidates else shutil.which("hyperframes")
         cli = Path(resolved) if resolved else None
     if cli is None or not cli.is_file():
-        raise SystemExit("缺少 HyperFrames CLI")
+        raise SystemExit(
+            "缺少 HyperFrames CLI（不是 Node 的问题）。"
+            "在 workflow_runtime/vendor 下执行 npm i，或设置 HYPERFRAMES_CLI。"
+        )
     return node, cli
 
 

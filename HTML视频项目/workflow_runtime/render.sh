@@ -21,6 +21,33 @@ if [ -z "${NODE_BIN:-}" ]; then
   echo "缺少 Node.js，请安装 Node.js 22+。"
   exit 1
 fi
+NODE_MAJOR="$("$NODE_BIN" -p 'Number(process.versions.node.split(".")[0])' 2>/dev/null || echo 0)"
+if [ "$NODE_MAJOR" -lt 22 ]; then
+  NODE22_BIN="$(find "$HOME/.nvm/versions/node" -path '*/bin/node' -type f 2>/dev/null | sort -V | tail -1 || true)"
+  if [ -n "$NODE22_BIN" ] && [ "$("$NODE22_BIN" -p 'Number(process.versions.node.split(".")[0])' 2>/dev/null || echo 0)" -ge 22 ]; then
+    NODE_BIN="$NODE22_BIN"
+    NODE_MAJOR="$("$NODE_BIN" -p 'Number(process.versions.node.split(".")[0])')"
+  fi
+fi
+if [ "$NODE_MAJOR" -lt 22 ]; then
+  echo "HyperFrames 需要 Node.js 22+，当前：$("$NODE_BIN" -v)"
+  exit 1
+fi
+# 优先使用仓库内钉死的 CLI（workflow_runtime/vendor），再退回 npx 缓存和全局命令。
+if [ -z "$HF_CLI" ] || [ ! -f "$HF_CLI" ]; then
+  SEARCH_DIR="$PROJECT_DIR"
+  for _ in 1 2 3 4; do
+    for CANDIDATE in \
+      "$SEARCH_DIR/vendor/node_modules/hyperframes/bin/hyperframes.mjs" \
+      "$SEARCH_DIR/workflow_runtime/vendor/node_modules/hyperframes/bin/hyperframes.mjs"; do
+      if [ -f "$CANDIDATE" ]; then
+        HF_CLI="$CANDIDATE"
+        break 2
+      fi
+    done
+    SEARCH_DIR="$(dirname "$SEARCH_DIR")"
+  done
+fi
 if [ -z "$HF_CLI" ] || [ ! -f "$HF_CLI" ]; then
   HF_CLI="$(find "$HOME/.npm/_npx" -path '*/node_modules/hyperframes/bin/hyperframes.mjs' -type f 2>/dev/null | sort | tail -1 || true)"
 fi
@@ -28,7 +55,9 @@ if [ -z "$HF_CLI" ] || [ ! -f "$HF_CLI" ]; then
   HF_CLI="$(command -v hyperframes || true)"
 fi
 if [ -z "$HF_CLI" ] || [ ! -f "$HF_CLI" ]; then
-  echo "缺少 HyperFrames CLI。请安装 Node.js 22+ 后运行 npx hyperframes --version。"
+  echo "缺少 HyperFrames CLI（不是 Node 的问题）。"
+  echo "修复：cd \"$(dirname "$PROJECT_DIR")/workflow_runtime/vendor\" 后执行 npm i（需 Node 22+），"
+  echo "或把可用的 hyperframes.mjs 路径写进 HYPERFRAMES_CLI 环境变量。"
   exit 1
 fi
 if [ ! -x "$CHROME_BIN" ]; then
@@ -97,8 +126,12 @@ fi
 python3 脚本/sync_video.py "${SYNC_ARGS[@]}" "${TRANSCRIPT_ARG[@]}"
 
 STAGE="检查生产契约（check_html_contract.py）"
-echo "检查生产契约（除致命项外不阻塞渲染）..."
-python3 脚本/check_html_contract.py index.html || echo "契约检查有告警，继续渲染"
+echo "检查生产契约（结构残缺会停止，其余告警继续）..."
+if ! python3 脚本/check_html_contract.py index.html; then
+  echo "生产契约不通过：产物结构残缺（截断/标签未闭合/丢场景/没有动效），停止渲染。"
+  echo "先修 HTML 或重跑 Dify，不要硬渲。"
+  exit 1
+fi
 STAGE="检查真实 DOM 排版（check_html_layout.mjs）"
 echo "检查真实 DOM 的组件重叠、垂直构图和字幕规格（只报告，不阻塞）..."
 HYPERFRAMES_CLI="$HF_CLI" HYPERFRAMES_BROWSER_PATH="$CHROME_BIN" "$NODE_BIN" 脚本/check_html_layout.mjs index.html || echo "排版检查有告警，继续渲染"
