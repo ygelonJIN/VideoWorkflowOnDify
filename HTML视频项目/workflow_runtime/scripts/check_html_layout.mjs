@@ -38,6 +38,7 @@ const report = await page.evaluate(() => {
   const errors = [];
   const warnings = [];
   const sceneMetrics = [];
+  const offCanvasScenes = [];
   const subtitleMetrics = {};
   const topMetrics = [];
   const rect = el => {
@@ -80,11 +81,26 @@ const report = await page.evaluate(() => {
 
   const scenes = [...document.querySelectorAll('.scene.clip')];
   if (!scenes.length) errors.push('未找到 scene.clip');
+  // 必须用「不抑制回调」的方式定位：GSAP 的 seek(t) 默认 suppressEvents=true，
+  // 页面里靠 onUpdate 计算的显隐/状态就不会更新，检查会误报整屏空白。
+  // 渲染器走的是 totalTime(t, false)，这里保持一致。
   const seekTimeline = (seconds) => {
-    if (typeof window.__seekTo === 'function') { window.__seekTo(seconds); return; }
-    if (window.__hfTimeline && typeof window.__hfTimeline.seek === 'function') { window.__hfTimeline.seek(seconds); return; }
-    const tl = Object.values(window.__timelines || {}).find(item => item && typeof item.seek === 'function');
-    if (tl) tl.seek(seconds);
+    if (typeof window.__seekTo === 'function') {
+      window.__seekTo(seconds);
+      try { window.dispatchEvent(new CustomEvent('hf-seek', { detail: { time: seconds } })); } catch {}
+      return;
+    }
+    const tl = Object.values(window.__timelines || {}).find(item => item && (typeof item.totalTime === 'function' || typeof item.seek === 'function'));
+    if (tl) {
+      // 先回 0 再前进：直接跳到某个时间，页面里"只在跨越时更新"的驱动会留下上一轮的状态，
+      // 检查会看到已经过期的显隐（实测 s09 被误判成整屏不可见）。
+      if (typeof tl.totalTime === 'function') { tl.totalTime(0, false); tl.totalTime(seconds, false); }
+      else { tl.seek(0, false); tl.seek(seconds, false); }
+    }
+    if (window.__hfTimeline && typeof window.__hfTimeline.seek === 'function' && window.__hfTimeline !== tl) {
+      window.__hfTimeline.seek(seconds, false);
+    }
+    try { window.dispatchEvent(new CustomEvent('hf-seek', { detail: { time: seconds } })); } catch {}
   };
   for (const scene of scenes) {
     const mid = Number(scene.dataset.start||0)+Number(scene.dataset.duration||0)*0.85;
@@ -179,6 +195,13 @@ const report = await page.evaluate(() => {
       };
       const center=(bounds.top+bounds.bottom)/2;
       if (center < 700 || center > 1100) warnings.push(`${scene.dataset.scene}: 主内容垂直中心=${center.toFixed(1)}px，偏离舒适区 700–1100px`);
+      // 安全区（画布 1080×1920）：左右各 90、顶部 200、底部 300（底部留给字幕）。只报告，不阻塞渲染。
+      if (bounds.top < -1 || bounds.bottom > 1921) {
+        offCanvasScenes.push(scene.dataset.scene || scene.id);
+        warnings.push(`${scene.dataset.scene || scene.id}: 内容出画布（上 ${bounds.top.toFixed(0)}、下 ${bounds.bottom.toFixed(0)}，画布 0–1920）`);
+      }
+      const safeMissed = bounds.left < 90 - 1 || bounds.right > 1080 - 90 + 1 || bounds.top < 200 - 1 || bounds.bottom > 1920 - 300 + 1;
+      if (safeMissed) warnings.push(`${scene.dataset.scene}: 内容越出安全区（左 ${bounds.left.toFixed(0)}、右 ${bounds.right.toFixed(0)}、上 ${bounds.top.toFixed(0)}、下 ${bounds.bottom.toFixed(0)}；安全区 左右 90–990、上 200、下 1620）`);
       sceneMetrics.push({scene:scene.dataset.scene, top:Number(bounds.top.toFixed(1)), bottom:Number(bounds.bottom.toFixed(1)), center:Number(center.toFixed(1))});
     } else {
       sceneMetrics.push({scene:scene.dataset.scene, top:null, bottom:null, center:null});
@@ -217,7 +240,9 @@ const report = await page.evaluate(() => {
     if (timeline && typeof timeline.seek === 'function') {
       [...document.querySelectorAll('.scene')].forEach(scene => {
         const start = Number(scene.getAttribute('data-start') || 0);
-        timeline.seek(start + 0.4);
+        const dur = Number(scene.getAttribute('data-duration') || 4);
+        if (typeof timeline.totalTime === 'function') { timeline.totalTime(0, false); timeline.totalTime(start + 0.4, false); }
+        else { timeline.seek(0, false); timeline.seek(start + 0.4, false); }
         let painted = 0;
         scene.querySelectorAll('*').forEach(el => {
           const style = getComputedStyle(el);
@@ -226,9 +251,37 @@ const report = await page.evaluate(() => {
           const rect = el.getBoundingClientRect();
           if (rect.width > 4 && rect.height > 4) painted += 1;
         });
-        motion.scenePaint.push({scene: scene.getAttribute('data-scene') || scene.id, painted});
-        if (painted === 0) warnings.push(`${scene.id}: 场景开场 0.4 秒时没有任何可见元素，可能整屏空白`);
+        // 再看这一屏结束前 0.4 秒：内容提前消失会留下大片空背景
+        const _late = start + Math.max(0.5, dur - 0.4);
+        if (typeof timeline.totalTime === 'function') { timeline.totalTime(0, false); timeline.totalTime(_late, false); }
+        else { timeline.seek(0, false); timeline.seek(_late, false); }
+        let paintedLate = 0;
+        scene.querySelectorAll('*').forEach(el => {
+          const style = getComputedStyle(el);
+          if (style.display === 'none' || style.visibility === 'hidden') return;
+          if (Number(style.opacity) <= 0.05) return;
+          const rect = el.getBoundingClientRect();
+          if (rect.width > 4 && rect.height > 4) paintedLate += 1;
+        });
+        motion.scenePaint.push({scene: scene.getAttribute('data-scene') || scene.id, painted, paintedLate});
+        if (painted === 0) {
+          const sceneStyle = getComputedStyle(scene);
+          const selfHidden = sceneStyle.visibility === 'hidden' || Number(sceneStyle.opacity) <= 0.05;
+          if (selfHidden) {
+            warnings.push(`${scene.id}: 在自己窗口内整屏不可见（场景容器 visibility/opacity 被置空）。最常见原因：把 timeline.time() 又乘/除了一次 data-timeline-scale，窗口判定整体偏移`);
+          } else {
+            warnings.push(`${scene.id}: 场景开场 0.4 秒时没有任何可见元素，可能整屏空白`);
+          }
+        }
+        if (painted > 0 && paintedLate === 0) warnings.push(`${scene.id}: 内容在该屏结束前就消失了，后段只剩背景（黑屏/空屏的主要来源）`);
       });
+    }
+    if (offCanvasScenes.length && offCanvasScenes.length >= Math.ceil(scenes.length / 2)) {
+      errors.push(`有 ${offCanvasScenes.length}/${scenes.length} 个场景的内容排到了画布外：${offCanvasScenes.slice(0,4).join("、")}`);
+    }
+    const blankOpen = (motion.scenePaint || []).filter(item => item.painted === 0).length;
+    if (motion.scenePaint && motion.scenePaint.length && blankOpen >= Math.ceil(motion.scenePaint.length / 2)) {
+      errors.push(`有 ${blankOpen}/${motion.scenePaint.length} 个场景开场即空白，观众看到的是大片空背景，不是画面`);
     }
   } catch (error) {
     motion.error = String(error && error.message ? error.message : error);
@@ -239,8 +292,16 @@ const report = await page.evaluate(() => {
 
 await browser.close();
 console.log(JSON.stringify(report, null, 2));
-if (report.errors.length) {
-  // 只报告不拦截：成片优先，版面问题留给人工复核
-  console.log('LAYOUT CHECK: WARN —— ' + report.errors.length + ' 条问题，不阻塞渲染');
+// 只有"大面积开场空白"和"多数场景出画布"才拦渲染；其余（单屏重叠、轻微越界）只报告
+const fatalErrors = report.errors.filter(item => /开场即空白|排到了画布外/.test(item));
+const softErrors = report.errors.filter(item => !fatalErrors.includes(item));
+if (fatalErrors.length) {
+  console.log('LAYOUT CHECK: FAIL —— ' + fatalErrors.length + ' 条致命排版问题');
+  fatalErrors.forEach(item => console.log('  reason: ' + item));
+  process.exit(1);
 }
-process.exit(0);
+if (softErrors.length) {
+  console.log('LAYOUT CHECK: WARN —— ' + softErrors.length + ' 条排版问题，不阻塞渲染');
+  softErrors.forEach(item => console.log('  warn: ' + item));
+}
+console.log('LAYOUT CHECK: PASS');

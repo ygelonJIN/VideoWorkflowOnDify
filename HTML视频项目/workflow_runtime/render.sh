@@ -133,8 +133,16 @@ if ! python3 脚本/check_html_contract.py index.html; then
   exit 1
 fi
 STAGE="检查真实 DOM 排版（check_html_layout.mjs）"
-echo "检查真实 DOM 的组件重叠、垂直构图和字幕规格（只报告，不阻塞）..."
-HYPERFRAMES_CLI="$HF_CLI" HYPERFRAMES_BROWSER_PATH="$CHROME_BIN" "$NODE_BIN" 脚本/check_html_layout.mjs index.html || echo "排版检查有告警，继续渲染"
+echo "检查真实 DOM 的组件重叠、垂直构图、出画布与开场空白（出画布/大面积空白会停止）..."
+if ! HYPERFRAMES_CLI="$HF_CLI" HYPERFRAMES_BROWSER_PATH="$CHROME_BIN" "$NODE_BIN" 脚本/check_html_layout.mjs index.html; then
+  if [ "${ALLOW_LAYOUT_WARN:-0}" = "1" ]; then
+    echo "⚠️ ALLOW_LAYOUT_WARN=1：排版问题只告警，继续渲染（仅用于诊断，不要交付）"
+  else
+    echo "排版检查不通过（内容出画布或大面积开场空白），停止渲染。"
+    echo "先修 HTML 或重跑 Dify，不要硬渲；只看画面可临时加 ALLOW_LAYOUT_WARN=1。"
+    exit 1
+  fi
+fi
 
 if [ "${RUN_HYPERFRAMES_CHECK:-0}" = "1" ]; then
   STAGE="HyperFrames 组合检查"
@@ -173,5 +181,17 @@ python3 脚本/normalize_final_audio.py --video ./成片/最终视频.mp4
 STAGE="检查最终 MP4 契约"
 echo "检查最终 MP4 的媒体主时钟与无数字人契约..."
 python3 脚本/check_final_video.py   --video ./成片/最终视频.mp4   --voice "$VOICE_FILE"   --html index.html
+
+# 复核产物：联系表 + 响度/真峰，只报告不拦截
+STAGE="生成复核产物"
+mkdir -p ./成片/复核
+if [ -f 脚本/contact_sheet.sh ]; then
+  echo "生成联系表..."
+  bash 脚本/contact_sheet.sh ./成片/最终视频.mp4 ./成片/复核/联系表.jpg 2 6 384 || echo "⚠️ 联系表生成失败（不阻塞）"
+fi
+if [ -f 脚本/audio_check.sh ]; then
+  echo "复核响度与真峰..."
+  bash 脚本/audio_check.sh ./成片/最终视频.mp4 -14.5 | tee ./成片/复核/音频报告.txt || echo "⚠️ 音频复核失败（不阻塞）"
+fi
 
 echo "完成：$PROJECT_DIR/成片/最终视频.mp4"

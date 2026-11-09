@@ -44,7 +44,16 @@ def main(copy_text: str, brief_json: str) -> dict:
     if not script and supplied_sentences:
         script = " ".join(str(item.get("text", "") if isinstance(item, dict) else item).strip() for item in supplied_sentences).strip()
     if not script:
-        raise ValueError("voiceover_script 和 sentences 不能同时为空")
+        return {
+            "script_json": "{}",
+            "voiceover_script": "",
+            "estimated_duration_seconds": 0,
+            "script_hash": "",
+            "copy_valid": False,
+            "copy_errors_json": json.dumps(["口播为空：A06 没有产出 voiceover_script，也没有可用 sentences"], ensure_ascii=False),
+            "copy_warnings_json": "[]",
+            "recommended_motion_count_min": 0,
+        }
     data["voiceover_script"] = script
 
     # The final script is the text truth. Rebuild captions by complete sentences,
@@ -150,7 +159,16 @@ def main(copy_text: str, brief_json: str) -> dict:
         cursor += estimated
 
     if not normalized_sentences:
-        raise ValueError("sentences 中没有有效文本")
+        return {
+            "script_json": "{}",
+            "voiceover_script": "",
+            "estimated_duration_seconds": 0,
+            "script_hash": "",
+            "copy_valid": False,
+            "copy_errors_json": json.dumps(["sentences 中没有有效文本"], ensure_ascii=False),
+            "copy_warnings_json": "[]",
+            "recommended_motion_count_min": 0,
+        }
     normalized_sentences[0]["purpose"] = "hook"
     if normalized_sentences[-1]["purpose"] not in {"ending", "summary", "cta"}:
         normalized_sentences[-1]["purpose"] = "ending"

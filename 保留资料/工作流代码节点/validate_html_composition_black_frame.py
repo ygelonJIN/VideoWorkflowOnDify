@@ -23,6 +23,20 @@ def main(html_document: str, production_requirements: str) -> dict:
         warnings.append("所有 GSAP 时间位置必须使用 at()")
     if "<!doctype html>" not in html.lower():
         errors.append("缺少完整 HTML 文档头")
+
+    # 本地不再替页面切场景显隐，页面必须自己按 data-start/data-duration 驱动，
+    # 否则所有 scene 会同时叠在画布上（成片是九屏混在一起）。
+    scene_tags = [tag for tag in re.findall(r"<(?:section|div)\b[^>]*>", html, flags=re.I)
+                  if "scene" in (re.search(r'class=["\']([^"\']*)["\']', tag).group(1).split()
+                                 if re.search(r'class=["\']([^"\']*)["\']', tag) else [])]
+    if len(scene_tags) >= 2:
+        scripts = "\n".join(re.findall(r"<script\b[^>]*>([\s\S]*?)</script>", html, flags=re.I))
+        reads_window = "data-start" in scripts and "data-duration" in scripts
+        writes_visibility = re.search(r"visibility|opacity|clip-path|clipPath|display|translate|scale", scripts) is not None
+        if not (reads_window and writes_visibility):
+            errors.append("没有场景显隐驱动：页面必须自己按 data-start/data-duration 决定每屏何时可见（本地已不兜底）")
+        elif not re.search(r"\[data-scene|\\.scene", scripts):
+            warnings.append("场景显隐驱动没有按 [data-scene] / .scene 选择场景，需人工确认")
     for token in ["CAPTIONS_START", "CAPTIONS_END"]:
         if token not in html:
             warnings.append("缺少字幕占位 " + token + "（本地会注入字幕容器，不拦截）")
@@ -42,14 +56,9 @@ def main(html_document: str, production_requirements: str) -> dict:
         warnings.append("根画布必须固定为 CSS 1080×1920")
     if re.search(r'width\s*:\s*1920px|height\s*:\s*1080px|data-width="1920"|data-height="1080"', html):
         warnings.append("禁止横屏/16:9 画布，必须是 1080×1920 竖屏")
-    for token in (
-        "bottom:15%", "font-size:40px", "line-height:1.35", "font-weight:700",
-        "background:rgba(6,10,20,.42)",
-    ):
-        if token not in html:
-            warnings.append("字幕契约缺少 " + token)
-    if not re.search(r"(?:max-)?width\s*:\s*70%", html):
-        warnings.append("字幕契约缺少 70% 宽度")
+    # 字幕由本地 sync_video.py 注入（13% / 45px / 无底板），HTML 里不该写字幕样式
+    if re.search(r'\.caption\b|#captions\b', html):
+        warnings.append("HTML 里出现了字幕样式或容器：字幕由本地注入，模型不应写")
     if "data-start" not in html or "data-duration" not in html:
         warnings.append("缺少时间片段属性")
     if not re.search(r'class=["\'][^\'"]*\bscene\b', html):
@@ -101,6 +110,33 @@ def main(html_document: str, production_requirements: str) -> dict:
     for token in ["VIDEO_WORKER", "production-jobs", "webhook"]:
         if token.lower() in html.lower():
             warnings.append("HTML 中不应引用 Worker/生产接口：" + token)
+    # ---- 图片契约：每一屏的主视觉必须是真实照片，不是 HTML 画的图形 ----
+    image_refs = sorted(set(re.findall(r"\{\{IMG:([A-Za-z0-9_-]+)\}\}", html)))
+    if not image_refs:
+        errors.append("整份 HTML 没有任何 {{IMG:图片id}} 引用：每一屏的主视觉必须是图像计划生成的真实照片")
+    scenes_without_image = []
+    for tag in re.finditer(r"<(?:section|div)\b[^>]*>", html, flags=re.I):
+        head = tag.group(0)
+        cls = re.search(r'class=["\']([^"\']*)["\']', head)
+        if not cls or "scene" not in cls.group(1).split():
+            continue
+        sid = re.search(r'data-scene=["\']([^"\']+)["\']', head)
+        scene_id = sid.group(1) if sid else "?"
+        end = html.find("</section>", tag.end())
+        inner = html[tag.end():end if end >= 0 else len(html)]
+        if not re.search(r"\{\{IMG:[A-Za-z0-9_-]+\}\}", inner):
+            scenes_without_image.append(scene_id)
+    if scenes_without_image:
+        errors.append("这些场景没有 {{IMG:...}} 图片：%s" % "、".join(scenes_without_image[:8]))
+    if re.search(r"<canvas\b", html, re.I):
+        warnings.append("HTML 里出现 canvas：具象视觉必须由照片承担，canvas 只允许做背景氛围")
+    if re.search(r"<svg\b", html, re.I):
+        warnings.append("HTML 里出现内联 SVG：插画/示意图/图标应由照片替代，只保留线条与排版")
+    if re.search(r"class=[\"'][^\"']*\b(?:chart|diagram|illustration|icon-)\b", html, re.I):
+        warnings.append("HTML 里出现图表/示意/插画类 class：这类图形应换成照片")
+    if "媒体/图片/" in html or "素材/图片/" in html:
+        warnings.append("图片路径必须写 {{IMG:图片id}}，本地渲染前才替换成真实文件")
+
     if len(html) > 800000:
         warnings.append("HTML 体积较大，建议拆分为模板和数据")
 

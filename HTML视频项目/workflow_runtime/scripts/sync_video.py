@@ -479,9 +479,15 @@ def activate_media_placeholders(document: str, black_frame: bool = False) -> str
         flags=re.I,
     )
     document = re.sub(r'</(audio|video)\b[^>]*>', r'</\1>', document, flags=re.I)
-    document = re.sub(r'src="素材/vendor/gsap\.min\.js"', 'src="assets/gsap.min.js"', document, flags=re.I)
-    return re.sub(r'(<script\b[^>]*?)\bdata-src="([^"]+)"',
-                  lambda match: f'{match.group(1).rstrip()} src="assets/gsap.min.js"', document, flags=re.I)
+    document = re.sub(r'src="素材/vendor/([A-Za-z0-9._-]+\.js)"', r'src="assets/\1"', document, flags=re.I)
+    def _script_source(match):
+        # 按文件名映射到 assets/，不再把所有脚本都改写成 gsap
+        name = str(match.group(2)).rsplit("/", 1)[-1].split("?")[0]
+        if not re.fullmatch(r"[A-Za-z0-9._-]+\.js", name):
+            name = "gsap.min.js"
+        return f'{match.group(1).rstrip()} src="assets/{name}"'
+
+    return re.sub(r'(<script\b[^>]*?)\bdata-src="([^"]+)"', _script_source, document, flags=re.I)
 
 
 def normalize_audio_roles(document: str) -> str:
@@ -518,9 +524,22 @@ def normalize_timeline_registration(document: str) -> str:
     root_match = re.search(r'\bdata-composition-id="([^"]+)"', document)
     composition_id = root_match.group(1) if root_match else "composition"
     registration = (
+        # GSAP 时间线只覆盖模型写的动作（常常只有前几秒）。不补足时长，渲染器 seek 到后面会被钳住，
+        # 后段既不跑动效、场景可见性也判错（2026-11-07 实测：44 秒片子时间线只有 6.42 秒）。
+        'var __root = document.querySelector("#stage") || document.body; '
+        'var __filmDuration = Number((__root && __root.getAttribute("data-duration")) || 0); '
+        'if (__filmDuration > 0) { timeline.to({}, {duration: __filmDuration}, 0); } '
         'window.__timelines = window.__timelines || {}; '
         f'window.__timelines["{composition_id}"] = timeline;'
     )
+    # 幂等：sync 可能跑多次，先把上一轮注入的补时长片段摘掉，否则每跑一次多一条 0 秒空 tween。
+    legacy_prefix = (
+        'var __root = document.querySelector("#stage") || document.body; '
+        'var __filmDuration = Number((__root && __root.getAttribute("data-duration")) || 0); '
+        'if (__filmDuration > 0) { timeline.to({}, {duration: __filmDuration}, 0); } '
+    )
+    while legacy_prefix in document:
+        document = document.replace(legacy_prefix, '', 1)
     document = re.sub(
         r'window\.__timelines\s*=\s*window\.__timelines\s*\|\|\s*(?:\{\s*\}|\[\s*\])\s*;\s*'
         r'(?:window\.__timelines(?:\.push\([^;]+\)|\[[^;]+?=\s*[^;]+;)\s*;?)?',
@@ -542,9 +561,48 @@ def class_tokens(tag: str) -> list[str]:
     return match.group(1).split() if match else []
 
 
+def unhide_scene_rules(document: str) -> tuple[str, int]:
+    """去掉 `.scene` 规则里的 visibility:hidden / opacity:0。
+
+    场景显隐由时间轴控制；模型若把 .scene 设成隐藏，整屏会一直不可见（2026-11-06 实测踩过）。
+    """
+    fixed = 0
+
+    def _fix(match):
+        nonlocal fixed
+        selector, body = match.group(1), match.group(2)
+        tokens = [part.strip() for part in selector.split(",")]
+        if ".scene" not in tokens:
+            return match.group(0)
+        new_body = body
+        new_body = re.sub(r"\bvisibility\s*:\s*hidden\s*;?", "visibility: visible;", new_body, flags=re.I)
+        new_body = re.sub(r"(?<![\w-])opacity\s*:\s*0\s*;?", "opacity: 1;", new_body, flags=re.I)
+        if new_body != body:
+            fixed += 1
+            return selector + "{" + new_body + "}"
+        return match.group(0)
+
+    document = re.sub(r"([^{}]+)\{([^{}]*)\}", _fix, document)
+    return document, fixed
+
+
+def is_scene_tag(tag: str) -> bool:
+    """判断一个标签是不是页面级 scene。
+
+    - class 里独立成词 `scene` 一定算；
+    - 模型常写成 class="clip gA gA-scene"，scene 只作为后缀出现，这时按语义判定：
+      带 data-sentence-ids（或 data-sentence-id）的 section 就是场景。
+    """
+    tokens = class_tokens(tag)
+    if "scene" in tokens:
+        return True
+    if not tag.lstrip().lower().startswith("<section"):
+        return False
+    return re.search(r'\bdata-sentence-ids?="[^"]+"', tag) is not None
+
+
 def scene_matches(document: str) -> list[re.Match[str]]:
-    """页面级 scene：class 里必须有独立成词的 scene，排除 gA-scene 这类前缀类名。"""
-    return [match for match in SCENE_TAG_RE.finditer(document) if "scene" in class_tokens(match.group(0))]
+    return [match for match in SCENE_TAG_RE.finditer(document) if is_scene_tag(match.group(0))]
 
 
 def scene_tags(document: str) -> list[str]:
@@ -585,72 +643,113 @@ def scale_scene_timings(document: str, factor: float) -> str:
 
 
 def align_scenes_to_caption_cues(document: str, cues: list[dict], duration: float) -> str:
-    """Anchor each scene transition to the first real speech cue it represents."""
+    """Anchor each sentence group to its real speech window.
+
+    取舍：句子之间跟字幕走（否则画面会整体落后语音 1–3 秒），句子内部保留模型写的
+    时长比例（那一屏想停久一点仍然有效）。旧的"全部按模型时长等比缩放"会让第一句
+    超长、第三句被压短，累积出 3 秒以上的漂移（2026-11-07 实测）。
+    """
     if not cues:
         return document
     matches = scene_matches(document)
     if not matches:
         return document
-    cue_ids = [str(cue.get("sentence_id") or f"s{index:02d}") for index, cue in enumerate(cues, 1)]
 
     def sentence_number(value: str):
         found = re.search(r"(\d+)", str(value or ""))
         return int(found.group(1)) if found else None
 
-    # 一句可能被切成多条字幕，这里只取该句的第一条作为场景锚点
-    first_cue_by_sentence: dict[int, int] = {}
-    for index, cue in enumerate(cues):
+    window_start: dict[int, float] = {}
+    for cue in cues:
         number = sentence_number(cue.get("sentence_id"))
-        if number is not None:
-            first_cue_by_sentence.setdefault(number, index)
-    total_sentences = max(first_cue_by_sentence) if first_cue_by_sentence else 1
+        start = float(cue.get("start") or 0.0)
+        if number is None:
+            continue
+        if number not in window_start or start < window_start[number]:
+            window_start[number] = start
+    if not window_start:
+        return document
 
-    scene_cue_indices: list[int] = []
-    for scene_index, match in enumerate(matches, 1):
-        tag = match.group(0)
+    ordered = sorted(window_start)
+    windows: dict[int, tuple[float, float]] = {}
+    for index, number in enumerate(ordered):
+        begin = max(0.0, window_start[number])
+        finish = window_start[ordered[index + 1]] if index + 1 < len(ordered) else duration
+        windows[number] = (begin, max(begin + 0.2, finish))
+
+    # 每个场景归到它绑定的句子；缺 id 的场景跟着上一个场景走
+    assignments: list[int] = []
+    fallback_number = ordered[0]
+    tags = [match.group(0) for match in matches]
+    for tag in tags:
         refs = re.search(r'\bdata-sentence-ids="([^"]+)"', tag)
         numbers = [sentence_number(item) for item in re.findall(r's\d+', refs.group(1), flags=re.I)] if refs else []
-        numbers = [number for number in numbers if number]
-        if not numbers:
-            scene_match = re.search(r'\bdata-scene="s(\d+)"', tag, flags=re.I)
-            if scene_match:
-                numbers = [int(scene_match.group(1))]
+        numbers = [number for number in numbers if number in windows]
         if numbers:
-            target = min(numbers)
-        else:
-            target = max(1, round((scene_index - 1) * (total_sentences - 1) / max(1, len(matches) - 1)) + 1)
-        index = first_cue_by_sentence.get(target)
-        if index is None:
-            index = min((scene_index - 1) * len(cues) // max(1, len(matches)), len(cues) - 1)
-        scene_cue_indices.append(index)
+            fallback_number = min(numbers)
+        assignments.append(fallback_number)
 
-    # 场景必须串行：后一场的开场不得早于前一场结束，且每场至少保留 0.6 秒
-    if len(cues) < len(matches):
-        # 场景比字幕多时，按总时长均分，避免把多余场景压成 0.6 秒的闪屏
-        starts = [duration * index / len(matches) for index in range(len(matches))]
-    else:
-        starts = [0.0]
-        for scene_index in range(1, len(matches)):
-            candidate = float(cues[scene_cue_indices[scene_index]]["start"])
-            starts.append(max(candidate, starts[-1] + 0.6))
-        for index in range(1, len(starts)):
-            starts[index] = max(starts[index], starts[index - 1] + 0.6)
-    for index in range(len(starts) - 1, -1, -1):
-        starts[index] = min(starts[index], duration - 0.6 * (len(matches) - index))
+    authored: list[float] = []
+    for tag in tags:
+        found = re.search(r'\bdata-duration="([0-9.]+)"', tag)
+        value = float(found.group(1)) if found else 0.0
+        authored.append(value if value > 0 else 3.0)
+
+    starts = [0.0] * len(matches)
+    lengths = [0.0] * len(matches)
+    cursor = 0.0
+    index = 0
+    first_group = True
+    while index < len(matches):
+        target = assignments[index]
+        group = [index]
+        index += 1
+        while index < len(matches) and assignments[index] == target:
+            group.append(index)
+            index += 1
+        window = windows.get(target)
+        if window is None:
+            for item in group:
+                starts[item] = cursor
+                lengths[item] = max(0.2, authored[item])
+                cursor += lengths[item]
+            first_group = False
+            continue
+        begin, finish = window
+        begin = 0.0 if first_group else max(begin, cursor)
+        span = max(0.12 * len(group), finish - begin)
+        total = sum(authored[item] for item in group)
+        for position, item in enumerate(group):
+            share = (authored[item] / total) if total > 0 else (1.0 / len(group))
+            length = max(0.12, span * share)
+            if position + 1 == len(group):
+                length = max(0.12, begin + span - cursor)
+            starts[item] = cursor
+            lengths[item] = length
+            cursor += length
+        first_group = False
+
+    if starts[-1] < duration:
+        lengths[-1] = max(0.2, duration - starts[-1])
 
     replacements: list[tuple[re.Match[str], str]] = []
     for scene_index, match in enumerate(matches):
-        cue_start_index = scene_cue_indices[scene_index]
-        start = starts[scene_index]
-        end = duration if scene_index + 1 == len(matches) else starts[scene_index + 1]
         tag = match.group(0)
         scene_name_match = re.search(r'\bdata-scene="([^"]+)"', tag)
-        scene_name = scene_name_match.group(1) if scene_name_match else f"{scene_index:02d}"
+        if scene_name_match:
+            scene_name = scene_name_match.group(1)
+        else:
+            id_match = re.search(r'\bid="([^"]+)"', tag)
+            if id_match and id_match.group(1).startswith("scene-"):
+                scene_name = id_match.group(1)[len("scene-"):]
+            else:
+                scene_name = f"{scene_index:02d}"
+        tag = set_attribute(tag, "data-scene", scene_name)
         tag = set_attribute(tag, "id", f"scene-{scene_name}")
         if not re.search(r'\bdata-sentence-ids="[^"]+"', tag):
-            tag = set_attribute(tag, "data-sentence-ids", cue_ids[cue_start_index])
-        tag = set_attribute(tag, "data-start", f"{start:.3f}")
-        tag = set_attribute(tag, "data-duration", f"{max(0.2, end - start):.3f}")
+            tag = set_attribute(tag, "data-sentence-ids", "s%02d" % assignments[scene_index])
+        tag = set_attribute(tag, "data-start", f"{starts[scene_index]:.3f}")
+        tag = set_attribute(tag, "data-duration", f"{max(0.12, lengths[scene_index]):.3f}")
         replacements.append((match, tag))
     for match, tag in reversed(replacements):
         document = document[:match.start()] + tag + document[match.end():]
@@ -890,15 +989,7 @@ STATE_CONTROLLER_JS = r"""
         var time=Math.max(0,Number(t)||0);
         var scenes=Array.prototype.slice.call(document.querySelectorAll('.scene.clip'));
         var captions=Array.prototype.slice.call(document.querySelectorAll('.caption'));
-        scenes.forEach(function(scene){
-          var start=Number(scene.getAttribute('data-start')||0);
-          var end=start+Number(scene.getAttribute('data-duration')||0);
-          var active=time>=start&&time<end;
-          scene.classList.toggle('is-active',active);
-          scene.classList.toggle('active',active);
-          scene.style.visibility=active?'visible':'hidden';
-          scene.style.opacity=active?'1':'0';
-        });
+        // 场景显隐归页面自己的驱动代码（由骨架/转场节点产出），本地不再插手。
         captions.forEach(function(cap){
           var start=Number(cap.getAttribute('data-start')||0);
           var end=start+Number(cap.getAttribute('data-duration')||0);
@@ -978,13 +1069,38 @@ SCENE_OFFSET_SCRIPT = """
   if (list.__sceneOffsetPatched) { return; }
   list.__sceneOffsetPatched = true;
   var originalPush = Array.prototype.push;
-  function sceneStartOf(selector){
-    if (typeof selector !== 'string') { return null; }
-    var element = null;
-    try { element = document.querySelector(selector); } catch (error) { return null; }
+  function targetElement(target){
+    // 动效节点可能传字符串选择器，也可能直接传 DOM 元素或元素数组（模型常写
+    // el('s04', '.gB-kicker') 这种查找助手）。只认字符串会让后两种拿不到场景起点，
+    // 所有动作都堆到 0 秒，后面的场景永远不动（2026-11-07 实测）。
+    if (!target) { return null; }
+    if (typeof target === 'string') {
+      try { return document.querySelector(target); } catch (error) { return null; }
+    }
+    if (target.nodeType === 1) { return target; }
+    if (typeof target.length === 'number') {
+      for (var i = 0; i < target.length; i++) {
+        var found = targetElement(target[i]);
+        if (found) { return found; }
+      }
+    }
+    return null;
+  }
+  function sceneOfTarget(target){
+    var element = targetElement(target);
     if (!element || !element.closest) { return null; }
-    var scene = element.closest('.scene');
+    return element.closest('.scene');
+  }
+  function sceneStartOf(target){
+    var scene = sceneOfTarget(target);
     return scene ? Number(scene.getAttribute('data-start') || 0) : null;
+  }
+  function sceneWindowOf(target){
+    var scene = sceneOfTarget(target);
+    if (!scene) { return null; }
+    var start = Number(scene.getAttribute('data-start') || 0);
+    var dur = Number(scene.getAttribute('data-duration') || 0);
+    return dur > 0 ? { start: start, dur: dur } : null;
   }
   function resolveTarget(selector){
     if (typeof selector !== 'string') { return selector; }
@@ -1046,7 +1162,16 @@ SCENE_OFFSET_SCRIPT = """
             if (typeof args[index] === 'number') { position = index; break; }
           }
           if (position === null) { args.push(start); }
-          else if (args[position] < start) { args[position] = args[position] + start; }
+          else {
+            if (args[position] < start) { args[position] = args[position] + start; }
+            // 动作不得越过本屏结束：模型常把时间写到 5–8 秒，而每屏只有 3–4 秒，
+            // 越界的动作会跑到后面几屏，表现为"标题在别的页上闪"或"这页没放完就跳"。
+            var win = sceneWindowOf(args[0]);
+            if (win) {
+              var limit = win.start + win.dur - 0.06;
+              if (args[position] > limit) { args[position] = Math.max(win.start, limit); }
+            }
+          }
         }
         return original.apply(timeline, args);
       };
@@ -1096,12 +1221,16 @@ def apply_chrome_overrides(document: str) -> str:
     return document + '\n' + CHROME_OVERRIDE_STYLE
 
 
+
+
 def install_scene_offset_runtime(document: str) -> str:
     """把每个 builder 里的相对动效时间加上所属场景的 data-start。
 
     模型的 at() 写的是场景内相对时间，但 GSAP 只有一条全局时间线；不加偏移，
     所有动画都会堆在 0 附近，后面的场景永远不会动。
     """
+    # 已存在时先移除旧块，保证脚本升级能生效（否则老项目永远用旧版本）
+    document = re.sub(r'<script id="scene-offset-runtime">[\s\S]*?</script>', '', document, count=1)
     if 'scene-offset-runtime' in document:
         return document
     if "</head>" in document:
@@ -1154,8 +1283,112 @@ def ensure_caption_container(document: str) -> str:
     return document + container
 
 
-def rewrite_html(path: Path, cues: list[dict], target_duration: float, transcript_path: Path, avatar_required: bool = True) -> None:
-    document = ensure_runtime_scripts(path.read_text(encoding="utf-8"))
+CUE_RUNTIME_MARKER = 'id="cue-runtime"'
+
+
+def normalize_cue_text(value) -> str:
+    return re.sub(r"[\s，。！？、；：“”‘’（）()《》…—,.!?;:]+", "", str(value or ""))
+
+
+def install_cue_times(document: str, cues: list[dict], entries: list[dict]) -> str:
+    """把词级/句级时间码写进页面，供动效按"说到哪个词"触发。
+
+    动效节点在 Dify 里运行时还没有 TTS，只能猜 at(秒)；同步阶段已经有真实时间码。
+    这里存全片字幕行和每屏窗口，动效脚本用 cue('s04','关键词', 1.2) 取该词相对本屏的秒数；
+    关键词跨屏也能算（先按绝对时间定位，再减本屏起点，越界才退回默认值）。
+    """
+    document = re.sub(r'<script id="cue-runtime">[\s\S]*?</script>', '', document, count=1)
+
+    windows: dict[str, list[float]] = {}
+    for match in scene_matches(document):
+        tag = match.group(0)
+        name = re.search(r'\bdata-scene="([^"]+)"', tag)
+        start = re.search(r'\bdata-start="([0-9.]+)"', tag)
+        dur = re.search(r'\bdata-duration="([0-9.]+)"', tag)
+        if name and start and dur:
+            windows[name.group(1)] = [round(float(start.group(1)), 3), round(float(dur.group(1)), 3)]
+    if not windows:
+        return document
+
+    lines: list[list] = []
+    for match in re.finditer(r'<div\b[^>]*\bclass="[^"]*\bcaption\b[^"]*"[^>]*>([^<]*)</div>', document, re.I):
+        tag = match.group(0)
+        start_match = re.search(r'\bdata-start="([0-9.]+)"', tag)
+        dur_match = re.search(r'\bdata-duration="([0-9.]+)"', tag)
+        if not start_match or not dur_match:
+            continue
+        text = normalize_cue_text(match.group(1))
+        if len(text) < 2:
+            continue
+        lines.append([text, round(float(start_match.group(1)), 3), round(float(dur_match.group(1)), 3)])
+
+    words: dict[str, list[list]] = {}
+    for item in entries or []:
+        if not isinstance(item, dict):
+            continue
+        text = normalize_cue_text(item.get("text"))
+        if not text or item.get("start") is None:
+            continue
+        begin = float(item.get("start") or 0.0)
+        for name, (start, dur) in windows.items():
+            if start - 0.001 <= begin < start + dur - 0.0005:
+                words.setdefault(name, []).append([text, round(begin - start, 3)])
+                break
+
+    if not lines and not words:
+        return document
+
+    payload_windows = json.dumps(windows, ensure_ascii=False, separators=(",", ":"))
+    payload_lines = json.dumps(lines, ensure_ascii=False, separators=(",", ":"))
+    payload_words = json.dumps(words, ensure_ascii=False, separators=(",", ":"))
+    script = (
+        '<script id="cue-runtime">\n'
+        'window.__cueWindows = ' + payload_windows + ';\n'
+        'window.__cueLines = ' + payload_lines + ';\n'
+        'window.__cueWords = ' + payload_words + ';\n'
+        'window.__cue = function(scene, phrase, fallback){\n'
+        '  var norm = function(value){ return String(value || "").replace(/[\\s，。！？、；：“”‘’（）()《》…—,.!?;:]+/g, ""); };\n'
+        '  var want = norm(phrase);\n'
+        '  var fb = (typeof fallback === "number") ? fallback : 0.3;\n'
+        '  if (!want) { return fb; }\n'
+        '  var win = (window.__cueWindows || {})[scene];\n'
+        '  var sceneStart = win ? win[0] : 0;\n'
+        '  var sceneDur = win ? win[1] : 9999;\n'
+        '  var pick = function(rows, relative){\n'
+        '    for (var i = 0; i < rows.length; i++) {\n'
+        '      var text = rows[i][0] || "";\n'
+        '      var hit = text.indexOf(want);\n'
+        '      if (hit >= 0) { return relative(rows[i], hit); }\n'
+        '    }\n'
+        '    var head = want.slice(0, 4);\n'
+        '    if (head.length >= 2) {\n'
+        '      for (var j = 0; j < rows.length; j++) {\n'
+        '        var hit2 = (rows[j][0] || "").indexOf(head);\n'
+        '        if (hit2 >= 0) { return relative(rows[j], hit2); }\n'
+        '      }\n'
+        '    }\n'
+        '    return null;\n'
+        '  };\n'
+        '  var fromLine = pick(window.__cueLines || [], function(row, hit){\n'
+        '    return row[1] + row[2] * (hit / Math.max(1, row[0].length)) - sceneStart;\n'
+        '  });\n'
+        '  if (fromLine !== null) { return Math.min(Math.max(fromLine, 0.02), Math.max(0.05, sceneDur - 0.05)); }\n'
+        '  var fromWord = pick((window.__cueWords || {})[scene] || [], function(row){ return row[1]; });\n'
+        '  if (fromWord !== null) { return Math.min(Math.max(fromWord, 0.02), Math.max(0.05, sceneDur - 0.05)); }\n'
+        '  return fb;\n'
+        '};\n'
+        '</script>'
+    )
+    if "</head>" in document:
+        return document.replace("</head>", script + "\n</head>", 1)
+    return document + "\n" + script
+
+
+def rewrite_html(path: Path, cues: list[dict], target_duration: float, transcript_path: Path, avatar_required: bool = True, word_entries: list[dict] | None = None) -> None:
+    document, unhidden = unhide_scene_rules(path.read_text(encoding="utf-8"))
+    if unhidden:
+        print(f"已修复 {unhidden} 条隐藏 .scene 的样式规则（场景显隐交给时间轴）")
+    document = ensure_runtime_scripts(document)
     document = install_scene_offset_runtime(document)
     document = ensure_media_placeholders(document)
     document = activate_media_placeholders(document, black_frame=not avatar_required)
@@ -1189,6 +1422,10 @@ def rewrite_html(path: Path, cues: list[dict], target_duration: float, transcrip
     document = align_scenes_to_caption_cues(document, cues, target_duration)
     # 第二遍保证幂等：第一遍可能刚补上 data-sentence-ids，再对齐一次才稳定
     document = align_scenes_to_caption_cues(document, cues, target_duration)
+    document = install_cue_times(document, cues, list(word_entries or []))
+    # 旧版本会往 HTML 里注入 scene-window-runtime（本地硬切场景显隐）；
+    # 现在显隐归页面自己，这里把历史注入的残留清掉，避免和新驱动打架。
+    document = re.sub(r'<script id="scene-window-runtime">[\s\S]*?</script>', '', document, count=1)
     print(f"scene_tags={len(scene_matches(document))} caption_cues={len(cues)} scene_span={scene_timeline_span(document):.3f} timeline_scale={timeline_factor:.4f}")
     document = set_timeline_scale(document, timeline_factor, target_duration)
     document = set_role_duration(document, "audio", "voiceover", target_duration)
@@ -1290,6 +1527,7 @@ def main() -> None:
         candidates = sorted(Path("字幕").glob("HeyGen转写.*")) + sorted(Path("字幕").glob("口播时间码.json"))
         transcript = candidates[0] if candidates else None
     fallback = False
+    entries: list[dict] = []
     if transcript is None and args.auto_transcribe and not handwritten_cues:
         node, cli = resolve_hyperframes()
         transcript = Path("字幕/口播.srt")
@@ -1339,6 +1577,7 @@ def main() -> None:
         effective_duration,
         Path("字幕/HTML字幕时间码.json" if fallback else "字幕/口播时间码.json"),
         avatar_required=not args.black_frame,
+        word_entries=entries,
     )
     config_path = Path("hyperframes.json")
     if config_path.exists():

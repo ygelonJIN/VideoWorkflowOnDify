@@ -3,11 +3,11 @@ set -euo pipefail
 
 BASE_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECTS_ROOT="$(cd "$BASE_DIR/../.." && pwd)"
-if [ "$#" -gt 0 ]; then
+if [ "$#" -gt 0 ] && [ "${1#-}" = "$1" ]; then
   NAME="$1"
   shift
 else
-  NAME="dify-output-$(date +%Y%m%d-%H%M%S)"
+  NAME="$(date +%Y%m%d-%H%M)"
 fi
 
 echo "同一条命令自动识别：仅 HTML → 预览；无数字人口播 → 本地 TTS/提供音频并生成 MP4；全合一 → HeyGen 并生成 MP4。"

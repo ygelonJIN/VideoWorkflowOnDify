@@ -51,6 +51,7 @@ bash /Volumes/TUF ESD-T1A Media/视频工作流/HTML视频项目/workflow_runtim
 | `Dify工作流/*.yml` 中的 Code 节点 | 对应 `保留资料/工作流代码节点/*.py` |
 | 输出变量、字段或 JSON 结构 | `Dify工作流/使用说明.md`、`经验文档/使用说明.md`、`workflow_runtime/tools/` |
 | 媒体、字幕、布局或渲染规则 | `workflow_runtime/`、`保留资料/项目文档/视频需求与质量标准.md` |
+| 图像计划、生图 prompt 规则、图片契约 | `workflow_runtime/scripts/generate_images.py`、`workflow_runtime/tools/build_black_frame_project.py`、`保留资料/项目文档/视频需求与质量标准.md` |
 | 新增或重命名节点 | `保留资料/README.md` 和相关说明 |
 | 本地命令或目录职责 | 根目录 `AGENTS.md`、`经验文档/使用说明.md` |
 
@@ -59,7 +60,8 @@ bash /Volumes/TUF ESD-T1A Media/视频工作流/HTML视频项目/workflow_runtim
 ### 视频制作
 
 - 不调用 HeyGen API，不读取或输出 API Key，除非用户明确要求生成数字人视频。`黑帧口播` 工作流即使保留口播，也不得调用 HeyGen。
-- 静态 PNG 不能直接当作完整动效镜头。每个中段镜头必须包含语义相关元素级动画。
+- **每一屏的主视觉是一张真实照片**（GPT Image API 生成，`{{IMG:图片id}}` 占位，本地替换）。HTML 只做文字、动效、背景和排版元素；不画插画、示意图、数据图表、三维物体。
+- 静态 PNG 不能直接当作完整动效镜头。每个中段镜头必须包含语义相关元素级动画（照片推拉/遮罩揭示也算）。
 - 动画必须由语音内容或明确时间线驱动，不能只做整图缩放、循环呼吸或无意义漂移。
 - 产品 UI 使用可复用高保真模板组件，通过变量改变行业、数据和流程；示例数据标记为"场景演示"，不得冒充真实产品截图。
 - 信息逐项入场、数字递增、路径推进、局部焦点和数据状态变化优先于装饰性动画。

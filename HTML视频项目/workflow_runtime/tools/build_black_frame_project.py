@@ -12,6 +12,7 @@ import urllib.error
 import urllib.request
 import subprocess
 import sys
+import tempfile
 import time
 from pathlib import Path
 
@@ -36,9 +37,41 @@ def extract_package(data: dict) -> dict:
     return package if isinstance(package, dict) else data
 
 
+def repair_scene_anchors(html: str) -> tuple[str, list[str]]:
+    """把 #s01 这类场景锚点改写成 [data-scene="s01"]。
+
+    本地同步会把 section 的 id 改写成 scene-<id>，模型若用 #s01 写选择器，
+    动效会全部命中 0 个元素，成片是静帧。这里与 Dify 的 H03 保持同一套兜底逻辑。
+    """
+    scene_ids: list[str] = []
+    for match in re.finditer(r'data-scene=["\']([^"\']+)["\']', html):
+        if match.group(1) not in scene_ids:
+            scene_ids.append(match.group(1))
+    fixed: list[str] = []
+    for sid in scene_ids:
+        if re.search(r'(?<![\w-])id=["\']' + re.escape(sid) + r'["\']', html):
+            continue
+        pattern = re.compile(r"#" + re.escape(sid) + r"(?![\w-])")
+        if not pattern.search(html):
+            continue
+
+        def _swap(match, _sid=sid):
+            head = match.string[:match.start()]
+            outer = '"' if head.rfind('"') > head.rfind("'") else "'"
+            inner = "'" if outer == '"' else '"'
+            return "[data-scene=%s%s%s]" % (inner, _sid, inner)
+
+        html = pattern.sub(_swap, html)
+        fixed.append(sid)
+    return html, fixed
+
+
 def normalize_input(data: dict) -> dict:
     package = extract_package(data)
     html = clean_html_document(package.get("html_document", package.get("html", "")))
+    html, anchored = repair_scene_anchors(html)
+    if anchored:
+        print("已修正动效场景锚点 #id → [data-scene=...]：" + "、".join(anchored))
     voiceover = str(package.get("voiceover_script", package.get("approved_voiceover_script", ""))).strip()
     if "<!doctype html>" not in html.lower():
         raise SystemExit("Dify 输出缺少完整 html_document")
@@ -52,6 +85,7 @@ def normalize_input(data: dict) -> dict:
     tts_config = raw_tts if isinstance(raw_tts, dict) else {}
     return {
         "html_document": html,
+        "image_plan": extract_image_plan(data, package),
         "voiceover_script": voiceover,
         "render_mode": "black_frame",
         "tts_config": {
@@ -61,6 +95,130 @@ def normalize_input(data: dict) -> dict:
             "voice": str(tts_config.get("voice", "")).strip(),
         },
     }
+
+
+IMAGE_PLACEHOLDER = re.compile(r"\{\{IMG:([A-Za-z0-9_-]+)\}\}")
+
+
+def extract_image_plan(raw: dict, package: dict) -> dict:
+    """图像计划可能来自 H01P 的透传字段，也可能被包成字符串。"""
+    candidates = [
+        raw.get("image_plan_json") if isinstance(raw, dict) else None,
+        package.get("image_plan_json"),
+        raw.get("image_plan") if isinstance(raw, dict) else None,
+        package.get("image_plan"),
+    ]
+    for candidate in candidates:
+        if isinstance(candidate, dict):
+            return candidate
+        if isinstance(candidate, str) and candidate.strip():
+            try:
+                parsed = json.loads(candidate)
+            except Exception:
+                continue
+            if isinstance(parsed, dict):
+                return parsed
+    return {}
+
+
+def placeholder_ids(html: str) -> list[str]:
+    return sorted(set(IMAGE_PLACEHOLDER.findall(html)))
+
+
+def generate_images(project_dir: Path, plan_path: Path, args) -> None:
+    script = RUNTIME_DIR / "scripts" / "generate_images.py"
+    if not script.exists():
+        raise SystemExit("缺少 generate_images.py：" + str(script))
+    command = [
+        sys.executable, str(script),
+        "--plan", str(plan_path),
+        "--out", str(project_dir / "媒体" / "图片"),
+    ]
+    if args.image_dry_run:
+        command.append("--dry-run")
+    if args.image_only_ids:
+        command.extend(["--only", args.image_only_ids])
+    print("开始生成图像：" + str(plan_path))
+    subprocess.run(command, check=True)
+
+
+IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".webp"}
+
+
+def image_mapping(project_dir: Path, image_ids: list[str]) -> dict[str, Path]:
+    """按「已按 id 命名的优先 → 其余按修改时间从早到晚」对号，不改用户文件名。"""
+    image_dir = project_dir / "媒体" / "图片"
+    if not image_dir.exists():
+        return {}
+    files = [
+        item for item in image_dir.iterdir()
+        if item.is_file() and item.suffix.lower() in IMAGE_EXTS and not item.name.startswith("_")
+    ]
+    by_id = {item.stem: item for item in files if item.stem in image_ids}
+    unnamed = sorted(
+        [item for item in files if item.stem not in image_ids],
+        key=lambda item: (item.stat().st_mtime, item.name),
+    )
+    mapping: dict[str, Path] = {}
+    cursor = 0
+    for image_id in image_ids:
+        if image_id in by_id:
+            mapping[image_id] = by_id[image_id]
+        elif cursor < len(unnamed):
+            mapping[image_id] = unnamed[cursor]
+            cursor += 1
+    return mapping
+
+
+def replace_image_placeholders(html: str, project_dir: Path, image_ids: list[str], allow_missing: bool) -> str:
+    """把 {{IMG:id}} 换成真实文件路径；文件保持原名，只做映射。"""
+    mapping = image_mapping(project_dir, image_ids)
+    missing: list[str] = []
+    used: list[str] = []
+
+    def _swap(match):
+        image_id = match.group(1)
+        used.append(image_id)
+        target = mapping.get(image_id)
+        if target is not None and target.stat().st_size > 10000:
+            safe_name = image_id + target.suffix.lower()
+            if target.name == safe_name:
+                return "媒体/图片/" + target.name
+            # 即梦下载名带中文和标点，HTML 里引用会出问题；副本放 _resolved/，主目录保持干净
+            safe_dir = target.parent / "_resolved"
+            safe_dir.mkdir(parents=True, exist_ok=True)
+            safe_path = safe_dir / safe_name
+            if not safe_path.exists() or safe_path.stat().st_mtime < target.stat().st_mtime:
+                shutil.copy2(target, safe_path)
+            return "媒体/图片/_resolved/" + safe_name
+        missing.append(image_id)
+        return "媒体/图片/" + image_id + ".png"
+
+    html = IMAGE_PLACEHOLDER.sub(_swap, html)
+    if used:
+        print("图片引用 %d 处，涉及 %d 张：%s" % (len(used), len(set(used)), "、".join(sorted(set(used))[:12])))
+    if missing:
+        message = "这些图片没有生成，画面会缺图：" + "、".join(sorted(set(missing)))
+        if not allow_missing:
+            raise SystemExit(message + "（先跑生图，或加 --allow-missing-images 强行出片）")
+        print("警告：" + message)
+    return html
+
+
+def check_scene_images(html: str) -> list[str]:
+    """每一屏都必须有图片引用；返回没有图的 scene id。"""
+    without: list[str] = []
+    for match in re.finditer(r"<(?:section|div)\b[^>]*>", html, flags=re.I):
+        head = match.group(0)
+        cls = re.search(r'class=["\']([^"\']*)["\']', head)
+        if not cls or "scene" not in cls.group(1).split():
+            continue
+        sid = re.search(r'data-scene=["\']([^"\']+)["\']', head)
+        end = html.find("</section>", match.end())
+        inner = html[match.end():end if end >= 0 else len(html)]
+        if "媒体/图片/" not in inner:
+            without.append(sid.group(1) if sid else "?")
+    return without
 
 
 def generate_mimo_voice(script: str, output: Path, model: str, voice: str, base_url: str) -> None:
@@ -183,6 +341,8 @@ def generate_background_music(project_dir: Path) -> None:
 
 
 def main() -> None:
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(line_buffering=True)
     parser = argparse.ArgumentParser(description="处理黑帧口播 Dify 输出：生成口播并渲染 MP4")
     parser.add_argument("project_name", type=valid_project_name)
     parser.add_argument("--input-file", type=Path, required=True)
@@ -193,8 +353,18 @@ def main() -> None:
     parser.add_argument("--tts-provider", choices=("mimo", "macos", "openai-compatible"), default=None)
     parser.add_argument("--tts-base-url", default=None, help="MiMo/OpenAI-compatible API 基础地址；默认读取 Dify 配置或 https://api.xiaomimimo.com/v1")
     parser.add_argument("--tts-model", default=None, help="TTS API 模型名；默认读取 Dify 配置或 mimo-v2.5-tts")
+    parser.add_argument("--no-open", action="store_true", help="准备完成后不自动打开图片目录")
+    parser.add_argument("--prepare", action="store_true", help="只建项目、落图像计划、出提示词包，不出图不渲染（手动出图的第一步）")
+    parser.add_argument("--skip-images", action="store_true", help="跳过生图，直接用 媒体/图片/ 里已有的文件")
+    parser.add_argument("--images-only", action="store_true", help="只生成图片，不生成口播、不渲染")
+    parser.add_argument("--allow-missing-images", action="store_true", help="缺图也继续渲染（只用于排查版面）")
+    parser.add_argument("--image-dry-run", action="store_true", help="用占位图跑通链路，不调用生图 API")
+    parser.add_argument("--image-only-ids", default="", help="只生成这些图片 id，逗号分隔，用于先看一张效果")
     parser.add_argument("--skip-render", action="store_true")
     args = parser.parse_args()
+    if args.prepare:
+        args.images_only = True
+        args.skip_images = True
 
     raw = json.loads(args.input_file.read_text(encoding="utf-8"))
     data = normalize_input(raw)
@@ -222,11 +392,19 @@ def main() -> None:
         return
 
     backup_dir = None
+    preserved_media = None
     if project_dir.exists():
         final_video = project_dir / "成片" / "最终视频.mp4"
         if not final_video.exists():
+            # 未完成项目重建时保住 媒体/：已经花钱生成的图片和口播不该被删掉
+            media_dir = project_dir / "媒体"
+            if media_dir.exists() and any(media_dir.iterdir()):
+                preserved_media = Path(tempfile.mkdtemp(prefix="blackframe-media-")) / "媒体"
+                shutil.move(str(media_dir), str(preserved_media))
+                print("未完成项目已清理，媒体目录临时保留（图片/口播不会被重新生成）")
+            else:
+                print("未完成项目已清理，不保留备份")
             shutil.rmtree(project_dir)
-            print("未完成项目已清理，不保留备份")
         else:
             backup_root = BASE / "项目备份"
             backup_root.mkdir(parents=True, exist_ok=True)
@@ -241,15 +419,62 @@ def main() -> None:
 
     try:
         (project_dir / "媒体").mkdir(parents=True, exist_ok=True)
+        if preserved_media and preserved_media.exists():
+            for item in sorted(preserved_media.iterdir()):
+                target = project_dir / "媒体" / item.name
+                if target.exists():
+                    continue
+                shutil.move(str(item), str(target))
+            shutil.rmtree(preserved_media.parent, ignore_errors=True)
+            print("已恢复 媒体/ 里的图片与音频")
         (project_dir / "成片").mkdir(parents=True, exist_ok=True)
         (project_dir / "字幕").mkdir(parents=True, exist_ok=True)
+        (project_dir / "媒体" / "图片").mkdir(parents=True, exist_ok=True)
         shutil.copy2(RUNTIME_DIR / "hyperframes.json", project_dir / "hyperframes.json")
         shutil.copy2(RUNTIME_DIR / "render.sh", project_dir / "render.sh")
         shutil.copytree(RUNTIME_DIR / "scripts", project_dir / "脚本")
         shutil.copytree(RUNTIME_DIR / "assets", project_dir / "素材")
         shutil.copy2(RUNTIME_DIR / "docs" / "视频说明.md", project_dir / "视频说明.md")
         shutil.copy2(RUNTIME_DIR / "docs" / "项目说明.md", project_dir / "项目说明.md")
-        (project_dir / "index.html").write_text(data["html_document"], encoding="utf-8")
+
+        image_plan = data.get("image_plan") or {}
+        plan_path = project_dir / "媒体" / "图片计划.json"
+        if image_plan:
+            plan_path.write_text(json.dumps(image_plan, ensure_ascii=False, indent=2), encoding="utf-8")
+            images = image_plan.get("images") if isinstance(image_plan.get("images"), list) else []
+            print("图像计划：%d 张，已写入 %s" % (len(images), plan_path))
+        wanted = placeholder_ids(data["html_document"])
+        if wanted:
+            if not image_plan:
+                raise SystemExit("HTML 里有 %d 个图片占位，但 Dify 输出没有 image_plan_json：H01P 没产出图像计划，重跑 Dify" % len(wanted))
+            if not args.skip_images:
+                generate_images(project_dir, plan_path, args)
+        else:
+            print("警告：HTML 里没有任何 {{IMG:...}} 占位，画面仍由 HTML 图形承担（旧版输出）")
+        if args.images_only:
+            if plan_path.exists():
+                subprocess.run([
+                    sys.executable, str(RUNTIME_DIR / "scripts" / "generate_images.py"),
+                    "--plan", str(plan_path),
+                    "--sheet", str(project_dir / "媒体" / "出图清单.html"),
+                ], check=False, cwd=str(project_dir))
+            if args.skip_images:
+                image_dir = project_dir / "媒体" / "图片"
+                print("项目已准备好。提示词在 媒体/出图/，图片放进 " + str(image_dir))
+                print("放好后重跑同一条命令（去掉 --prepare），加 --skip-images 合并出片。")
+                if sys.platform == "darwin" and not args.no_open:
+                    subprocess.run(["open", str(image_dir)], check=False)
+            else:
+                print("图片已生成，跳过口播与渲染：" + str(project_dir / "媒体" / "图片"))
+            return
+        image_ids = [str(item.get("id")) for item in (image_plan.get("images") or []) if isinstance(item, dict) and item.get("id")]
+        if not image_ids:
+            image_ids = wanted
+        html_final = replace_image_placeholders(data["html_document"], project_dir, image_ids, args.allow_missing_images)
+        no_image_scenes = check_scene_images(html_final)
+        if no_image_scenes:
+            print("警告：这些场景没有图片，画面只剩文字：" + "、".join(no_image_scenes[:10]))
+        (project_dir / "index.html").write_text(html_final, encoding="utf-8")
         voice_path = project_dir / "媒体" / "口播.mp3"
         (project_dir / "口播文案.txt").write_text(data["voiceover_script"] + "\n", encoding="utf-8")
         if args.voice_file:
@@ -279,7 +504,8 @@ def main() -> None:
         ascii_assets.mkdir(parents=True, exist_ok=True)
         shutil.copy2(voice_path, ascii_media / "voice.mp3")
         shutil.copy2(project_dir / "媒体" / "背景音乐.mp3", ascii_media / "bgm.mp3")
-        shutil.copy2(RUNTIME_DIR / "assets" / "vendor" / "gsap.min.js", ascii_assets / "gsap.min.js")
+        for _asset in sorted((RUNTIME_DIR / "assets" / "vendor").glob("*.js")):
+            shutil.copy2(_asset, ascii_assets / _asset.name)
         log_lines: list[str] = []
         proc = subprocess.Popen(
             ["bash", str(project_dir / "render.sh")],

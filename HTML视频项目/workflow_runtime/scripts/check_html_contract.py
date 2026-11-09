@@ -43,6 +43,36 @@ def main() -> None:
         errors.append("缺少时间线驱动的 GSAP from/fromTo/to/set 动作调用")
     if not re.search(r'window\.__timelines', doc):
         errors.append("缺少 window.__timelines 注册的可寻址时间线")
+    # 动效选择器全部命中 0 个元素时，成片是静帧；静态解析，和 H03 的 unmatched 同一套口径。
+    motion_blocking = []
+    _selectors = []
+    for _call in re.finditer(r"\b(?:master|timeline)\.(?:from|fromTo|to|set)\s*\(([\s\S]*?)(?:,\s*\{|,\s*at\(|\)\s*;?\s*$)", doc):
+        _pieces = re.findall(r"""(['"])((?:(?!\1).)+)\1""", _call.group(1))
+        _joined = "".join(_piece for _q, _piece in _pieces)
+        if _joined:
+            _selectors.append(_joined)
+    if _selectors:
+        def _resolves(selector):
+            tokens = re.findall(r'\[data-[\w-]+="[^"]*"\]|#[\w-]+|\.[\w-]+', selector)
+            if not tokens:
+                return False
+            for token in tokens:
+                if token.startswith("["):
+                    if token not in doc:
+                        return False
+                elif token.startswith("#"):
+                    if not re.search(r"(?<![\w-])id=[\"']" + re.escape(token[1:]) + r"[\"']", doc):
+                        return False
+                elif not re.search(r'class="[^"]*\b' + re.escape(token[1:]) + r'\b', doc):
+                    return False
+            return True
+        # 有 canvas/three 场景时，动效由 hf-seek 里的时间函数驱动，DOM 选择器不适用，跳过这条门禁
+        if "hf-seek" not in doc:
+            _resolved = sum(1 for _sel in _selectors if _resolves(_sel))
+            if _resolved == 0:
+                motion_blocking.append("动效选择器 %d 个全部命中 0 个元素，成片会是静帧" % len(_selectors))
+            elif _resolved < len(_selectors) * 0.6:
+                motion_blocking.append("动效选择器只有 %d/%d 能命中元素，动效大面积失效" % (_resolved, len(_selectors)))
     if black_frame:
         if 'data-render-mode="black-frame"' not in doc:
             errors.append("缺少黑帧模式标记")
@@ -71,9 +101,20 @@ def main() -> None:
         errors.append("缺少 scene 时间片段")
     root_duration_match = re.search(r'\bdata-duration="([0-9.]+)"', doc)
     root_duration = float(root_duration_match.group(1)) if root_duration_match else 0.0
-    scene_tags = re.findall(r'<(?:section|div)\b(?=[^>]*class=["\'][^"\']*\bscene\b)[^>]*>', doc, flags=re.I)
-    if any(not re.search(r'\bdata-sentence-ids="[^"]+"', tag) for tag in scene_tags):
-        errors.append("每个 scene 必须保留 data-sentence-ids 句子锚点")
+    scene_tags = re.findall(r'<section\b(?=[^>]*class=["\'][^"\']*\bscene\b)[^>]*>', doc, flags=re.I)
+    structure_blocking = []
+    # 场景显隐已交还给页面自己驱动（本地不再注入 scene-window-runtime），
+    # 页面没写驱动的话所有 scene 会同时叠在画布上，必须拦。
+    if len(scene_tags) >= 2:
+        _scripts = "\n".join(re.findall(r'<script\b[^>]*>([\s\S]*?)</script>', doc, flags=re.I))
+        if not ("data-start" in _scripts and re.search(r'visibility|opacity|clip-path|clipPath|display|translate|scale', _scripts)):
+            structure_blocking.append("页面没有场景显隐驱动（需按 data-start/data-duration 自己切可见性，本地已不兜底）")
+    missing_anchor = [tag for tag in scene_tags if not re.search(r'\bdata-sentence-ids="[^"]+"', tag)]
+    if missing_anchor:
+        structure_blocking.append("有 %d 个 scene 缺 data-sentence-ids 句子锚点（字幕无法对时）" % len(missing_anchor))
+    missing_scene_id = [tag for tag in scene_tags if not re.search(r'\bdata-scene="[^"]+"', tag)]
+    if missing_scene_id:
+        structure_blocking.append("有 %d 个 scene 缺 data-scene（动效与场景判定会错位）" % len(missing_scene_id))
     if not re.search(r'class=["\'][^"\']*\bcaption\b[^"\']*["\'][^>]*data-sentence-id=', doc, re.I):
         errors.append("字幕必须保留 data-sentence-id 句子锚点")
     scene_end = 0.0
@@ -136,7 +177,14 @@ def main() -> None:
             )
 
     # ---- 结构完整性：残缺 HTML（截断、标签没闭合、丢场景）不放行 ----
-    blocking: list[str] = []
+    blocking: list[str] = list(motion_blocking) + list(structure_blocking)
+    # canvas：固定 1080×1920 backing，且不能按视口尺寸改（渲染时会被缩到 338×600，画面糊掉）
+    for canvas_tag in re.findall(r"<canvas\b[^>]*>", doc, re.I):
+        if not (re.search(r'width=["\']1080["\']', canvas_tag) and re.search(r'height=["\']1920["\']', canvas_tag)):
+            blocking.append('canvas 必须固定 width="1080" height="1920"，否则分辨率被视口缩放压扁')
+            break
+    if re.search(r"[A-Za-z_$][\w$]*\.width\s*=\s*Math\.round\(", doc) and "getBoundingClientRect" in doc:
+        blocking.append("canvas 不要按 getBoundingClientRect 改尺寸（渲染时被缩放，画面糊且元素错位）")
     if "</html>" not in doc.lower():
         blocking.append("HTML 结尾不完整（缺少 </html>），产物可能被截断")
     for tag in ("style", "script"):
@@ -164,6 +212,52 @@ def main() -> None:
         blocking.append("有 %d 句口播没有对应场景：%s" % (len(uncovered), "、".join(uncovered[:8])))
     if not re.search(r'\b(?:master|timeline)\.(?:from|fromTo|to|set)\s*\(|\bgsap\.set\s*\(', doc):
         blocking.append("HTML 里没有任何 GSAP 动作，成片会是静止的")
+
+    # ---- 转场把下一屏图片「动画到」opacity 0：那一屏会永远没有图 ----
+    # 只看目标对象（第二个参数）；from 是 0、to 是 1 是正常的淡入。
+    broken_transitions = []
+    for match in re.finditer(
+        r"fromTo\(\s*([A-Za-z_$][\w$]*)\s*,\s*\{[^{}]*\}\s*,\s*\{([^{}]*)\}",
+        doc,
+        re.S,
+    ):
+        name, target = match.group(1), match.group(2)
+        if not name.lower().startswith("to"):
+            continue
+        if re.search(r"opacity\s*:\s*0(?![.\d])", target):
+            broken_transitions.append(name)
+    if broken_transitions:
+        blocking.append(
+            "转场把下一屏图片「动画到」opacity: 0（%s），转场后那一屏永远没有图：把目标改成 opacity: 1"
+            % "、".join(sorted(set(broken_transitions))[:4])
+        )
+
+    # ---- 图片契约：每一屏的主视觉必须是真实照片 ----
+    leftover_placeholders = re.findall(r"\{\{IMG:[A-Za-z0-9_-]+\}\}", doc)
+    if leftover_placeholders:
+        blocking.append("还有 %d 个 {{IMG:...}} 占位没替换成真实文件（生图没跑，或占位替换没执行）" % len(leftover_placeholders))
+    image_refs = sorted(set(re.findall(r'媒体/图片/((?:[^"/\\]+/)*[^"/\\]+?)\.(?:png|jpe?g|webp)', doc)))
+    if not image_refs:
+        errors.append("HTML 里没有任何 媒体/图片/ 引用：主视觉仍是 HTML 画的图形，不是真实照片")
+    else:
+        base_dir = args.html.resolve().parent
+        missing_files = [name for name in image_refs
+                         if not any((base_dir / "媒体" / "图片" / (name + ext)).exists()
+                                    for ext in (".png", ".jpg", ".jpeg", ".webp"))]
+        if missing_files:
+            blocking.append("图片文件不存在：" + "、".join(missing_files[:8]))
+    scenes_without_image = []
+    for tag in re.finditer(r"<section\b(?=[^>]*class=[\"\'][^\"\']*\bscene\b)[^>]*>", doc, flags=re.I):
+        head = tag.group(0)
+        sid_match = re.search(r'data-scene=["\']([^"\']+)["\']', head)
+        end = doc.find("</section>", tag.end())
+        inner = doc[tag.end():end if end >= 0 else len(doc)]
+        if "媒体/图片/" not in inner:
+            scenes_without_image.append(sid_match.group(1) if sid_match else "?")
+    if scenes_without_image:
+        blocking.append("这些场景没有图片（画面只剩文字和背景）：" + "、".join(scenes_without_image[:8]))
+    if re.search(r"<canvas\b", doc, re.I) and image_refs:
+        errors.append("HTML 里同时有 canvas 和照片：具象视觉归照片，canvas 只留背景氛围")
 
     body = doc[doc.lower().find("<body"):] if "<body" in doc.lower() else doc
     text = re.sub(r"<script.*?</script>|<style.*?</style>", " ", body, flags=re.I | re.S)

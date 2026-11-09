@@ -1,24 +1,51 @@
-def main(brief_json: str, draft_script_json: str, storyboard_json: str, motion_plan_json: str, review_action: str, tts_provider: str, tts_base_url: str, tts_model: str, tts_voice: str) -> dict:
+def main(brief_json: str, draft_script_json: str, storyboard_json: str, motion_plan_json: str, compliance_json: str, review_action: str, tts_provider: str, tts_base_url: str, tts_model: str, tts_voice: str) -> dict:
     import hashlib
     import json
+
+    def fail(message):
+        return {
+            "approved_package_json": "{}",
+            "approved_voiceover_script": "",
+            "approval_status": "failed",
+            "package_error": message,
+        }
 
     def parse(raw, label):
         try:
             data = json.loads(raw or "")
-        except Exception:
-            raise ValueError(label + " 不是合法 JSON")
+        except Exception as exc:
+            raise ValueError(label + " 不是合法 JSON（" + str(exc)[:120] + "）")
         if not isinstance(data, dict):
             raise ValueError(label + " 必须是 JSON 对象")
         return data
 
-    brief = parse(brief_json, "brief")
-    script = parse(draft_script_json, "原始脚本")
-    storyboard = parse(storyboard_json, "storyboard")
-    motion = parse(motion_plan_json, "motion_plan")
+    try:
+        brief = parse(brief_json, "brief")
+        script = parse(draft_script_json, "原始脚本")
+        storyboard = parse(storyboard_json, "storyboard")
+        motion = parse(motion_plan_json, "motion_plan")
+    except ValueError as exc:
+        return fail(str(exc))
+
+    try:
+        compliance = parse(compliance_json, "合规审核")
+    except ValueError:
+        compliance = {}
+    if str(compliance.get("decision", "")).strip().lower() == "rejected":
+        reasons = []
+        for item in compliance.get("violations") or []:
+            if isinstance(item, dict) and str(item.get("text") or "").strip():
+                reasons.append(str(item.get("text")).strip())
+        for item in compliance.get("unverified_claims") or []:
+            if isinstance(item, dict) and str(item.get("text") or "").strip():
+                reasons.append(str(item.get("text")).strip())
+        for item in compliance.get("revision_instructions") or []:
+            reasons.append(str(item))
+        return fail("合规审核判定 rejected，禁止打包" + ("：" + "；".join(reasons[:5]) if reasons else ""))
 
     voiceover = str(script.get("voiceover_script", "")).strip()
     if not voiceover:
-        raise ValueError("人工确认后的口播不能为空")
+        return fail("人工确认后的口播为空：A06/A07 没有产出可用文案")
 
     base_url_options = {
         "默认（按量付费）": "https://api.xiaomimimo.com/v1",
@@ -60,10 +87,17 @@ def main(brief_json: str, draft_script_json: str, storyboard_json: str, motion_p
         "approved_script": script,
         "storyboard": storyboard,
         "motion_plan": motion,
+        "compliance": {
+            "decision": str(compliance.get("decision") or ""),
+            "risk_level": str(compliance.get("risk_level") or ""),
+            "violations": compliance.get("violations") or [],
+            "unverified_claims": compliance.get("unverified_claims") or [],
+        },
         "tts_config": tts_config,
     }
     return {
         "approved_package_json": json.dumps(package, ensure_ascii=False),
         "approved_voiceover_script": voiceover,
-        "approval_status": "approved"
+        "approval_status": "approved",
+        "package_error": "",
     }

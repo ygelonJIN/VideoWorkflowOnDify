@@ -52,6 +52,29 @@ def find_embedded_package(text: str) -> dict:
     return (preferred or candidates)[-1] if candidates else {}
 
 
+def find_image_plan(text: str) -> dict:
+    """在「生产资料」报告末尾找 H01P 的 image_plan_json（裸 JSON，没有字段名）。"""
+    import json
+    decoder = json.JSONDecoder()
+    found = {}
+    for index, char in enumerate(text):
+        if char != "{":
+            continue
+        try:
+            value, _ = decoder.raw_decode(text[index:])
+        except Exception:
+            continue
+        value = decode_json_value(value)
+        if not isinstance(value, dict):
+            continue
+        items = value.get("images")
+        if not isinstance(items, list) or not items:
+            continue
+        if all(isinstance(item, dict) and ("prompt" in item or "scene_id" in item) for item in items):
+            found = value
+    return found
+
+
 def unwrap_package(data: dict) -> dict:
     package = decode_json_value(data.get("build_package_json", data.get("build_package", data)))
     if isinstance(package, str):
@@ -118,6 +141,18 @@ def read_editor_payload(project_name: str, input_path: Path | None = None, open_
     raise SystemExit(f"等待 TextEdit 输入超时：{input_path}")
 
 
+def resolve_path(path: Path) -> Path:
+    """相对路径按「当前目录 → HTML视频项目 → 工作区根」依次找，省得在 ~ 下跑时报找不到。"""
+    if path.is_absolute() or path.exists():
+        return path
+    for root in (BASE, BASE.parent):
+        candidate = root / path
+        if candidate.exists():
+            print("输入路径按 %s 解析：%s" % (root, candidate))
+            return candidate
+    return path
+
+
 def read_payload(input_file: Path | None, project_name: str, terminal_paste: bool = False) -> str:
     if input_file and terminal_paste:
         raise SystemExit("input_file 与 --terminal-paste 只能二选一")
@@ -155,9 +190,33 @@ def main() -> None:
     parser.add_argument("--tts-base-url", help="MiMo/OpenAI-compatible API 基础地址")
     parser.add_argument("--tts-model", help="TTS 模型或音色模型名")
     parser.add_argument("--tts-voice", help="音色 voice ID 或 macOS voice 名")
+    parser.add_argument("--prepare", action="store_true", help="黑帧口播：只建项目、落图像计划、出提示词包，不出图不渲染")
+    parser.add_argument("--skip-images", action="store_true", help="黑帧口播：跳过生图，用 媒体/图片/ 里已有的图合并出片")
     parser.add_argument("--no-open", action="store_true", help="HTML-only 输出保存后不打开浏览器")
     args = parser.parse_args()
 
+    if args.skip_images and args.input_file is None:
+        candidates = sorted(
+            (BASE / "Dify输出").glob("*-blackframe-input.json"),
+            key=lambda item: item.stat().st_mtime,
+            reverse=True,
+        )
+        chosen = None
+        for candidate in candidates:
+            name = candidate.name[: -len("-blackframe-input.json")]
+            image_dir = BASE / name / "媒体" / "图片"
+            if image_dir.exists() and any(image_dir.iterdir()):
+                chosen = (candidate, name)
+                break
+        if chosen is None and candidates:
+            chosen = (candidates[0], candidates[0].name[: -len("-blackframe-input.json")])
+        if chosen:
+            args.input_file, args.project_name = chosen
+            print("使用最近一次输出：%s（项目名 %s）" % (chosen[0].name, chosen[1]))
+    if args.input_file is not None:
+        args.input_file = resolve_path(args.input_file)
+    if args.voice_file is not None:
+        args.voice_file = resolve_path(args.voice_file)
     text = read_payload(args.input_file, args.project_name, args.terminal_paste)
     parsed = parse_json_object(text)
     if isinstance(parsed, dict) and any(
@@ -204,6 +263,13 @@ def main() -> None:
     if any(tts_args) and not is_black_frame_output(package, response):
         raise SystemExit("TTS/音色参数只能用于黑帧口播输出")
     if is_black_frame_output(package, response):
+        if isinstance(parsed, dict) and not package.get("image_plan_json") and parsed.get("image_plan_json"):
+            package["image_plan_json"] = parsed.get("image_plan_json")
+        if not package.get("image_plan_json"):
+            plan = find_image_plan(text)
+            if plan:
+                package["image_plan_json"] = json.dumps(plan, ensure_ascii=False)
+                print("已从报告里提取图像计划：%d 张" % len(plan.get("images") or []))
         normalized_input = {
             "build_package_json": {
                 **package,
@@ -227,9 +293,19 @@ def main() -> None:
             command.extend(["--tts-model", args.tts_model])
         if args.tts_voice:
             command.extend(["--voice-name", args.tts_voice])
-        print("检测到黑帧口播输出：生成口播并渲染 MP4。")
+        if args.prepare:
+            command.extend(["--images-only", "--skip-images"])
+        elif args.skip_images:
+            command.append("--skip-images")
+        if args.prepare:
+            print("检测到黑帧口播输出：只准备项目与出图提示词，不渲染。")
+        else:
+            print("检测到黑帧口播输出：生成口播并渲染 MP4。")
         subprocess.run(command, check=True)
-        print(f"完成：{BASE / args.project_name / '成片' / '最终视频.mp4'}")
+        if args.prepare:
+            print("准备完成：" + str(BASE / args.project_name / "媒体" / "出图"))
+        else:
+            print(f"完成：{BASE / args.project_name / '成片' / '最终视频.mp4'}")
         return
 
     if is_full_video_output(package, response):

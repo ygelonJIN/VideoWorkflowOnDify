@@ -9,8 +9,11 @@
 | `项目文档/用户输入事实与合规规则.md` | 任意主题通用的输入事实、CTA 和禁用表达 |
 | `项目文档/内容选题与去重规则.md` | 选题模式、单条视频边界、去重规则 |
 | `项目文档/视频需求与质量标准.md` | 视频需求、尺寸、结构、布局、字幕、动效和质检 |
-| `工作流提示词/` | Dify YAML 中提示词的可读镜像：黑帧版（`HTML骨架提示词.md`、`场景组A-D提示词.md`）与数字人版（`HTML骨架提示词_有数字人.md`、`场景组A-D提示词_有数字人.md`） |
-| `工作流代码节点/` | Dify YAML 中 Code 节点的可读镜像；HTML 校验和 A16 批准包按完整版/黑帧版分别镜像，分组拆合为 `split_scene_groups.py` / `merge_scene_groups.py` |
+| `工作流提示词/` | Dify YAML 中提示词的可读镜像。黑帧版（04）按环节拆开：`视觉定调提示词.md`（H01D，隐喻/色彩/字体/材质/光/纵深/节奏/摄影设定与 `:root` 令牌）、`图像计划提示词.md`（H01P，全片摄影设定 `prompt_prefix` + 每屏一条可拍摄英文 prompt、尺寸、文字留白侧、镜头运动）、`组件语法提示词.md`（H01C，形语法/组件族/状态语言/`data-anim` 命名）、`转场设计提示词.md`（H01T，逐切点转场规格）、`背景系统提示词.md`（H01G，背景层 css + js）、`HTML骨架提示词.md`（H01S，只落结构契约与槽位）、`场景组A-D提示词.md`（H02A–D，只排布与标记）、`动效脚本提示词.md`（H02M，只写屏内 GSAP）、`转场脚本提示词.md`（H02T，只写页间交接 GSAP）、`动效计划提示词.md`（A10，元素级动效计划）。数字人版（01，未迁移）：`HTML骨架提示词_有数字人.md`、`场景组A-D提示词_有数字人.md` |
+| `画面工艺/` | 画面与声音的工艺参考（讲解图形、动效图形、风格化、模拟、角色、三维、声音、卡点）；不进提示词、不约束模型方向，供人工查阅和调优 |
+| `工作流代码节点/` | Dify YAML 中 Code 节点的可读镜像。黑帧版（04）：`split_scene_groups_black_frame.py`（H00，均衡分组 + 动效切片）、`normalize_image_plan.py`（H01PV，图像计划归一化 + 缺图补齐 + 精简版 `image_brief_json`）、`normalize_transition_plan.py`（H01V，转场规格归一化）、`split_background_spec.py`（H01W，拆背景 css/js）、`merge_scene_groups_black_frame.py`（H03，合并 + 动效/转场双槽位 + 报告）。数字人版（01）仍用 `split_scene_groups.py` / `merge_scene_groups.py`；HTML 校验和 A16 批准包按完整版/黑帧版分别镜像 |
+
+旧文件（不在 04 链路中，只作历史参考）：`黑帧口播视频编排提示词.md`（单节点版）、`HTML批量草稿提示词.md`。
 
 ## 输入提炼层（所有 Workflow 共用）
 
@@ -36,6 +39,7 @@
 | Dify 导入、输出和故障说明 | `Dify工作流/使用说明.md` |
 | 当前项目说明和成片 | `HTML视频项目/333/` |
 | 通用运行模板和工具 | `HTML视频项目/workflow_runtime/` |
+| 生图脚本与环境变量 | `HTML视频项目/workflow_runtime/scripts/generate_images.py`、`经验文档/使用说明.md`「真实图像」节 |
 | Dify 原始 TXT、JSON、HTML 和响应 | `HTML视频项目/Dify输出/` |
 
 ## 修改 Workflow 时
