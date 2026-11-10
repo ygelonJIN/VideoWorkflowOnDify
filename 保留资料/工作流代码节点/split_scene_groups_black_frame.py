@@ -12,6 +12,8 @@ def main(approved_package_json: str, motion_plan_json: str) -> dict:
         return {
             "group_a_json": empty, "group_b_json": empty, "group_c_json": empty, "group_d_json": empty,
             "scene_total": 0,
+            "scene_payloads": [],
+            "composition_ledger_json": "[]",
             "design_brief": json.dumps({"error": "分镜为空，无法分组"}, ensure_ascii=False),
         }
 
@@ -24,6 +26,71 @@ def main(approved_package_json: str, motion_plan_json: str) -> dict:
         claim = str(item.get("claim") or "").strip()
         if claim:
             claims[str(item.get("id") or "a%d" % (index + 1))] = claim
+
+    # 构图账本：A08 已经按全片视野分配了每屏的构图，这里只做归一化和查重。
+    # 查重结果写进 design_brief，场景组会照着避开；真正的验收在渲染前的
+    # check_composition_variation.mjs（量真实 DOM，不看模型自报）。
+    composition_warnings = []
+    ledger = []
+    seen_family = {}
+    for index, scene in enumerate(scenes):
+        raw = scene.get("composition") if isinstance(scene.get("composition"), dict) else {}
+        family = str(raw.get("family") or "").strip()
+        zone = str(raw.get("text_zone") or "").strip()
+        align = str(raw.get("align") or "").strip().lower()
+        scale = str(raw.get("scale") or "").strip()
+        if align not in {"left", "center", "right"}:
+            align = ""
+        scene_id = str(scene.get("scene_id") or "s%02d" % (index + 1))
+        if not family:
+            family = "未分配-" + scene_id
+            composition_warnings.append("%s 没有 composition.family：已标记未分配，场景组会按内容自拟" % scene_id)
+        if not zone or not align or not scale:
+            composition_warnings.append("%s 的 composition 缺 text_zone/align/scale：场景组只能按内容自拟" % scene_id)
+        if family in seen_family:
+            composition_warnings.append("%s 与 %s 用了同一个构图族「%s」：分镜必须逐屏变" % (
+                scene_id, seen_family[family], family))
+        else:
+            seen_family[family] = scene_id
+        entry = {
+            "scene_id": scene_id,
+            "family": family,
+            "text_zone": zone,
+            "align": align,
+            "scale": scale,
+            "why": str(raw.get("why") or "").strip(),
+        }
+        ledger.append(entry)
+
+    for left, right in zip(ledger, ledger[1:]):
+        if left["family"] and left["family"] == right["family"]:
+            composition_warnings.append("相邻两屏构图族相同：%s 与 %s（%s）" % (
+                left["scene_id"], right["scene_id"], left["family"]))
+    if len(ledger) >= 2:
+        first, last = ledger[0], ledger[-1]
+        if (first["family"], first["text_zone"], first["scale"]) == (
+                last["family"], last["text_zone"], last["scale"]):
+            composition_warnings.append("首尾两屏构图三项全同（%s / %s）：必须做出对照" % (
+                first["scene_id"], last["scene_id"]))
+    composition_warnings = list(dict.fromkeys(composition_warnings))
+
+    # 逐屏载荷：迭代节点一次只给模型一屏，附带前后屏的构图，方便它避开相邻同构。
+    scene_payloads = []
+    for index, scene in enumerate(scenes):
+        item = dict(scene)
+        item["composition"] = dict(ledger[index]) if index < len(ledger) else {}
+        item["index"] = index + 1
+        item["total"] = len(scenes)
+        item["prev_scene"] = ledger[index - 1]["scene_id"] if index > 0 else ""
+        item["next_scene"] = ledger[index + 1]["scene_id"] if index + 1 < len(ledger) else ""
+        item["prev_composition"] = ledger[index - 1] if index > 0 else {}
+        item["next_composition"] = ledger[index + 1] if index + 1 < len(ledger) else {}
+        scene_payloads.append(json.dumps(item, ensure_ascii=False))
+    distinct_families = len({entry["family"] for entry in ledger if entry["family"]})
+    need_families = min(4, len(ledger))
+    if ledger and distinct_families < need_families:
+        composition_warnings.append("构图族只有 %d 种（%d 屏），至少需要 %d 种" % (
+            distinct_families, len(ledger), need_families))
 
     # 均衡切分：前 total % 4 组多 1 屏，任何场景数（>=4）下都不会出现空组。
     base, extra = divmod(total, 4)
@@ -54,16 +121,8 @@ def main(approved_package_json: str, motion_plan_json: str) -> dict:
                 return text[:40]
         return ""
 
-    # 版式与主运动槽位：按全局序号轮转，保证相邻两屏不重复，模型没有"全用同一套"的机会。
-    LAYOUT_SLOTS = ["full-bleed", "split-left", "split-right", "inset-offset", "texture-under", "framed"]
-    MOTION_SLOTS = ["push-in", "pan-x", "mask-reveal", "parallax", "path-draw", "state-flip", "type-stagger"]
-    slot_index = 0
-    for group in groups:
-        for scene in group:
-            if isinstance(scene, dict):
-                scene["layout_slot"] = LAYOUT_SLOTS[slot_index % len(LAYOUT_SLOTS)]
-                scene["motion_slot"] = MOTION_SLOTS[slot_index % len(MOTION_SLOTS)]
-            slot_index += 1
+    # 版式与主运动不再按序号轮转：每屏的视觉承担者由 H01P 的 role 决定，
+    # 版面与动作由 H02A–D / H02M 按内容判断。这里只做分组和动效切片。
 
     payload = []
     for index, group in enumerate(groups):
@@ -86,6 +145,8 @@ def main(approved_package_json: str, motion_plan_json: str) -> dict:
             "motion_note": "" if group_motion else "本组没有动效计划切片：按本屏组件自拟语义化 data-anim 名称",
             "prev_hook": last_line(previous),
             "next_hook": first_line(following),
+            "composition_ledger": ledger,
+            "composition_warnings": composition_warnings,
         }, ensure_ascii=False))
 
     strategy = storyboard.get("creative_strategy") or {}
@@ -97,8 +158,14 @@ def main(approved_package_json: str, motion_plan_json: str) -> dict:
         "thesis": thesis,
         "argument_claims": [{"id": key, "claim": claims[key]} for key in claims],
         "aspect": "9:16 1080x1920",
+        "composition_warnings": composition_warnings,
     }, ensure_ascii=False)
     keys = ["group_a_json", "group_b_json", "group_c_json", "group_d_json"]
     result = {key: payload[i] for i, key in enumerate(keys)}
-    result.update({"scene_total": total, "design_brief": design_brief})
+    result.update({
+        "scene_total": total,
+        "design_brief": design_brief,
+        "scene_payloads": scene_payloads,
+        "composition_ledger_json": json.dumps(ledger, ensure_ascii=False),
+    })
     return result

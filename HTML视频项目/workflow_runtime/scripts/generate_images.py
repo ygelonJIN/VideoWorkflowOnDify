@@ -432,9 +432,11 @@ def main() -> None:
     quality = args.quality or env("IMAGE_QUALITY", "") or DEFAULT_QUALITY
 
     plan = load_plan(args.plan)
-    items = normalize_items(plan)
+    # role=html 的屏由 CSS 背景承担画面，不生成照片，也不出现在出图清单里。
+    items = [item for item in normalize_items(plan) if str(item.get("role") or "").lower() != "html"]
     if not items:
-        raise SystemExit("图像计划里没有 images")
+        print("图像计划里没有需要生成的图片（全部是无图屏）")
+        return
 
     if args.list:
         for item in items:

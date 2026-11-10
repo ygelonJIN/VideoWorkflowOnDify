@@ -115,6 +115,10 @@ def main() -> None:
     missing_scene_id = [tag for tag in scene_tags if not re.search(r'\bdata-scene="[^"]+"', tag)]
     if missing_scene_id:
         structure_blocking.append("有 %d 个 scene 缺 data-scene（动效与场景判定会错位）" % len(missing_scene_id))
+    scene_names = [m.group(1) for m in re.finditer(r'\bdata-scene="([^"]+)"', " ".join(scene_tags))]
+    duplicated_scenes = sorted({name for name in scene_names if scene_names.count(name) > 1})
+    if duplicated_scenes:
+        structure_blocking.append("scene id 重复（同一屏被合并了多次）：" + "、".join(duplicated_scenes[:8]))
     if not re.search(r'class=["\'][^"\']*\bcaption\b[^"\']*["\'][^>]*data-sentence-id=', doc, re.I):
         errors.append("字幕必须保留 data-sentence-id 句子锚点")
     scene_end = 0.0
@@ -125,6 +129,18 @@ def main() -> None:
             scene_end = max(scene_end, float(start.group(1)) + float(duration.group(1)))
     if root_duration and abs(scene_end - root_duration) > 0.05:
         errors.append(f"场景总时长 {scene_end:.3f}s 与根时间轴 {root_duration:.3f}s 不一致")
+    paced_scenes = []
+    for tag in scene_tags:
+        sid = re.search(r'\bdata-scene="([^"]+)"', tag)
+        duration = re.search(r'\bdata-duration="([0-9.]+)"', tag)
+        if sid and duration:
+            paced_scenes.append((sid.group(1), float(duration.group(1))))
+    too_short = [(sid, dur) for sid, dur in paced_scenes if dur < 0.8]
+    too_long = [(sid, dur) for sid, dur in paced_scenes if dur > 6.0]
+    if too_short:
+        errors.append("这些 scene 短于 0.8s，成片会闪得看不清：" + "、".join("%s(%.2fs)" % item for item in too_short[:8]))
+    if too_long:
+        errors.append("这些 scene 超过 6s，容易长时间静止：" + "、".join("%s(%.2fs)" % item for item in too_long[:8]))
     caption_tags = re.findall(r'<div\b[^>]*class=["\'][^"\']*\bcaption\b[^>]*>', doc, flags=re.I)
     for tag in caption_tags:
         start = re.search(r'\bdata-start="([0-9.]+)"', tag)
@@ -210,6 +226,10 @@ def main() -> None:
     uncovered = sorted(caption_ids - scene_sentence_ids)
     if uncovered:
         blocking.append("有 %d 句口播没有对应场景：%s" % (len(uncovered), "、".join(uncovered[:8])))
+    if caption_ids:
+        invalid_sentence_refs = sorted(scene_sentence_ids - caption_ids)
+        if invalid_sentence_refs:
+            blocking.append("场景引用了字幕里不存在的句子：%s" % "、".join(invalid_sentence_refs[:8]))
     if not re.search(r'\b(?:master|timeline)\.(?:from|fromTo|to|set)\s*\(|\bgsap\.set\s*\(', doc):
         blocking.append("HTML 里没有任何 GSAP 动作，成片会是静止的")
 
@@ -232,13 +252,13 @@ def main() -> None:
             % "、".join(sorted(set(broken_transitions))[:4])
         )
 
-    # ---- 图片契约：每一屏的主视觉必须是真实照片 ----
+    # ---- 画面承担者契约：照片屏必须有图，无图屏必须声明 data-visual="html" ----
     leftover_placeholders = re.findall(r"\{\{IMG:[A-Za-z0-9_-]+\}\}", doc)
     if leftover_placeholders:
         blocking.append("还有 %d 个 {{IMG:...}} 占位没替换成真实文件（生图没跑，或占位替换没执行）" % len(leftover_placeholders))
     image_refs = sorted(set(re.findall(r'媒体/图片/((?:[^"/\\]+/)*[^"/\\]+?)\.(?:png|jpe?g|webp)', doc)))
     if not image_refs:
-        errors.append("HTML 里没有任何 媒体/图片/ 引用：主视觉仍是 HTML 画的图形，不是真实照片")
+        errors.append("HTML 里没有任何 媒体/图片/ 引用：整片至少需要一张真实照片；无图屏用 data-visual=\"html\" + data-anim=\"bg\"")
     else:
         base_dir = args.html.resolve().parent
         missing_files = [name for name in image_refs
@@ -247,15 +267,27 @@ def main() -> None:
         if missing_files:
             blocking.append("图片文件不存在：" + "、".join(missing_files[:8]))
     scenes_without_image = []
+    html_scenes = []
     for tag in re.finditer(r"<section\b(?=[^>]*class=[\"\'][^\"\']*\bscene\b)[^>]*>", doc, flags=re.I):
         head = tag.group(0)
         sid_match = re.search(r'data-scene=["\']([^"\']+)["\']', head)
+        scene_id = sid_match.group(1) if sid_match else "?"
+        visual = re.search(r'data-visual=["\']([^"\']+)["\']', head)
+        visual = visual.group(1).strip().lower() if visual else ""
         end = doc.find("</section>", tag.end())
         inner = doc[tag.end():end if end >= 0 else len(doc)]
-        if "媒体/图片/" not in inner:
-            scenes_without_image.append(sid_match.group(1) if sid_match else "?")
+        if "媒体/图片/" in inner:
+            continue
+        if visual == "html":
+            html_scenes.append(scene_id)
+            if not re.search(r'data-anim=["\']bg["\']', inner):
+                errors.append("%s 是无图屏，但没有 data-anim=\"bg\" 背景层" % scene_id)
+            continue
+        scenes_without_image.append(scene_id)
     if scenes_without_image:
-        blocking.append("这些场景没有图片（画面只剩文字和背景）：" + "、".join(scenes_without_image[:8]))
+        blocking.append("这些场景没有图片，也没有 data-visual=\"html\"：" + "、".join(scenes_without_image[:8]))
+    if html_scenes and not image_refs:
+        errors.append("全片都是无图屏（%d 屏）：至少保留一张真实照片" % len(html_scenes))
     if re.search(r"<canvas\b", doc, re.I) and image_refs:
         errors.append("HTML 里同时有 canvas 和照片：具象视觉归照片，canvas 只留背景氛围")
 

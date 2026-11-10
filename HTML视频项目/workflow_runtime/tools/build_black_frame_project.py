@@ -66,12 +66,71 @@ def repair_scene_anchors(html: str) -> tuple[str, list[str]]:
     return html, fixed
 
 
+def sanitize_scene_scope(html: str, storyboard: dict) -> tuple[str, list[str]]:
+    """只保留分镜里的 scene、去掉重复 scene，并把 sentence_ids 校正回分镜。
+
+    Dify 的 H03 也会做同一件事；这里再做一次是为了让旧的 Dify 输出、
+    或者 H03 之前生成的 html_document 也能被本地构建修好。
+    """
+    scenes = storyboard.get("scenes") if isinstance(storyboard, dict) else []
+    storyboard_ids = set()
+    sentence_by_scene = {}
+    for scene in scenes or []:
+        if not isinstance(scene, dict):
+            continue
+        scene_id = str(scene.get("scene_id") or "").strip()
+        if not scene_id:
+            continue
+        storyboard_ids.add(scene_id)
+        refs = scene.get("sentence_ids")
+        if isinstance(refs, str):
+            refs = [refs]
+        if not isinstance(refs, list):
+            refs = []
+        sentence_by_scene[scene_id] = [str(item).strip() for item in refs if str(item).strip()]
+
+    def set_attribute(tag: str, name: str, value: str) -> str:
+        pattern = re.compile(r"\s" + re.escape(name) + r'="[^"]*"')
+        replacement = ' %s="%s"' % (name, value)
+        if pattern.search(tag):
+            return pattern.sub(replacement, tag, count=1)
+        return tag[:-1].rstrip() + replacement + ">"
+
+    seen = set()
+    dropped = []
+
+    def repl(match):
+        tag, inner = match.group(1), match.group(2)
+        sid_match = re.search(r'\bdata-scene="([^"]+)"', tag)
+        scene_id = sid_match.group(1) if sid_match else ""
+        if storyboard_ids:
+            if scene_id not in storyboard_ids:
+                dropped.append(scene_id or "?")
+                return ""
+            if scene_id in seen:
+                dropped.append(scene_id)
+                return ""
+        if scene_id:
+            seen.add(scene_id)
+            refs = sentence_by_scene.get(scene_id)
+            if refs:
+                tag = set_attribute(tag, "data-sentence-ids", " ".join(refs))
+        return tag + inner
+
+    html = re.sub(r"(<section\b[^>]*>)([\s\S]*?</section>)", repl, html, flags=re.I)
+    return html, dropped
+
+
 def normalize_input(data: dict) -> dict:
     package = extract_package(data)
     html = clean_html_document(package.get("html_document", package.get("html", "")))
     html, anchored = repair_scene_anchors(html)
     if anchored:
         print("已修正动效场景锚点 #id → [data-scene=...]：" + "、".join(anchored))
+    storyboard = package.get("storyboard") if isinstance(package.get("storyboard"), dict) else {}
+    html, dropped_scenes = sanitize_scene_scope(html, storyboard)
+    if dropped_scenes:
+        print("已丢弃 %d 个重复或分镜外的 scene：%s" % (len(dropped_scenes), "、".join(dropped_scenes[:10])))
     voiceover = str(package.get("voiceover_script", package.get("approved_voiceover_script", ""))).strip()
     if "<!doctype html>" not in html.lower():
         raise SystemExit("Dify 输出缺少完整 html_document")
@@ -206,7 +265,7 @@ def replace_image_placeholders(html: str, project_dir: Path, image_ids: list[str
 
 
 def check_scene_images(html: str) -> list[str]:
-    """每一屏都必须有图片引用；返回没有图的 scene id。"""
+    """返回既没有图片、也没有声明 data-visual=html 的 scene id。"""
     without: list[str] = []
     for match in re.finditer(r"<(?:section|div)\b[^>]*>", html, flags=re.I):
         head = match.group(0)
@@ -214,10 +273,13 @@ def check_scene_images(html: str) -> list[str]:
         if not cls or "scene" not in cls.group(1).split():
             continue
         sid = re.search(r'data-scene=["\']([^"\']+)["\']', head)
+        visual = re.search(r'data-visual=["\']([^"\']+)["\']', head)
+        visual = visual.group(1).strip().lower() if visual else ""
         end = html.find("</section>", match.end())
         inner = html[match.end():end if end >= 0 else len(html)]
-        if "媒体/图片/" not in inner:
-            without.append(sid.group(1) if sid else "?")
+        if "媒体/图片/" in inner or visual == "html":
+            continue
+        without.append(sid.group(1) if sid else "?")
     return without
 
 
@@ -442,7 +504,9 @@ def main() -> None:
         if image_plan:
             plan_path.write_text(json.dumps(image_plan, ensure_ascii=False, indent=2), encoding="utf-8")
             images = image_plan.get("images") if isinstance(image_plan.get("images"), list) else []
-            print("图像计划：%d 张，已写入 %s" % (len(images), plan_path))
+            photo_images = [item for item in images if isinstance(item, dict) and str(item.get("role") or "").lower() != "html"]
+            html_images = [item for item in images if isinstance(item, dict) and str(item.get("role") or "").lower() == "html"]
+            print("图像计划：%d 张照片 + %d 屏 HTML 背景，已写入 %s" % (len(photo_images), len(html_images), plan_path))
         wanted = placeholder_ids(data["html_document"])
         if wanted:
             if not image_plan:
@@ -450,7 +514,8 @@ def main() -> None:
             if not args.skip_images:
                 generate_images(project_dir, plan_path, args)
         else:
-            print("警告：HTML 里没有任何 {{IMG:...}} 占位，画面仍由 HTML 图形承担（旧版输出）")
+            if not re.search(r'data-visual=["\']html["\']', data["html_document"]):
+                print("警告：HTML 里没有任何 {{IMG:...}} 占位，也没有 data-visual=html 的无图屏（旧版输出）")
         if args.images_only:
             if plan_path.exists():
                 subprocess.run([
@@ -467,7 +532,8 @@ def main() -> None:
             else:
                 print("图片已生成，跳过口播与渲染：" + str(project_dir / "媒体" / "图片"))
             return
-        image_ids = [str(item.get("id")) for item in (image_plan.get("images") or []) if isinstance(item, dict) and item.get("id")]
+        image_ids = [str(item.get("id")) for item in (image_plan.get("images") or [])
+                     if isinstance(item, dict) and item.get("id") and str(item.get("role") or "").lower() != "html"]
         if not image_ids:
             image_ids = wanted
         html_final = replace_image_placeholders(data["html_document"], project_dir, image_ids, args.allow_missing_images)

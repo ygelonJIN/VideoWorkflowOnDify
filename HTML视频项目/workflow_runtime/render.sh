@@ -6,6 +6,9 @@ trap 'code=$?; if [ "$code" -ne 0 ]; then echo ""; echo "❌ 失败关卡：${ST
 
 PROJECT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$PROJECT_DIR"
+# 渲染锁默认放在项目内，避免 ~/.cache 在多账号/沙箱下不可写导致渲染排队失败。
+export HYPERFRAMES_CACHE_DIR="${HYPERFRAMES_CACHE_DIR:-$PROJECT_DIR/.hyperframes/cache}"
+mkdir -p "$HYPERFRAMES_CACHE_DIR" "$HYPERFRAMES_CACHE_DIR/locks"
 
 NODE_BIN="${NODE_BIN:-/tmp/node22-runtime/bin/node}"
 HF_CLI="${HYPERFRAMES_CLI:-}"
@@ -143,6 +146,25 @@ if ! HYPERFRAMES_CLI="$HF_CLI" HYPERFRAMES_BROWSER_PATH="$CHROME_BIN" "$NODE_BIN
     exit 1
   fi
 fi
+
+STAGE="检查页面时间线（空页/闪屏/动作越界）"
+echo "检查页面时间线..."
+if ! HYPERFRAMES_CLI="$HF_CLI" HYPERFRAMES_BROWSER_PATH="$CHROME_BIN" "$NODE_BIN" 脚本/check_html_timing.mjs index.html; then
+  echo "时间线检查不通过：有整屏不可见、图片闪回或动作越界，先修 HTML 再渲染。"
+  exit 1
+fi
+STAGE="检查动效差异"
+echo "检查动效差异（只报告）..."
+HYPERFRAMES_CLI="$HF_CLI" HYPERFRAMES_BROWSER_PATH="$CHROME_BIN" "$NODE_BIN" 脚本/check_motion_variation.mjs index.html || true
+
+STAGE="检查构图差异"
+echo "检查构图差异（相邻/首尾/全片是不是同一套骨架；默认只报告，STRICT_COMPOSITION=1 才拦截）..."
+if ! HYPERFRAMES_CLI="$HF_CLI" HYPERFRAMES_BROWSER_PATH="$CHROME_BIN" "$NODE_BIN" 脚本/check_composition_variation.mjs index.html; then
+  echo "构图差异检查不通过：相邻或首尾两屏是同一套构图骨架，先改排版再渲染。"
+  echo "只想先看画面可去掉 STRICT_COMPOSITION=1。"
+  exit 1
+fi
+
 
 if [ "${RUN_HYPERFRAMES_CHECK:-0}" = "1" ]; then
   STAGE="HyperFrames 组合检查"

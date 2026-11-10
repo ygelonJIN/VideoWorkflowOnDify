@@ -11,11 +11,11 @@
 - `background_js`：{{#h01w.background_js#}}
 - `background_spec_json`：{{#h01w.background_spec_json#}}
 - `design_brief`：{{#h00.design_brief#}}
-- `image_brief_json`：{{#h01pv.image_brief_json#}}（全片图片风格与每一屏的图片用法；图片路径由场景组按 id 写）
+- `image_brief_json`：{{#h01pv.image_brief_json#}}（全片图片风格与每一屏的 `role`：full / inset / portrait / texture / html；图片路径由场景组按 id 写）
 
 ## 你只做四件事
 
-1. **照抄令牌**：把 `art_direction_json.tokens` 原样写进 `:root`，值不许改、不许补、不许自己加减档。
+1. **照抄令牌**：把 `art_direction_json.tokens` 原样写进 `:root`，值不许改、不许补、不许自己加减档。**只落颜色、字体栈、圆角、描边、缓动、时长**；字号、行高、间距、对齐不写进 `:root`，也不要在骨架里定义任何全局文字类（`.title` / `.body` / `.kicker` 这类）——字阶归每一屏自己定。
 2. **落结构**：画布、场景外壳、背景容器、四个场景占位、动效占位、转场占位、媒体占位、主时间线脚本。
 3. **接背景**：把 `background_css` 原样拼进 `<style>`，`background_js` 原样包成一段 `<script>`，`#background-layer` 容器放在 `#scenes` 之前。
 4. **接图片**：写图片的基础样式（见下），场景组只负责放 `<img>` 和写自己那一屏的定位，不再重复定义。
@@ -36,11 +36,13 @@
 .media img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center; display: block; }
 .media--inset { inset: auto; }
 .media-scrim { position: absolute; inset: 0; pointer-events: none; }
+.scene-bg { position: absolute; inset: 0; pointer-events: none; z-index: 0; }
 ```
 
   - `.media` 是满屏底图容器；`.media--inset` 是局部图容器（场景组自己给 `top/left/width/height`）。
   - `.media-scrim` 是压在图上、垫在文字下的遮罩层，默认透明，颜色与强度由场景组按 `art_direction_json` 决定。
-  - 图片路径统一由场景组写成 `{{IMG:图片id}}`，本地渲染前会替换成真实文件；骨架里**不要**写任何具体图片路径。
+  - `.scene-bg` 是 `role=html` 屏的背景容器基础类；场景组用 `.gX-bg scene-bg` 写自己那一屏的 CSS 背景，`data-anim="bg"`，不需要照片。
+  - 照片路径统一由场景组写成 `{{IMG:图片id}}`，本地渲染前会替换成真实文件；骨架里**不要**写任何具体图片路径。
   - `background_css` 原样拼在后面。
 - `<body>`：
   - `<div id="stage" data-composition-id="..." data-width="1080" data-height="1920" data-duration="..." data-caption-sync="transcript-required" data-render-mode="black-frame">`
@@ -102,8 +104,10 @@
 
 ## 禁止
 
-- **不要在骨架里画任何具象图形**：不写 SVG 插画、不写 canvas、不写用 CSS 拼出来的场景/物体/图标。画面里的具象视觉全部是照片，由场景组用 `<img src="{{IMG:...}}">` 放进去。
-- **不要自己发明颜色、字号、圆角、阴影、缓动**：全部引用 `:root` 变量，变量缺失就照上游原值写，不许补默认值。
+- **不要在骨架里画任何具象图形**：不写 SVG 插画、不写 canvas、不写用 CSS 拼出来的场景/物体/图标。画面里的具象视觉由照片承担；无图屏（`role=html`）只用抽象结构、线条、色块和排版做背景，不补画具象物体。
+- **不要自己发明颜色、圆角、阴影、缓动**：全部引用 `:root` 变量，变量缺失就照上游原值写，不许补默认值。
+- **字号、行高、间距、对齐不归你**：不要在骨架里写任何全局文字类或字阶，场景组会按自己那一屏的构图和字号力度另写。骨架只保证画布、场景外壳、图层顺序、安全区和图片基础样式。
+- 不要写死每一屏的文字位置（那是场景组和分镜 `composition` 的事），也不要给 `.scene` 写同一套文字排布。
 - 不要写任何具体某一屏的版式、组件、文案。
 - 不要出现 `.gA-` / `.gB-` / `.gC-` / `.gD-` 选择器。
 - 不要改主时间线脚本，不要把它包进其它作用域。

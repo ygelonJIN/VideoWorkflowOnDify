@@ -68,6 +68,10 @@ def main(html_document: str, production_requirements: str) -> dict:
         return bool(match) and "scene" in match.group(1).split()
 
     scene_tags = [tag for tag in re.findall(r'<(?:section|div)\b[^>]*>', html, flags=re.I) if scene_is(tag)]
+    scene_names = [m.group(1) for tag in scene_tags for m in [re.search(r'\bdata-scene=["\']([^"\']+)["\']', tag)] if m]
+    duplicated_scenes = sorted({name for name in scene_names if scene_names.count(name) > 1})
+    if duplicated_scenes:
+        errors.append("scene id 重复（同一屏被合并了多次，成片会出现重复/空背景）：" + "、".join(duplicated_scenes[:8]))
     # 本地 sync_video.py 会给每个 scene 补 id="scene-<名字>"，这里只提示不拦截
     if any(not re.search(r'(?<![\w-])id="[^"]+"', tag) for tag in scene_tags):
         warnings.append("部分 scene 没有 id（本地渲染前会补齐）")
@@ -110,11 +114,12 @@ def main(html_document: str, production_requirements: str) -> dict:
     for token in ["VIDEO_WORKER", "production-jobs", "webhook"]:
         if token.lower() in html.lower():
             warnings.append("HTML 中不应引用 Worker/生产接口：" + token)
-    # ---- 图片契约：每一屏的主视觉必须是真实照片，不是 HTML 画的图形 ----
+    # ---- 画面承担者契约：照片屏必须有 {{IMG}}，无图屏必须声明 data-visual="html" ----
     image_refs = sorted(set(re.findall(r"\{\{IMG:([A-Za-z0-9_-]+)\}\}", html)))
     if not image_refs:
-        errors.append("整份 HTML 没有任何 {{IMG:图片id}} 引用：每一屏的主视觉必须是图像计划生成的真实照片")
+        errors.append("整份 HTML 没有任何 {{IMG:图片id}} 引用：整片至少需要一张真实照片；无图屏用 data-visual=\"html\" + data-anim=\"bg\"")
     scenes_without_image = []
+    html_scenes = []
     for tag in re.finditer(r"<(?:section|div)\b[^>]*>", html, flags=re.I):
         head = tag.group(0)
         cls = re.search(r'class=["\']([^"\']*)["\']', head)
@@ -122,12 +127,23 @@ def main(html_document: str, production_requirements: str) -> dict:
             continue
         sid = re.search(r'data-scene=["\']([^"\']+)["\']', head)
         scene_id = sid.group(1) if sid else "?"
+        visual = re.search(r'data-visual=["\']([^"\']+)["\']', head)
+        visual = visual.group(1).strip().lower() if visual else ""
         end = html.find("</section>", tag.end())
         inner = html[tag.end():end if end >= 0 else len(html)]
-        if not re.search(r"\{\{IMG:[A-Za-z0-9_-]+\}\}", inner):
+        has_image = re.search(r"\{\{IMG:[A-Za-z0-9_-]+\}\}", inner) is not None
+        if visual == "html":
+            html_scenes.append(scene_id)
+            if not re.search(r'data-anim=["\']bg["\']', inner):
+                warnings.append("%s 声明了 data-visual=html，但没有 data-anim=bg 背景层" % scene_id)
+            if has_image:
+                warnings.append("%s 声明了 data-visual=html，却也放了 {{IMG:...}} 图片" % scene_id)
+        elif not has_image:
             scenes_without_image.append(scene_id)
     if scenes_without_image:
-        errors.append("这些场景没有 {{IMG:...}} 图片：%s" % "、".join(scenes_without_image[:8]))
+        errors.append("这些场景没有 {{IMG:...}} 图片，也没有 data-visual=\"html\"：%s" % "、".join(scenes_without_image[:8]))
+    if html_scenes and not image_refs:
+        errors.append("全片都是无图屏（%d 屏）：至少保留一张真实照片" % len(html_scenes))
     if re.search(r"<canvas\b", html, re.I):
         warnings.append("HTML 里出现 canvas：具象视觉必须由照片承担，canvas 只允许做背景氛围")
     if re.search(r"<svg\b", html, re.I):

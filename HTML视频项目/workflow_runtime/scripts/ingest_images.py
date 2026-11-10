@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""预览图片对号：按修改时间从早到晚对应 s01、s02…，不改文件名。
+"""预览图片对号：按修改时间从早到晚对应有图屏（跳过 role=html），不改文件名。
 
 出片时构建脚本用同一套规则映射，所以这里只做检查，不动文件。
 
@@ -27,7 +27,9 @@ def load_ids(plan_path: Path) -> list[str]:
         inner = data["image_plan_json"]
         data = json.loads(inner) if isinstance(inner, str) else inner
     images = data.get("images") if isinstance(data, dict) and isinstance(data.get("images"), list) else []
-    ids = [str(item.get("id")) for item in images if isinstance(item, dict) and str(item.get("id") or "").strip()]
+    ids = [str(item.get("id")) for item in images
+           if isinstance(item, dict) and str(item.get("id") or "").strip()
+           and str(item.get("role") or "").lower() != "html"]
     if not ids:
         raise SystemExit("图像计划里没有 images：先跑一次 --prepare")
     return ids
