@@ -1,10 +1,10 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { parseWorkflow } from "../src/engine/dsl.js";
 import { runGraph } from "../src/engine/scheduler.js";
 import { providerFromEnv } from "../src/engine/config.js";
-import { stringify } from "yaml";
-import { loadWorkflow } from "../src/engine/dsl.js";
+import { parse, stringify } from "yaml";
 import { WORKFLOW } from "./paths.js";
 
 const ITERATION_YAML = `
@@ -185,43 +185,60 @@ describe("容器节点", () => {
     assert.equal(innerRuns.length, 3);
   });
 
-  it("04 的真实 H02I 迭代 + H02S + H02J 拼接能跑通", async () => {
-    const source = loadWorkflow(WORKFLOW);
-    const pick = (id: string) => JSON.parse(JSON.stringify(source.nodes.get(id))) as Record<string, any>;
-    const iteration = pick("h02i");
-    iteration.data.iterator_selector = ["s", "scene_payloads"];
-    const doc = {
-      version: "0.7.0",
-      kind: "app",
-      app: { name: "04 迭代切片", mode: "workflow" },
-      workflow: {
-        graph: {
-          nodes: [
-            { id: "s", type: "custom", data: { type: "start", title: "S", variables: [{ variable: "scene_payloads", type: "array", required: true }] } },
-            iteration,
-            pick("h02i_start"),
-            pick("h02s"),
-            pick("h02j"),
-            { id: "e", type: "custom", data: { type: "end", title: "E", outputs: [{ variable: "scenes_html", value_selector: ["h02j", "scenes_html"] }] } },
-          ],
-          edges: [
-            { id: "x1", source: "s", target: "h02i" },
-            { id: "x2", source: "h02i_start", target: "h02s" },
-            { id: "x3", source: "h02i", target: "h02j" },
-            { id: "x4", source: "h02j", target: "e" },
-          ],
-        },
-      },
+  it("04 的真实 H02I 迭代（逐屏 → 动效 → 合并）能跑通", async () => {
+    // 从当前 YAML 里抓 H02I 的整个子图：h02i_start + 所有 parentId=h02i 的节点。
+    // 以前这里写死 h02i_start→h02s→h02j，04 加上 h02sm/h02sk 后测试就假红了。
+    const doc = parse(readFileSync(WORKFLOW, "utf8")) as {
+      workflow: { graph: { nodes: Array<Record<string, any>>; edges: Array<Record<string, any>> } };
     };
-    const workflow = parseWorkflow(stringify(doc), "<04-slice>");
+    const rawNodes = doc.workflow.graph.nodes;
+    const rawEdges = doc.workflow.graph.edges;
+    const clone = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
+
+    const iteration = clone(rawNodes.find((node) => node.id === "h02i"));
+    assert.ok(iteration, "04 里找不到 h02i");
+    iteration.data.iterator_selector = ["s", "scene_payloads"];
+
+    const body = rawNodes.filter((node) => node.parentId === "h02i");
+    assert.ok(body.some((node) => node.id === "h02i_start"), "H02I 缺少入口节点");
+    assert.ok(body.some((node) => node.id === "h02sk"), "H02I 里缺少 H02SK 合并节点");
+    const bodyIds = new Set(body.map((node) => String(node.id)));
+
+    const nodes = [
+      { id: "s", type: "custom", data: { type: "start", title: "S", variables: [{ variable: "scene_payloads", type: "array", required: true }] } },
+      iteration,
+      ...body.map(clone),
+      { id: "e", type: "custom", data: { type: "end", title: "E", outputs: [{ variable: "scenes", value_selector: ["h02i", "output"] }] } },
+    ];
+    const edges = rawEdges
+      .filter((edge) => bodyIds.has(String(edge.source)) && bodyIds.has(String(edge.target)))
+      .map(clone)
+      .concat([
+        { id: "slice-s-i", source: "s", target: "h02i" },
+        { id: "slice-i-e", source: "h02i", target: "e" },
+      ]);
+
+    const workflow = parseWorkflow(stringify({ version: "0.7.0", kind: "app", app: { name: "04 迭代切片", mode: "workflow" }, workflow: { graph: { nodes, edges } } }), "<04-slice>");
+    const section = "<section class=\"scene\" data-scene=\"s01\">A</section>";
+    // 合并节点内部可能对动效做清洗（h02sx 等），只断言 HTML 仍在，不绑死脚本原文
+    const script = "<script>window.__m = 1;</script>";
     const result = await runGraph(workflow, {
       inputs: { scene_payloads: [{ scene_id: "s01" }, { scene_id: "s02" }, { scene_id: "s03" }] },
       provider: providerFromEnv({ WF_STUB: "1" }),
-      stub: { get: (nodeId: string) => (nodeId === "h02s" ? "<section>S</section>" : undefined) },
+      stub: { get: (nodeId: string) => (nodeId === "h02s" ? section : nodeId === "h02sm" ? script : undefined) },
     });
+
     assert.equal(result.status, "success");
-    assert.equal(result.outputs["scenes_html"], "<section>S</section>\n\n<section>S</section>\n\n<section>S</section>");
     assert.equal(result.nodes.filter((node) => node.nodeId === "h02s").length, 3);
+    assert.equal(result.nodes.filter((node) => node.nodeId === "h02sm").length, 3);
+    assert.equal(result.nodes.filter((node) => node.nodeId === "h02sk").length, 3);
+
+    const scenes = result.outputs["scenes"] as string[];
+    assert.equal(scenes.length, 3, "每屏应收集一条合并结果");
+    for (const item of scenes) {
+      assert.ok(item.startsWith(section), "合并结果应以本屏 HTML 开头");
+      assert.ok(item.length >= section.length, "合并结果不能丢内容");
+    }
   });
 
   it("iteration 并行模式结果顺序不变", async () => {

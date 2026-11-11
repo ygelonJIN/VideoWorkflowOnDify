@@ -2,15 +2,32 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { parse } from "yaml";
-import { addNode, connect, moveNode, removeEdge, removeNode, updateNodeField, YamlEditError } from "../src/engine/yamlEdit.js";
-import { WORKFLOW } from "./paths.js";
+import { addNode, connect, moveNode, promptTextOf, removeEdge, removeNode, updateNodeField, YamlEditError } from "../src/engine/yamlEdit.js";
+import { WORKFLOW, WORKFLOW_01 } from "./paths.js";
 
 const RAW = readFileSync(WORKFLOW, "utf8");
+const RAW_01 = readFileSync(WORKFLOW_01, "utf8");
+
+interface GraphShape {
+  workflow: {
+    graph: {
+      nodes: Array<{ id: string; data: Record<string, unknown>; position?: { x: number; y: number }; positionAbsolute?: { x: number; y: number } }>;
+      edges: Array<{ id: string; source: string; target: string }>;
+    };
+  };
+}
+
+function graphOf(raw: string): GraphShape["workflow"]["graph"] {
+  return (parse(raw) as GraphShape).workflow.graph;
+}
 
 function nodeData(raw: string, id: string): Record<string, unknown> {
-  const doc = parse(raw) as { workflow: { graph: { nodes: Array<{ id: string; data: Record<string, unknown> }> } } };
-  return doc.workflow.graph.nodes.find((node) => node.id === id)?.data as Record<string, unknown>;
+  return graphOf(raw).nodes.find((node) => node.id === id)?.data as Record<string, unknown>;
 }
+
+// 节点/连线数量以当前 YAML 为基准，04 增删节点不用回来改测试
+const BASE_NODES = graphOf(RAW).nodes.length;
+const BASE_EDGES = graphOf(RAW).edges.length;
 
 describe("YAML 写回", () => {
   it("改提示词只动那一行，注释和结构不变", () => {
@@ -21,7 +38,7 @@ describe("YAML 写回", () => {
     assert.equal(nodeData(RAW, "a01")["title"], nodeData(next, "a01")["title"]);
     assert.ok(next.startsWith(RAW.split("\n").slice(0, 2).join("\n")), "文件头注释应原样保留");
     assert.equal(next.split("\n").length, RAW.split("\n").length, "单行替换不应改变行数");
-    assert.equal((parse(next) as { workflow: { graph: { nodes: unknown[] } } }).workflow.graph.nodes.length, 49);
+    assert.equal(graphOf(next).nodes.length, BASE_NODES);
   });
 
   it("改代码与标题", () => {
@@ -32,45 +49,72 @@ describe("YAML 写回", () => {
     assert.equal(nodeData(withTitle, "a03")["title"], "A03 新标题");
   });
 
+  it("多消息提示词按索引只改那一条", () => {
+    const before = graphOf(RAW_01).nodes.find((node) => node.id === "d01")?.data["prompt_template"] as Array<{ role: string; text: string }>;
+    assert.equal(before.length, 2, "01 的 d01 应是 system+user 两条");
+    const next = updateNodeField(RAW_01, "d01", "prompt", "新的 user 消息", 1);
+    const after = graphOf(next).nodes.find((node) => node.id === "d01")?.data["prompt_template"] as Array<{ role: string; text: string }>;
+    assert.equal(after.length, 2);
+    assert.equal(after[0]?.text, before[0]?.text, "第一条 message 不应被动");
+    assert.equal(after[1]?.text, "新的 user 消息");
+    assert.equal(graphOf(next).nodes.length, graphOf(RAW_01).nodes.length);
+    assert.equal(promptTextOf(next, "d01"), `${before[0]?.text}\n\n新的 user 消息`);
+  });
+
+  it("提示词索引越界直接报错", () => {
+    assert.throws(() => updateNodeField(RAW_01, "d01", "prompt", "x", 2), YamlEditError);
+  });
+
   it("未知节点直接报错，不写坏文件", () => {
     assert.throws(() => updateNodeField(RAW, "nope", "title", "x"), YamlEditError);
   });
 
   it("加节点会自动连一条边，删除后恢复原状", () => {
     const added = addNode(RAW, { type: "code", title: "新 Code", position: { x: 10, y: 20 }, sourceId: "a03" });
-    const withNode = parse(added.raw) as { workflow: { graph: { nodes: Array<{ id: string; data: Record<string, unknown> }>; edges: Array<{ source: string; target: string }> } } };
-    assert.equal(withNode.workflow.graph.nodes.length, 50);
-    const node = withNode.workflow.graph.nodes.find((item) => item.id === added.nodeId);
+    const withNode = graphOf(added.raw);
+    assert.equal(withNode.nodes.length, BASE_NODES + 1);
+    assert.equal(withNode.edges.length, BASE_EDGES + 1);
+    const node = withNode.nodes.find((item) => item.id === added.nodeId);
     assert.equal(node?.data["type"], "code");
-    assert.ok(withNode.workflow.graph.edges.some((edge) => edge.source === "a03" && edge.target === added.nodeId));
+    assert.ok(withNode.edges.some((edge) => edge.source === "a03" && edge.target === added.nodeId));
 
     const removed = removeNode(added.raw, added.nodeId);
-    const restored = parse(removed) as { workflow: { graph: { nodes: unknown[]; edges: Array<{ source: string; target: string }> } } };
-    assert.equal(restored.workflow.graph.nodes.length, 49);
-    assert.equal(restored.workflow.graph.edges.length, 51);
-    assert.ok(!restored.workflow.graph.edges.some((edge) => edge.source === added.nodeId || edge.target === added.nodeId));
+    const restored = graphOf(removed);
+    assert.equal(restored.nodes.length, BASE_NODES);
+    assert.equal(restored.edges.length, BASE_EDGES);
+    assert.ok(!restored.edges.some((edge) => edge.source === added.nodeId || edge.target === added.nodeId));
+  });
+
+  it("结构编辑不丢文件末尾换行", () => {
+    assert.ok(RAW.endsWith("\n"), "原始 04 应以换行结尾");
+    const added = addNode(RAW, { type: "code", title: "换行测试", position: { x: 0, y: 0 }, sourceId: "a03" });
+    assert.ok(added.raw.endsWith("\n"), "加节点后末尾换行还在");
+    const removed = removeNode(added.raw, added.nodeId);
+    assert.ok(removed.endsWith("\n"), "删节点后末尾换行还在");
+    assert.equal(removed, RAW, "一加一删应逐字还原");
   });
 
   it("删除中间节点会把前后接上", () => {
     const removed = removeNode(RAW, "a02");
-    const graph = (parse(removed) as { workflow: { graph: { nodes: unknown[]; edges: Array<{ source: string; target: string }> } } }).workflow.graph;
-    assert.equal(graph.nodes.length, 48);
+    const graph = graphOf(removed);
+    assert.equal(graph.nodes.length, BASE_NODES - 1);
     assert.ok(graph.edges.some((edge) => edge.source === "a01" && edge.target === "a03"));
   });
 
   it("连线与断开", () => {
     const connected = connect(RAW, { source: "a03", target: "a04" });
-    const after = (parse(connected) as { workflow: { graph: { edges: Array<{ id: string; source: string; target: string }> } } }).workflow.graph;
+    const after = graphOf(connected);
     const edge = after.edges.find((item) => item.source === "a03" && item.target === "a04");
     assert.ok(edge);
     const removed = removeEdge(connected, edge.id);
-    const final = (parse(removed) as { workflow: { graph: { edges: unknown[] } } }).workflow.graph;
-    assert.equal(final.edges.length, 51);
+    const final = graphOf(removed);
+    assert.equal(final.edges.length, BASE_EDGES);
+    assert.equal(removed, RAW, "连一条再删掉应逐字还原");
   });
 
   it("移动节点只改 position 四行", () => {
     const moved = moveNode(RAW, "a03", { x: 123, y: 456 });
-    const graph = (parse(moved) as { workflow: { graph: { nodes: Array<{ id: string; position: { x: number; y: number }; positionAbsolute: { x: number; y: number } }> } } }).workflow.graph;
+    const graph = graphOf(moved);
     const node = graph.nodes.find((item) => item.id === "a03");
     assert.deepEqual(node?.position, { x: 123, y: 456 });
     assert.deepEqual(node?.positionAbsolute, { x: 123, y: 456 });
@@ -79,7 +123,7 @@ describe("YAML 写回", () => {
 
   it("新加 if-else 会按来源节点的输出生成默认条件", () => {
     const added = addNode(RAW, { type: "if-else", title: "新门禁", position: { x: 0, y: 0 }, sourceId: "a03" });
-    const graph = (parse(added.raw) as { workflow: { graph: { nodes: Array<{ id: string; data: Record<string, unknown> }> } } }).workflow.graph;
+    const graph = graphOf(added.raw);
     const node = graph.nodes.find((item) => item.id === added.nodeId);
     const cases = node?.data["cases"] as Array<{ conditions: Array<{ variable_selector: string[]; comparison_operator: string }> }>;
     assert.equal(cases?.[0]?.conditions[0]?.variable_selector[0], "a03");

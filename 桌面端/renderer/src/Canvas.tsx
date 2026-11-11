@@ -25,8 +25,8 @@ const MIN_RATIO = 0.4;        // 缩放下限 = 全图适配比例 × 0.4，不�
 
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 
-const STATE_TEXT: Record<string, string> = { success: "成功", running: "运行中", error: "失败" };
-const STATE_CLASS: Record<string, string> = { success: "ok", running: "run", error: "err" };
+const STATE_TEXT: Record<string, string> = { success: "成功", running: "运行中", error: "失败", stopped: "已停止" };
+const STATE_CLASS: Record<string, string> = { success: "ok", running: "run", error: "err", stopped: "stop" };
 
 export function Canvas({ graph, selectedId, connectSource, statuses, onSelect, onEdgeClick, onMoveNode }: Props) {
   const ref = useRef<HTMLDivElement>(null);
@@ -34,9 +34,42 @@ export function Canvas({ graph, selectedId, connectSource, statuses, onSelect, o
   const [view, setView] = useState<View>({ scale: 0.5, x: 40, y: 40 });
   const drag = useRef<{ startX: number; startY: number; originX: number; originY: number } | null>(null);
   const [dragging, setDragging] = useState<{ id: string; startX: number; startY: number; originX: number; originY: number; x: number; y: number } | null>(null);
+  const [query, setQuery] = useState("");
+  const searchRef = useRef<HTMLInputElement>(null);
   const viewRef = useRef(view);
   viewRef.current = view;
   const fittedPath = useRef<string | null>(null);
+
+  const matches = useMemo(() => {
+    const keyword = query.trim().toLowerCase();
+    if (!keyword) return [];
+    return graph.nodes
+      .filter((node) => node.title.toLowerCase().includes(keyword) || node.id.toLowerCase().includes(keyword))
+      .slice(0, 8);
+  }, [query, graph]);
+
+  const focusNode = (id: string) => {
+    const node = graph.nodes.find((item) => item.id === id);
+    if (!node) return;
+    onSelect(id);
+    const scale = clamp(Math.max(view.scale, 0.5), minScaleRef.current, 1);
+    const centerX = node.position.x + node.width / 2;
+    const centerY = node.position.y + node.height / 2;
+    setView({ scale, x: size.width / 2 - centerX * scale, y: size.height / 2 - centerY * scale });
+    setQuery("");
+  };
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "f") {
+        event.preventDefault();
+        searchRef.current?.focus();
+        searchRef.current?.select();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   const bounds = useMemo(() => {
     let maxX = 1200;
@@ -163,6 +196,33 @@ export function Canvas({ graph, selectedId, connectSource, statuses, onSelect, o
         <span>{graph.nodes.length} 节点 · {graph.edges.length} 连线</span>
         <span className="zoom">{Math.round(view.scale * 100)}%</span>
         <span className="hint">滚轮缩放 · 拖空白平移 · 点节点看详情</span>
+      </div>
+      <div className="canvas-search">
+        <input
+          ref={searchRef}
+          value={query}
+          placeholder="搜索节点（⌘F）"
+          onChange={(event) => setQuery(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" && matches[0]) {
+              event.preventDefault();
+              focusNode(matches[0].id);
+            } else if (event.key === "Escape") {
+              setQuery("");
+              searchRef.current?.blur();
+            }
+          }}
+        />
+        {matches.length > 0 && (
+          <ul className="search-results">
+            {matches.map((node) => (
+              <li key={node.id} onMouseDown={(event) => { event.preventDefault(); focusNode(node.id); }}>
+                <span>{node.title}</span>
+                <span className="dim">{node.id}</span>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
       <div
         className="stage"

@@ -3,12 +3,14 @@ import type { EnvInfo, FileEntry, Project, RunInputs, RunResult, TermEvent, Term
 export interface Bridge {
   workflows(): Promise<Array<{ name: string; path: string }>>;
   load(path: string): Promise<WorkflowInfo>;
-  run(options: { path: string; stub: boolean; until?: string; inputs?: Partial<RunInputs> }): Promise<RunResult>;
+  rev(path: string): Promise<{ rev: string }>;
+  run(options: { path: string; stub: boolean; until?: string; inputs?: Partial<RunInputs>; clientId?: string }): Promise<RunResult>;
+  cancel(clientId: string): Promise<{ ok: boolean; error?: string }>;
   env(): Promise<EnvInfo>;
   inputs(): Promise<Partial<RunInputs>>;
   onEvent(handler: (event: TraceEvent) => void): () => void;
   projects(): Promise<Project[]>;
-  updateNode(options: { path: string; nodeId: string; field: "title" | "prompt" | "code"; value: string }): Promise<{ ok: boolean; mirror?: string | null; graph: WorkflowInfo }>;
+  updateNode(options: { path: string; nodeId: string; field: "title" | "prompt" | "code"; value: string; messageIndex?: number }): Promise<{ ok: boolean; mirror?: string | null; mirrorWarning?: string; graph: WorkflowInfo }>;
   fileUrl(filePath: string): Promise<string>;
   addNode(options: { path: string; type: string; title?: string; position?: { x: number; y: number }; sourceId?: string | null }): Promise<{ nodeId: string; graph: WorkflowInfo }>;
   removeNode(options: { path: string; nodeId: string }): Promise<{ graph: WorkflowInfo }>;
@@ -39,7 +41,9 @@ async function post<T>(url: string, body: unknown): Promise<T> {
 const httpBridge: Bridge = {
   workflows: () => fetch("/api/workflows").then((response) => response.json()),
   load: (path) => post<WorkflowInfo>("/api/load", { path }),
+  rev: (path) => post<{ rev: string }>("/api/rev", { path }),
   run: (options) => post<RunResult>("/api/run", options),
+  cancel: (clientId) => post<{ ok: boolean; error?: string }>("/api/cancel", { clientId }),
   env: () => fetch("/api/env").then((response) => response.json()),
   inputs: () => fetch("/api/inputs").then((response) => response.json()),
   projects: () => fetch("/api/projects").then((response) => response.json()),

@@ -151,9 +151,11 @@ export async function complete(provider: ProviderConfig, messages: ChatMessage[]
   const attempts = 3;
   let lastError: unknown;
   for (let attempt = 0; attempt < attempts; attempt += 1) {
+    if (options.signal?.aborted) throw new LlmError("已停止");
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), provider.timeoutMs);
-    const signal = options.signal ?? controller.signal;
+    // 外部 signal（手动停止）与单次请求超时要同时生效；以前传了 signal 就把超时丢了
+    const signal = options.signal ? AbortSignal.any([options.signal, controller.signal]) : controller.signal;
     try {
       const response = await fetch(url, {
         method: "POST",
@@ -190,6 +192,7 @@ export async function complete(provider: ProviderConfig, messages: ChatMessage[]
       };
     } catch (error) {
       lastError = error;
+      if (options.signal?.aborted) throw new LlmError("已停止");
       if (error instanceof LlmError) throw error;
       if (attempt < attempts - 1) {
         await new Promise((resolve) => setTimeout(resolve, 800 * 2 ** attempt));

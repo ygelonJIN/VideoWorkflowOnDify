@@ -73,7 +73,7 @@ export interface OutputDefinition {
   value_type?: string;
 }
 
-export type NodeStatus = "pending" | "running" | "success" | "error" | "skipped" | "unimplemented";
+export type NodeStatus = "pending" | "running" | "success" | "error" | "stopped" | "skipped" | "unimplemented";
 
 export interface TokenUsage {
   input_tokens?: number;

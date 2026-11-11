@@ -1,18 +1,69 @@
-import type { RunInputs } from "./types.js";
+import type { RunInputs, StartVariable } from "./types.js";
 
 interface Props {
   inputs: RunInputs;
+  variables: StartVariable[];
   running: boolean;
   stub: boolean;
   until: string;
-  onChange: (patch: Partial<RunInputs>) => void;
+  onChange: (patch: Record<string, string>) => void;
   onStubChange: (value: boolean) => void;
   onUntilChange: (value: string) => void;
   onRun: () => void;
   onClose: () => void;
 }
 
-export function InputPanel({ inputs, running, stub, until, onChange, onStubChange, onUntilChange, onRun, onClose }: Props) {
+function InputField({
+  variable,
+  value,
+  onChange,
+}: {
+  variable: StartVariable;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  const label = `${variable.label || variable.variable}${variable.required ? "（必填）" : ""}`;
+  if (variable.type === "paragraph") {
+    return (
+      <label className="field">
+        <span>{label}</span>
+        <textarea
+          rows={variable.variable === "campaign_brief" ? 8 : 3}
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          placeholder={variable.variable === "campaign_brief" ? "粘聊天记录、文章、清单或一句话都行" : ""}
+        />
+      </label>
+    );
+  }
+  if (variable.type === "select") {
+    const options = variable.options.includes(value) || value === "" ? variable.options : [value, ...variable.options];
+    return (
+      <label className="field">
+        <span>{label}</span>
+        <select value={value} onChange={(event) => onChange(event.target.value)}>
+          {options.map((option) => (
+            <option key={option} value={option}>{option}</option>
+          ))}
+        </select>
+      </label>
+    );
+  }
+  return (
+    <label className="field">
+      <span>{label}</span>
+      <input
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        {...(variable.maxLength ? { maxLength: variable.maxLength } : {})}
+      />
+    </label>
+  );
+}
+
+export function InputPanel({ inputs, variables, running, stub, until, onChange, onStubChange, onUntilChange, onRun, onClose }: Props) {
+  const longFields = variables.filter((variable) => variable.type === "paragraph");
+  const shortFields = variables.filter((variable) => variable.type !== "paragraph");
   return (
     <div className="drawer card">
       <div className="drawer-head">
@@ -20,41 +71,27 @@ export function InputPanel({ inputs, running, stub, until, onChange, onStubChang
         <span className="spacer" />
         <button className="btn sm" onClick={onClose}>关闭</button>
       </div>
-      <label className="field">
-        <span>主题、原始文本或随口一句话（必填）</span>
-        <textarea
-          rows={8}
-          value={inputs.campaign_brief}
-          onChange={(event) => onChange({ campaign_brief: event.target.value })}
-          placeholder="粘聊天记录、文章、清单或一句话都行"
+      {variables.length === 0 && <div className="hint-text">这个工作流的 start 节点没有声明输入。</div>}
+      {longFields.map((variable) => (
+        <InputField
+          key={variable.variable}
+          variable={variable}
+          value={inputs[variable.variable] ?? ""}
+          onChange={(value) => onChange({ [variable.variable]: value })}
         />
-      </label>
-      <label className="field">
-        <span>生产要求</span>
-        <input value={inputs.production_requirements} onChange={(event) => onChange({ production_requirements: event.target.value })} />
-      </label>
-      <div className="field-row">
-        <label className="field">
-          <span>请求编号</span>
-          <input value={inputs.request_id} onChange={(event) => onChange({ request_id: event.target.value })} />
-        </label>
-        <label className="field">
-          <span>TTS 供应商</span>
-          <select value={inputs.tts_provider} onChange={(event) => onChange({ tts_provider: event.target.value })}>
-            <option value="mimo">mimo</option>
-            <option value="macos">macos</option>
-            <option value="openai-compatible">openai-compatible</option>
-          </select>
-        </label>
-        <label className="field">
-          <span>TTS 声音</span>
-          <select value={inputs.tts_voice} onChange={(event) => onChange({ tts_voice: event.target.value })}>
-            {["mimo_default", "冰糖", "茉莉", "苏打", "白桦", "Mia", "Chloe", "Milo", "Dean"].map((voice) => (
-              <option key={voice} value={voice}>{voice}</option>
-            ))}
-          </select>
-        </label>
-      </div>
+      ))}
+      {shortFields.length > 0 && (
+        <div className="field-grid">
+          {shortFields.map((variable) => (
+            <InputField
+              key={variable.variable}
+              variable={variable}
+              value={inputs[variable.variable] ?? ""}
+              onChange={(value) => onChange({ [variable.variable]: value })}
+            />
+          ))}
+        </div>
+      )}
       <div className="field-row">
         <label className="field">
           <span>运行方式</span>

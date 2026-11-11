@@ -4,7 +4,7 @@ import { environmentValues, nodeTitle, nodeType, startNode, startVariables } fro
 import type { ProviderConfig } from "./config.js";
 import { VariablePool } from "./vars.js";
 import type { ExecuteResult, StubSource } from "./executors.js";
-import { evaluateConditions, executeNode, NodeExecutionError, NodeNotImplementedError } from "./executors.js";
+import { evaluateConditions, executeNode, NodeExecutionError, NodeNotImplementedError, selectorsUsedBy } from "./executors.js";
 import { TraceRecorder } from "./trace.js";
 import type { TraceEvent } from "./trace.js";
 
@@ -17,6 +17,8 @@ export interface RunOptions {
   until?: string;
   maxSteps?: number;
   codeTimeoutMs?: number;
+  /** 手动停止：节点之间检查，模型请求 / Code 子进程会收到中断。 */
+  signal?: AbortSignal;
   onEvent?: (event: TraceEvent) => void;
 }
 
@@ -71,6 +73,60 @@ class StopRun extends Error {
   }
 }
 
+function throwIfAborted(ctx: RunContext): void {
+  if (ctx.options.signal?.aborted) throw new StopRun("stopped", "已停止");
+}
+
+const INPUT_BUDGET = 24000;
+const INPUT_ITEM_LIMIT = 6000;
+
+/** 收集节点声明的选择器：`*_selector` 数组 + 提示词 / 模板里的 {{#node.field#}}。 */
+function collectSelectors(value: unknown, out: string[][]): void {
+  if (!value || typeof value !== "object") return;
+  if (Array.isArray(value)) {
+    for (const item of value) collectSelectors(item, out);
+    return;
+  }
+  for (const [key, item] of Object.entries(value)) {
+    if (
+      key.endsWith("_selector") &&
+      Array.isArray(item) &&
+      item.length >= 2 &&
+      item.every((entry) => typeof entry === "string")
+    ) {
+      out.push(item as string[]);
+    } else {
+      collectSelectors(item, out);
+    }
+  }
+}
+
+/** 运行前把该节点实际读到的值记下来，给检视器的「输入值」用（超长截断，单节点总量封顶）。 */
+function captureInputs(node: DslNode, pool: VariablePool): Record<string, string> {
+  const selectors: string[][] = [];
+  collectSelectors(node.data, selectors);
+  selectors.push(...selectorsUsedBy(node));
+  const inputs: Record<string, string> = {};
+  let budget = INPUT_BUDGET;
+  const seen = new Set<string>();
+  for (const selector of selectors) {
+    const key = selector.join(".");
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    const value = pool.get(selector);
+    if (value === undefined) continue;
+    let text = typeof value === "string" ? value : (JSON.stringify(value, null, 2) ?? String(value));
+    if (text.length > INPUT_ITEM_LIMIT) text = `${text.slice(0, INPUT_ITEM_LIMIT)}\n…（已截断，共 ${text.length} 字符）`;
+    if (text.length > budget) {
+      inputs[`${key} （其余省略）`] = `本次输入展示预算 ${INPUT_BUDGET} 字符已用完`;
+      break;
+    }
+    budget -= text.length;
+    inputs[key] = text;
+  }
+  return inputs;
+}
+
 function belongsTo(node: DslNode, containerId: string | undefined): boolean {
   const iterationId = node.data["iteration_id"];
   const loopId = node.data["loop_id"];
@@ -99,6 +155,7 @@ function resolveNextNodeIds(
 }
 
 async function executeOne(ctx: RunContext, node: DslNode): Promise<ExecuteResult> {
+  throwIfAborted(ctx);
   const record: NodeRunRecord = {
     nodeId: node.id,
     type: nodeType(node),
@@ -108,6 +165,7 @@ async function executeOne(ctx: RunContext, node: DslNode): Promise<ExecuteResult
   };
   ctx.records.push(record);
   ctx.statuses.set(node.id, "running");
+  if (node.data.type !== "start") record.inputs = captureInputs(node, ctx.pool);
   ctx.emit({ type: "node_start", nodeId: node.id, nodeType: record.type, title: record.title });
   const started = Date.now();
 
@@ -126,6 +184,7 @@ async function executeOne(ctx: RunContext, node: DslNode): Promise<ExecuteResult
         ...(ctx.options.stub ? { stub: ctx.options.stub } : {}),
         ...(ctx.options.codeTimeoutMs !== undefined ? { codeTimeoutMs: ctx.options.codeTimeoutMs } : {}),
         ...(ctx.options.env ? { env: ctx.options.env } : {}),
+        ...(ctx.options.signal ? { signal: ctx.options.signal } : {}),
       });
     }
 
@@ -151,6 +210,13 @@ async function executeOne(ctx: RunContext, node: DslNode): Promise<ExecuteResult
     return result;
   } catch (error) {
     record.ms = Date.now() - started;
+    if (ctx.options.signal?.aborted) {
+      record.status = "stopped";
+      record.error = "已停止";
+      ctx.statuses.set(node.id, "stopped");
+      ctx.emit({ type: "node_error", nodeId: node.id, nodeType: record.type, title: record.title, status: "stopped", error: record.error });
+      throw new StopRun("stopped", "已停止");
+    }
     if (error instanceof NodeNotImplementedError) {
       record.status = "unimplemented";
       record.error = error.message;
@@ -187,11 +253,12 @@ async function executeIteration(ctx: RunContext, node: DslNode): Promise<Record<
   const parallelNums = Math.max(1, Number(node.data["parallel_nums"] ?? 10));
 
   const runItem = async (item: unknown, index: number, pool: VariablePool, sink: RunContext): Promise<unknown> => {
+    throwIfAborted(sink);
     pool.mergeNodeOutputs(node.id, { item, index });
     try {
       await runContainer(sink, [startId], node.id);
     } catch (error) {
-      if (error instanceof StopRun && error.status === "unimplemented") throw error;
+      if (error instanceof StopRun && (error.status === "unimplemented" || error.status === "stopped")) throw error;
       if (mode === "continue-on-error") return null;
       if (mode === "remove-abnormal-output") return undefined;
       throw error;
@@ -245,6 +312,7 @@ async function executeLoop(ctx: RunContext, node: DslNode): Promise<Record<strin
 
   let round = 0;
   for (; round < loopCount; round += 1) {
+    throwIfAborted(ctx);
     await runContainer(ctx, [startId], node.id);
     if (evaluateConditions(breakConditions, ctx.pool, logicalOperator)) {
       round += 1;
@@ -258,6 +326,7 @@ async function runContainer(ctx: RunContext, startIds: string[], containerId: st
   const queue = [...startIds];
   const visited = new Set<string>();
   while (queue.length > 0) {
+    throwIfAborted(ctx);
     const nodeId = queue.shift();
     if (!nodeId) break;
     const node = ctx.workflow.nodes.get(nodeId);

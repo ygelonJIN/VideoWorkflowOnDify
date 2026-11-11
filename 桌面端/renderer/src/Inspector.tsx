@@ -3,12 +3,20 @@ import type { RunResult, WorkflowInfo, WorkflowNode } from "./types.js";
 
 type EditableField = "title" | "prompt" | "code";
 
+const OUTPUT_LIMIT = 4000;
+
+/** 节点输出值：字符串原样、对象格式化；超长截断并注明总长度。 */
+function formatOutput(value: unknown): string {
+  const text = typeof value === "string" ? value : (JSON.stringify(value, null, 2) ?? String(value));
+  return text.length > OUTPUT_LIMIT ? `${text.slice(0, OUTPUT_LIMIT)}\n…（已截断，共 ${text.length} 字符）` : text;
+}
+
 interface Props {
   graph: WorkflowInfo;
   node: WorkflowNode | null;
   result: RunResult | null;
   status: string;
-  onUpdate: (field: EditableField, value: string) => Promise<void>;
+  onUpdate: (field: EditableField, value: string, messageIndex?: number) => Promise<void>;
   onDelete: () => void;
 }
 
@@ -25,7 +33,7 @@ function Section({ title, action, children }: { title: string; action?: React.Re
 }
 
 export function Inspector({ graph, node, result, status, onUpdate, onDelete }: Props) {
-  const [editor, setEditor] = useState<{ field: EditableField; value: string } | null>(null);
+  const [editor, setEditor] = useState<{ field: EditableField; value: string; index?: number } | null>(null);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [editError, setEditError] = useState<string | null>(null);
@@ -36,7 +44,7 @@ export function Inspector({ graph, node, result, status, onUpdate, onDelete }: P
     setEditError(null);
     setMessage(null);
     try {
-      await onUpdate(editor.field, editor.value);
+      await onUpdate(editor.field, editor.value, editor.index);
       setEditor(null);
       setMessage("已写回 YAML");
     } catch (error) {
@@ -97,7 +105,9 @@ export function Inspector({ graph, node, result, status, onUpdate, onDelete }: P
       {editor ? (
         <div className="editor">
           <div className="sec-title">
-            {editor.field === "prompt" ? "编辑提示词" : editor.field === "code" ? "编辑代码" : "编辑标题"}
+            {editor.field === "prompt"
+              ? `编辑提示词${editor.index !== undefined && editor.index > 0 ? `（第 ${editor.index + 1} 条）` : ""}`
+              : editor.field === "code" ? "编辑代码" : "编辑标题"}
             <span className="sec-action">
               <button className="btn" onClick={() => setEditor(null)} disabled={saving}>取消</button>
               <button className="btn primary" onClick={() => void save()} disabled={saving}>
@@ -148,12 +158,26 @@ export function Inspector({ graph, node, result, status, onUpdate, onDelete }: P
             )}
           </Section>
 
-          {node.prompt !== undefined && (
+          {node.promptSections && node.promptSections.length > 0 && node.promptSections.length === 1 && (
             <Section
               title="提示词"
-              action={<button className="btn sm" onClick={() => setEditor({ field: "prompt", value: node.prompt ?? "" })}>编辑</button>}
+              action={<button className="btn sm" onClick={() => setEditor({ field: "prompt", value: node.promptSections?.[0]?.text ?? "", index: 0 })}>编辑</button>}
             >
-              <div className="code">{node.prompt.slice(0, 2000)}</div>
+              <div className="code">{(node.promptSections[0]?.text ?? "").slice(0, 2000)}</div>
+            </Section>
+          )}
+
+          {node.promptSections && node.promptSections.length > 1 && (
+            <Section title={`提示词（${node.promptSections.length} 条消息）`}>
+              {node.promptSections.map((section, index) => (
+                <div className="prompt-msg" key={section.id}>
+                  <div className="prompt-msg-head">
+                    <span className="prompt-role">{section.role} #{index + 1}</span>
+                    <button className="btn sm" onClick={() => setEditor({ field: "prompt", value: section.text, index })}>编辑这条</button>
+                  </div>
+                  <div className="code">{section.text.slice(0, 1200)}</div>
+                </div>
+              ))}
             </Section>
           )}
 
@@ -178,9 +202,32 @@ export function Inspector({ graph, node, result, status, onUpdate, onDelete }: P
                 <tbody>
                   <tr><td>状态</td><td>{runNode.status}</td></tr>
                   <tr><td>耗时</td><td>{runNode.ms}ms</td></tr>
+                  {runNode.usage?.total_tokens !== undefined && <tr><td>Tokens</td><td>{runNode.usage.total_tokens}</td></tr>}
                   {runNode.error && <tr><td>错误</td><td className="bad-text">{runNode.error}</td></tr>}
                 </tbody>
               </table>
+            </Section>
+          )}
+
+          {runNode?.inputs && Object.keys(runNode.inputs).length > 0 && (
+            <Section title="输入值">
+              {Object.entries(runNode.inputs).map(([name, value]) => (
+                <div className="out-item" key={name}>
+                  <div className="out-name">{name}</div>
+                  <pre className="out-value">{value}</pre>
+                </div>
+              ))}
+            </Section>
+          )}
+
+          {runNode?.outputs && Object.keys(runNode.outputs).length > 0 && (
+            <Section title="输出值">
+              {Object.entries(runNode.outputs).map(([name, value]) => (
+                <div className="out-item" key={name}>
+                  <div className="out-name">{name}</div>
+                  <pre className="out-value">{formatOutput(value)}</pre>
+                </div>
+              ))}
             </Section>
           )}
 

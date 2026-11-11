@@ -94,6 +94,10 @@ const server = createServer(async (request, response) => {
       return send(response, 200, { url: `/files?path=${encodeURIComponent(filePath)}`, href: await core.fileUrl(filePath) });
     }
     if (url.pathname === "/api/presets") return send(response, 200, core.termPresets());
+    if (url.pathname === "/api/rev" && request.method === "POST") {
+      const { path: filePath } = await jsonBody(request);
+      return send(response, 200, await core.fileRevision(filePath));
+    }
     if (url.pathname === "/api/load" && request.method === "POST") {
       const { path: filePath } = await jsonBody(request);
       return send(response, 200, await core.loadGraph(filePath));
@@ -113,6 +117,10 @@ const server = createServer(async (request, response) => {
         onEvent: (payload) => broadcast("trace", payload),
       });
       return send(response, 200, result);
+    }
+    if (url.pathname === "/api/cancel" && request.method === "POST") {
+      const { clientId } = await jsonBody(request);
+      return send(response, 200, core.cancelRun(clientId));
     }
     if (url.pathname === "/api/exec" && request.method === "POST") {
       const { cmd, cwd } = await jsonBody(request);

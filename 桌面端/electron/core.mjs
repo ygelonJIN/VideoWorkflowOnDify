@@ -3,6 +3,7 @@ import { readdir, readFile, rename, stat, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { spawn } from "node:child_process";
+import { createHash } from "node:crypto";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -20,6 +21,7 @@ export async function engine() {
       config: await import(pathToFileURL(path.join(engineDir, "config.js")).href),
       runner: await import(pathToFileURL(path.join(engineDir, "run.js")).href),
       yamlEdit: await import(pathToFileURL(path.join(engineDir, "yamlEdit.js")).href),
+      mirrors: await import(pathToFileURL(path.join(engineDir, "mirrors.js")).href),
     };
   }
   return engineCache;
@@ -42,6 +44,16 @@ export async function envInfo() {
   };
 }
 
+async function revisionOf(filePath) {
+  const data = await readFile(filePath);
+  return createHash("sha1").update(data).digest("hex").slice(0, 12);
+}
+
+/** 供界面判断磁盘上的 YAML 是否被别的进程改过。 */
+export async function fileRevision(filePath) {
+  return { rev: await revisionOf(safePath(filePath)) };
+}
+
 export async function loadGraph(filePath) {
   const { dsl } = await engine();
   const workflow = dsl.loadWorkflow(filePath);
@@ -59,17 +71,37 @@ export async function loadGraph(filePath) {
         : [],
       outputs: Array.isArray(data.outputs) ? data.outputs.map((item) => (typeof item === "string" ? item : item.variable)) : [],
       prompt: Array.isArray(data.prompt_template) ? data.prompt_template.map((item) => item.text).join("\n\n") : undefined,
+      promptSections: Array.isArray(data.prompt_template)
+        ? data.prompt_template.map((item, index) => ({
+            id: String(item.id ?? `${node.id}-${index}`),
+            role: String(item.role ?? "user"),
+            text: String(item.text ?? ""),
+          }))
+        : undefined,
       code: typeof data.code === "string" ? data.code : undefined,
       conditions: data.cases ?? data.conditions ?? undefined,
       model: data.model?.name ?? undefined,
     };
   });
+  const start = [...workflow.nodes.values()].find((node) => node.data?.type === "start");
+  const startVariables = Array.isArray(start?.data.variables)
+    ? start.data.variables.map((item) => ({
+        variable: String(item.variable ?? ""),
+        label: String(item.label ?? item.variable ?? ""),
+        type: String(item.type ?? "text-input"),
+        required: item.required === true,
+        options: Array.isArray(item.options) ? item.options.map((option) => String(option)) : [],
+        ...(item.max_length !== undefined ? { maxLength: Number(item.max_length) } : {}),
+      }))
+    : [];
   return {
     path: filePath,
+    rev: await revisionOf(filePath),
     name: path.basename(filePath),
     version: workflow.doc.version ?? "",
     appName: workflow.doc.app?.name ?? "",
     nodes,
+    startVariables,
     edges: workflow.edges.map((edge) => ({
       id: edge.id,
       source: edge.source,
@@ -81,7 +113,17 @@ export async function loadGraph(filePath) {
   };
 }
 
-export async function runWorkflow({ path: workflowPath, inputs = {}, stub = false, until, onEvent }) {
+const activeRuns = new Map();
+
+/** 手动停止：按渲染层传来的 clientId 中断对应运行（Electron IPC 与 HTTP 壳共用）。 */
+export function cancelRun(clientId) {
+  const controller = activeRuns.get(String(clientId ?? ""));
+  if (!controller) return { ok: false, error: "运行已结束或不存在" };
+  controller.abort();
+  return { ok: true };
+}
+
+export async function runWorkflow({ path: workflowPath, inputs = {}, stub = false, until, clientId, onEvent }) {
   const { config, runner } = await engine();
   const env = { ...config.loadEnvFile(path.join(desktopDir, ".env")), ...process.env };
   const provider = config.providerFromEnv(env, { stub });
@@ -89,66 +131,59 @@ export async function runWorkflow({ path: workflowPath, inputs = {}, stub = fals
   const provided = Object.fromEntries(Object.entries(inputs).filter(([, value]) => value !== "" && value !== undefined));
   const merged = { ...defaults, ...provided };
   const stubSource = stub ? runner.fileStubSource(path.join(desktopDir, "fixtures", "stub")) : undefined;
-  const result = await runner.runWorkflowFile({
-    workflowPath,
-    inputs: merged,
-    provider,
-    ...(stubSource ? { stub: stubSource } : {}),
-    ...(until ? { until } : {}),
-    ...(onEvent ? { onEvent } : {}),
-  });
-  const { trace, ...rest } = result;
-  return rest;
+  const controller = clientId ? new AbortController() : null;
+  if (clientId && controller) activeRuns.set(String(clientId), controller);
+  try {
+    const result = await runner.runWorkflowFile({
+      workflowPath,
+      inputs: merged,
+      provider,
+      ...(stubSource ? { stub: stubSource } : {}),
+      ...(until ? { until } : {}),
+      ...(controller ? { signal: controller.signal } : {}),
+      ...(onEvent ? { onEvent } : {}),
+    });
+    const { trace, ...rest } = result;
+    return rest;
+  } finally {
+    if (clientId) activeRuns.delete(String(clientId));
+  }
 }
 
 export async function inputDefaults() {
   return JSON.parse(await readFile(path.join(desktopDir, "fixtures", "input.json"), "utf8"));
 }
 
-const PROMPT_MIRRORS = {
-  a08: "分镜导演提示词.md",
-  h01d: "视觉定调提示词.md",
-  h01p: "图像计划提示词.md",
-  h01c: "组件语法提示词.md",
-  h01t: "转场设计提示词.md",
-  h01g: "背景系统提示词.md",
-  h01s: "HTML骨架提示词.md",
-  h02s: "场景单屏提示词.md",
-  h02m: "动效脚本提示词.md",
-  h02t: "转场脚本提示词.md",
-};
-
-const CODE_MIRRORS = {
-  h00: "split_scene_groups_black_frame.py",
-  h01v: "normalize_transition_plan.py",
-  h01pv: "normalize_image_plan.py",
-  h01w: "split_background_spec.py",
-  h02: "validate_html_composition_black_frame.py",
-  h03: "merge_scene_groups_black_frame.py",
-};
+const MIRROR_TOOL = path.join(workspaceDir, "HTML视频项目", "workflow_runtime", "tools", "sync_prompts_to_yaml.py");
 
 /** 改 YAML 里的提示词/代码/标题；04 的提示词和代码节点同步写回 保留资料/ 镜像。 */
-export async function updateNode({ path: yamlPath, nodeId, field, value }) {
+export async function updateNode({ path: yamlPath, nodeId, field, value, messageIndex }) {
   const safe = safePath(yamlPath);
-  const { yamlEdit } = await engine();
+  const { yamlEdit, mirrors } = await engine();
   const raw = await readFile(safe, "utf8");
-  const next = yamlEdit.updateNodeField(raw, nodeId, field, String(value ?? ""));
+  const next = yamlEdit.updateNodeField(raw, nodeId, field, String(value ?? ""), messageIndex);
   recordHistory(safe, raw);
   await writeAtomic(safe, next);
 
   let mirror = null;
-  if (path.basename(safe).startsWith("04")) {
-    const name = field === "prompt" ? PROMPT_MIRRORS[nodeId] : field === "code" ? CODE_MIRRORS[nodeId] : undefined;
+  let mirrorWarning;
+  if (path.basename(safe).startsWith("04") && (field === "prompt" || field === "code")) {
+    const maps = await mirrors.loadMirrorMaps(MIRROR_TOOL);
+    if (maps.warning) mirrorWarning = maps.warning;
+    const name = field === "prompt" ? maps.prompts[nodeId] : maps.codes[nodeId];
     if (name) {
       const dir = field === "prompt" ? "保留资料/工作流提示词" : "保留资料/工作流代码节点";
       const target = path.join(workspaceDir, dir, name);
       if (existsSync(target)) {
-        await writeFile(target, String(value ?? ""), "utf8");
+        const mirrorText = field === "prompt" ? yamlEdit.promptTextOf(next, nodeId) : String(value ?? "");
+        await writeFile(target, mirrorText, "utf8");
         mirror = path.relative(workspaceDir, target);
+      } else {
+        mirrorWarning = `映射表里有 ${nodeId} → ${name}，但镜像文件不存在，保留资料/ 未同步`;
       }
     }
   }
-  return { ok: true, path: safe, mirror, ...historyFlags(safe) };
+  return { ok: true, path: safe, mirror, ...(mirrorWarning ? { mirrorWarning } : {}), ...historyFlags(safe) };
 }
 
 const HISTORY_LIMIT = 50;

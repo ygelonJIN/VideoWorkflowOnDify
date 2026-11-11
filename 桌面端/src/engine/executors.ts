@@ -19,6 +19,7 @@ export interface ExecuteContext {
   stub?: StubSource;
   codeTimeoutMs?: number;
   env?: Record<string, string>;
+  signal?: AbortSignal;
 }
 
 export interface ExecuteResult {
@@ -193,7 +194,7 @@ function evaluateIfElse(node: DslNode, pool: VariablePool): string {
   return "false";
 }
 
-async function executeHttp(node: DslNode, pool: VariablePool): Promise<ExecuteResult> {
+async function executeHttp(node: DslNode, pool: VariablePool, signal?: AbortSignal): Promise<ExecuteResult> {
   const interpolate = (value: unknown) => (typeof value === "string" ? interpolateDify(value, pool) : value);
   const method = String(node.data["method"] ?? "get").toUpperCase();
   const url = interpolate(node.data["url"]);
@@ -226,7 +227,13 @@ async function executeHttp(node: DslNode, pool: VariablePool): Promise<ExecuteRe
   }
   const fullUrl = query.size > 0 ? `${String(url)}${String(url).includes("?") ? "&" : "?"}${query.toString()}` : String(url);
   const timeout = Number((node.data["timeout"] as Record<string, unknown> | undefined)?.["max_read_timeout"] ?? 60) * 1000;
-  const response = await fetch(fullUrl, { method, headers, body, signal: AbortSignal.timeout(timeout) });
+  const timeoutSignal = AbortSignal.timeout(timeout);
+  const response = await fetch(fullUrl, {
+    method,
+    headers,
+    body,
+    signal: signal ? AbortSignal.any([signal, timeoutSignal]) : timeoutSignal,
+  });
   const text = await response.text();
   return {
     outputs: {
@@ -260,7 +267,7 @@ export async function executeNode(context: ExecuteContext): Promise<ExecuteResul
           | undefined;
         const maxTokens = params?.["max_tokens"] !== undefined ? Number(params["max_tokens"]) : undefined;
         const started = Date.now();
-        const result = await complete(provider, messages, { maxTokens });
+        const result = await complete(provider, messages, { maxTokens, ...(context.signal ? { signal: context.signal } : {}) });
         return {
           outputs: { text: result.text, files: [], usage: result.usage ?? {} },
           usage: result.usage,
@@ -276,6 +283,7 @@ export async function executeNode(context: ExecuteContext): Promise<ExecuteResul
           code: String(node.data["code"] ?? ""),
           args,
           timeoutMs: context.codeTimeoutMs,
+          ...(context.signal ? { signal: context.signal } : {}),
           ...(process.env.WF_PYTHON ? { python: process.env.WF_PYTHON } : {}),
         });
         const outputs: Record<string, unknown> = {};
@@ -300,7 +308,7 @@ export async function executeNode(context: ExecuteContext): Promise<ExecuteResul
       }
 
       case "http-request":
-        return await executeHttp(node, pool);
+        return await executeHttp(node, pool, context.signal);
 
       case "end": {
         const outputs: Record<string, unknown> = {};

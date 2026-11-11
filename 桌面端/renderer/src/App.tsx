@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Canvas } from "./Canvas.js";
 import { Inspector } from "./Inspector.js";
 import { Terminal } from "./Terminal.js";
@@ -12,13 +12,7 @@ const api = bridge();
 type Tab = "run" | "terminal";
 type View = "canvas" | "artifacts";
 
-const EMPTY_INPUTS: RunInputs = {
-  campaign_brief: "",
-  request_id: "",
-  tts_provider: "mimo",
-  tts_voice: "mimo_default",
-  production_requirements: "",
-};
+const EMPTY_INPUTS: RunInputs = {};
 
 function timeOf(iso: string): string {
   const date = new Date(iso);
@@ -48,6 +42,8 @@ export function App() {
   const [view, setView] = useState<View>("canvas");
   const [inspectorOpen, setInspectorOpen] = useState(true);
   const [consoleOpen, setConsoleOpen] = useState(true);
+  const [notice, setNotice] = useState<string | null>(null);
+  const runClientId = useRef<string | null>(null);
 
   const open = useCallback(async (path: string) => {
     try {
@@ -78,13 +74,9 @@ export function App() {
       if (!alive) return;
       setWorkflows(list);
       setEnv(envInfo);
-      setInputs({
-        campaign_brief: String(defaults.campaign_brief ?? ""),
-        request_id: String(defaults.request_id ?? ""),
-        tts_provider: String(defaults.tts_provider ?? "mimo"),
-        tts_voice: String(defaults.tts_voice ?? "mimo_default"),
-        production_requirements: String(defaults.production_requirements ?? ""),
-      });
+      const initialInputs: RunInputs = {};
+      for (const [key, value] of Object.entries(defaults)) initialInputs[key] = typeof value === "string" ? value : String(value ?? "");
+      setInputs(initialInputs);
       const preferred = list.find((item) => item.name.startsWith("04")) ?? list[0];
       if (preferred) void open(preferred.path);
     }).catch((cause: Error) => {
@@ -97,11 +89,14 @@ export function App() {
 
   const run = useCallback(async () => {
     if (!graph || running) return;
+    const clientId = crypto.randomUUID();
+    runClientId.current = clientId;
     setRunning(true);
     setStatuses({});
     setEvents([]);
     setResult(null);
     setError(null);
+    setNotice(null);
     setTab("run");
     const unsubscribe = api.onEvent((event) => {
       setEvents((previous) => [...previous, event]);
@@ -109,7 +104,7 @@ export function App() {
         setStatuses((previous) => ({
           ...previous,
           [event.nodeId as string]:
-            event.type === "node_start" ? "running" : event.type === "node_end" ? "success" : "error",
+            event.type === "node_start" ? "running" : event.type === "node_end" ? "success" : (event.status ?? "error"),
         }));
       }
     });
@@ -117,28 +112,66 @@ export function App() {
       const runResult = await api.run({
         path: graph.path,
         stub,
+        clientId,
         ...(until ? { until } : {}),
         inputs,
       });
       setResult(runResult);
       if (runResult.status === "error" && runResult.error) setError(runResult.error);
+      if (runResult.status === "stopped" && runResult.error) setNotice(runResult.error);
     } catch (runError) {
       setError((runError as Error).message);
     } finally {
       unsubscribe();
+      runClientId.current = null;
       setRunning(false);
     }
   }, [graph, running, stub, until, inputs]);
+
+  const stop = useCallback(async () => {
+    const clientId = runClientId.current;
+    if (!clientId) return;
+    setNotice("正在停止…");
+    try {
+      await api.cancel(clientId);
+    } catch (cause) {
+      setNotice(`停止失败：${(cause as Error).message}`);
+    }
+  }, []);
+
+  // 别的脚本（sync_prompts_to_yaml.py 等）改了 YAML 时，窗口重新获得焦点就同步一次
+  const syncExternal = useCallback(async () => {
+    if (!graph || running) return;
+    try {
+      const { rev } = await api.rev(graph.path);
+      if (!rev || rev === graph.rev) return;
+      const loaded = await api.load(graph.path);
+      setGraph(loaded);
+      setError(null);
+      setNotice("检测到外部修改，已重新载入 YAML");
+    } catch {
+      /* 文件暂时读不到：不打断当前操作，下一次编辑/运行会给出具体错误 */
+    }
+  }, [graph, running]);
+
+  useEffect(() => {
+    const onFocus = () => {
+      void syncExternal();
+    };
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+  }, [syncExternal]);
 
   const selected = useMemo(() => graph?.nodes.find((node) => node.id === selectedId) ?? null, [graph, selectedId]);
 
   const fail = (cause: unknown) => setError((cause as Error).message);
 
-  function applyUpdate(result: { graph: WorkflowInfo; canUndo?: boolean; canRedo?: boolean }) {
+  function applyUpdate(result: { graph: WorkflowInfo; canUndo?: boolean; canRedo?: boolean; mirrorWarning?: string }) {
     setGraph(result.graph);
     if (typeof result.canUndo === "boolean") setCanUndo(result.canUndo);
     if (typeof result.canRedo === "boolean") setCanRedo(result.canRedo);
     setError(null);
+    if (result.mirrorWarning) setNotice(result.mirrorWarning);
   }
 
   async function undo() {
@@ -276,9 +309,11 @@ export function App() {
           {connecting ? (connectFrom ? "选目标…" : "选起点…") : "连线"}
         </button>
         <button className="btn" onClick={() => setShowInput(true)}>输入</button>
-        <button className="btn primary" onClick={() => void run()} disabled={running || !graph}>
-          {running ? "运行中…" : "运行"}
-        </button>
+        {running ? (
+          <button className="btn danger" onClick={() => void stop()}>停止</button>
+        ) : (
+          <button className="btn primary" onClick={() => void run()} disabled={!graph}>运行</button>
+        )}
         <button
           className="btn ghost"
           onClick={() => setInspectorOpen((value) => !value)}
@@ -336,9 +371,15 @@ export function App() {
               node={selected}
               result={result}
               status={selectedId ? (statuses[selectedId] ?? "") : ""}
-              onUpdate={async (field, value) => {
+              onUpdate={async (field, value, messageIndex) => {
                 if (!selected) return;
-                const updated = await api.updateNode({ path: graph.path, nodeId: selected.id, field, value });
+                const updated = await api.updateNode({
+                  path: graph.path,
+                  nodeId: selected.id,
+                  field,
+                  value,
+                  ...(messageIndex !== undefined ? { messageIndex } : {}),
+                });
                 applyUpdate(updated);
               }}
               onDelete={() => void deleteNode()}
@@ -351,7 +392,7 @@ export function App() {
             <span className={`tab ${tab === "run" ? "on" : ""}`} onClick={() => setTab("run")}>运行台</span>
             <span className={`tab ${tab === "terminal" ? "on" : ""}`} onClick={() => setTab("terminal")}>终端</span>
             <span className="right">
-              {result ? `${result.status} · ${(result.ms / 1000).toFixed(2)}s` : running ? "运行中" : "就绪"}
+              {result ? `${result.status === "stopped" ? (result.error ? "已停止" : "已完成") : result.status} · ${(result.ms / 1000).toFixed(2)}s` : running ? "运行中" : "就绪"}
             </span>
             <button className="btn sm ghost toggle" onClick={() => setConsoleOpen((value) => !value)}>
               {consoleOpen ? "收起" : "展开"}
@@ -386,6 +427,7 @@ export function App() {
       {showInput && (
         <InputPanel
           inputs={inputs}
+          variables={graph?.startVariables ?? []}
           running={running}
           stub={stub}
           until={until}
@@ -398,6 +440,13 @@ export function App() {
           }}
           onClose={() => setShowInput(false)}
         />
+      )}
+
+      {notice && (
+        <div className="toast" role="status">
+          <span>{notice}</span>
+          <button className="btn sm ghost" onClick={() => setNotice(null)}>知道了</button>
+        </div>
       )}
     </div>
   );

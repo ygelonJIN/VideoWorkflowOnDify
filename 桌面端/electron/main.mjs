@@ -1,5 +1,5 @@
 import { app, BrowserWindow, ipcMain, protocol, shell } from "electron";
-import { readFile, stat } from "node:fs/promises";
+import { readFile, stat, writeFile } from "node:fs/promises";
 import { pathToFileURL } from "node:url";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -13,6 +13,7 @@ ipcMain.handle("wf:workflows", () => core.listWorkflows());
 ipcMain.handle("wf:env", () => core.envInfo());
 ipcMain.handle("wf:inputs", () => core.inputDefaults());
 ipcMain.handle("wf:load", (_event, filePath) => core.loadGraph(filePath));
+ipcMain.handle("wf:rev", (_event, filePath) => core.fileRevision(filePath));
 ipcMain.handle("wf:run", (event, options) =>
   core.runWorkflow({
     ...options,
@@ -21,6 +22,7 @@ ipcMain.handle("wf:run", (event, options) =>
     },
   }),
 );
+ipcMain.handle("wf:cancel", (_event, clientId) => core.cancelRun(clientId));
 ipcMain.handle("wf:projects", () => core.listProjects());
 ipcMain.handle("wf:update-node", async (_event, payload) => {
   const result = await core.updateNode(payload);
@@ -152,7 +154,122 @@ function createWindow() {
         await sleep(200);
         const back = await run(`({ zoom: document.querySelector(".canvas-hud .zoom").textContent, canvas: !!document.querySelector(".canvas-wrap") })`);
 
-        console.log("PROBE", JSON.stringify({ before, afterSelect, afterWheel, clickedZoomIn, afterZoomIn, clickedFit, afterFit, clicked100, after100, afterMin, widthBefore, collapsed, bottomBefore, consoleCollapsed, consoleBack, artifacts, back }, null, 2));
+        // 跑一次 stub（默认停在 a03），验证运行台、节点输出值和「停止」按钮的显隐
+        const reopened = await run(clickText("展开详情"));
+        const clickedRun = await run(clickText("运行"));
+        let settle = "";
+        for (let attempt = 0; attempt < 80; attempt += 1) {
+          await sleep(250);
+          settle = await run(`document.querySelector(".tabs .right")?.textContent?.trim() || ""`);
+          if (settle && !settle.includes("运行中")) break;
+        }
+        const nodeCenter = await run(`(() => { const node = document.querySelector(".node"); if (!node) return null; const rect = node.getBoundingClientRect(); return { x: Math.round(rect.x + rect.width / 2), y: Math.round(rect.y + rect.height / 2) }; })()`);
+        if (nodeCenter) {
+          win.webContents.sendInputEvent({ type: "mouseDown", x: nodeCenter.x, y: nodeCenter.y, button: "left", clickCount: 1 });
+          win.webContents.sendInputEvent({ type: "mouseUp", x: nodeCenter.x, y: nodeCenter.y, button: "left", clickCount: 1 });
+          await sleep(300);
+        }
+        const afterRun = await run(`({
+          settle: document.querySelector(".tabs .right")?.textContent?.trim() || "",
+          selected: document.querySelector(".insp-head h2")?.textContent || "",
+          outputs: document.querySelectorAll(".out-item").length,
+          outChars: (document.querySelector(".out-value")?.textContent || "").length,
+          stopWhileIdle: [...document.querySelectorAll("button")].some((button) => button.textContent.trim() === "停止"),
+          runVisible: [...document.querySelectorAll("button")].some((button) => button.textContent.trim() === "运行")
+        })`);
+
+        // 节点输入值：选中 A01，检视器应出现「输入值」并列出它读的 a00 字段
+        const clickedA01 = await run(`(() => {
+          const node = [...document.querySelectorAll(".node")].find((item) => item.textContent.includes("A01_整理自然语言需求"));
+          if (!node) return false;
+          node.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+          return true;
+        })()`);
+        await sleep(300);
+        const inputValues = await run(`(() => {
+          const section = [...document.querySelectorAll(".sec")].find((item) => (item.querySelector(".sec-title")?.textContent || "").startsWith("输入值"));
+          return { found: Boolean(section), items: section ? section.querySelectorAll(".out-item").length : 0 };
+        })()`);
+
+        // 输入抽屉按 start 变量动态生成：04 应出现 10 个变量 + 2 个运行控制
+        await run(clickText("输入"));
+        await sleep(250);
+        const inputDrawer = await run(`({
+          fields: document.querySelectorAll(".drawer .field").length,
+          labels: [...document.querySelectorAll(".drawer .field > span")].map((span) => span.textContent.trim()),
+          hasCreative: [...document.querySelectorAll(".drawer .field > span")].some((span) => span.textContent.includes("创作偏好")),
+          hasTtsBase: [...document.querySelectorAll(".drawer .field > span")].some((span) => span.textContent.includes("TTS Base"))
+        })`);
+        await run(clickText("关闭"));
+
+        // 切到 01 看多消息提示词：d01 应拆成 system / user 两块，各自可编辑
+        const switched = await run(`(() => {
+          const select = document.querySelector(".topbar select");
+          const option = [...select.options].find((item) => item.textContent.includes("01_"));
+          if (!option) return false;
+          const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value").set;
+          setter.call(select, option.value);
+          select.dispatchEvent(new Event("change", { bubbles: true }));
+          return true;
+        })()`);
+        await sleep(1200);
+        const clickedD01 = await run(`(() => {
+          const node = [...document.querySelectorAll(".node")].find((item) => item.textContent.includes("D01_批量HTML草稿"));
+          if (!node) return false;
+          node.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+          return true;
+        })()`);
+        await sleep(350);
+        const multiMessage = await run(`({
+          selected: document.querySelector(".insp-head h2")?.textContent || "",
+          messages: document.querySelectorAll(".prompt-msg").length,
+          roles: [...document.querySelectorAll(".prompt-role")].map((item) => item.textContent.trim()),
+          editButtons: [...document.querySelectorAll(".prompt-msg button")].map((button) => button.textContent.trim())
+        })`);
+
+        // 画布搜索：输入 D01 应出现结果，点第一条应选中并清空输入
+        const searchTyped = await run(`(() => {
+          const input = document.querySelector(".canvas-search input");
+          if (!input) return false;
+          const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set;
+          setter.call(input, "D01");
+          input.dispatchEvent(new Event("input", { bubbles: true }));
+          return true;
+        })()`);
+        await sleep(300);
+        const searchResults = await run(`({
+          items: document.querySelectorAll(".search-results li").length,
+          first: document.querySelector(".search-results li")?.textContent?.trim() || ""
+        })`);
+        const searchPicked = await run(`(() => {
+          const item = document.querySelector(".search-results li");
+          if (!item) return false;
+          item.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
+          return true;
+        })()`);
+        await sleep(350);
+        const afterSearch = await run(`({
+          selected: document.querySelector(".insp-head h2")?.textContent || "",
+          query: document.querySelector(".canvas-search input")?.value || "",
+          results: document.querySelectorAll(".search-results li").length
+        })`);
+
+        // 外部改动同步：往当前打开的工作流末尾写一行注释，再触发 window focus，应自动重载并提示
+        let externalSync = { skipped: true };
+        if (switched) {
+          const target = path.join(desktopDir, "..", "Dify工作流", "01_有数字人完整视频工作流.yml");
+          const original = await readFile(target);
+          try {
+            await writeFile(target, `${original.toString("utf8")}\n# probe-external-change\n`, "utf8");
+            await run(`window.dispatchEvent(new Event("focus"))`);
+            await sleep(900);
+            externalSync = await run(`({ toast: document.querySelector(".toast")?.textContent?.trim() || "", nodes: document.querySelectorAll(".node").length })`);
+          } finally {
+            await writeFile(target, original);
+          }
+        }
+
+        console.log("PROBE", JSON.stringify({ before, afterSelect, afterWheel, clickedZoomIn, afterZoomIn, clickedFit, afterFit, clicked100, after100, afterMin, widthBefore, collapsed, bottomBefore, consoleCollapsed, consoleBack, artifacts, back, reopened, clickedRun, afterRun, inputDrawer, switched, clickedD01, multiMessage, clickedA01, inputValues, searchTyped, searchResults, searchPicked, afterSearch, externalSync }, null, 2));
         app.exit(0);
       } catch (error) {
         console.error("PROBE FAILED", error);

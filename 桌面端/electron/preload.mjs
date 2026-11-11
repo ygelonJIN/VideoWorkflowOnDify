@@ -9,7 +9,9 @@ function subscribe(channel, handler) {
 contextBridge.exposeInMainWorld("wfs", {
   workflows: () => ipcRenderer.invoke("wf:workflows"),
   load: (filePath) => ipcRenderer.invoke("wf:load", filePath),
+  rev: (filePath) => ipcRenderer.invoke("wf:rev", filePath),
   run: (options) => ipcRenderer.invoke("wf:run", options),
+  cancel: (clientId) => ipcRenderer.invoke("wf:cancel", clientId),
   env: () => ipcRenderer.invoke("wf:env"),
   inputs: () => ipcRenderer.invoke("wf:inputs"),
   projects: () => ipcRenderer.invoke("wf:projects"),

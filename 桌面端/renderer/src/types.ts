@@ -11,6 +11,7 @@ export interface WorkflowNode {
   code?: string;
   conditions?: unknown;
   model?: string;
+  promptSections?: PromptSection[];
 }
 
 export interface WorkflowEdge {
@@ -23,10 +24,12 @@ export interface WorkflowEdge {
 
 export interface WorkflowInfo {
   path: string;
+  rev: string;
   name: string;
   version: string;
   appName: string;
   nodes: WorkflowNode[];
+  startVariables: StartVariable[];
   edges: WorkflowEdge[];
   warnings: string[];
 }
@@ -48,6 +51,9 @@ export interface RunNodeRecord {
   title: string;
   status: string;
   ms: number;
+  inputs?: Record<string, string>;
+  outputs?: Record<string, unknown>;
+  usage?: { input_tokens?: number; output_tokens?: number; total_tokens?: number };
   error?: string;
 }
 
@@ -100,12 +106,21 @@ export interface TermPreset {
   cmd: string;
 }
 
-export interface RunInputs {
-  campaign_brief: string;
-  request_id: string;
-  tts_provider: string;
-  tts_voice: string;
-  production_requirements: string;
+export type RunInputs = Record<string, string>;
+
+export interface StartVariable {
+  variable: string;
+  label: string;
+  type: string;
+  required: boolean;
+  options: string[];
+  maxLength?: number;
+}
+
+export interface PromptSection {
+  id: string;
+  role: string;
+  text: string;
 }
 
 declare global {

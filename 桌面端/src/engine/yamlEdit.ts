@@ -55,13 +55,20 @@ function findKeyLine(lines: string[], from: number, to: number, key: string, sec
   throw new YamlEditError(`节点里没有 ${key}`);
 }
 
+function isMultilineScalar(inline: string): boolean {
+  if (/^[|>][-+]?\s*$/.test(inline)) return true;
+  const quoteChar = inline[0];
+  if (quoteChar !== "'" && quoteChar !== '"') return false;
+  return !inline.slice(1).endsWith(quoteChar);
+}
+
 function replaceScalar(lines: string[], index: number, key: string, value: string): void {
   const line = lines[index] as string;
   const indent = " ".repeat(leadingSpaces(line));
   const inline = line.slice(line.indexOf(`${key}:`) + key.length + 1).trim();
   lines[index] = `${indent}${key}: ${quote(value)}`;
-  // 块标量（|、>）后面跟着缩进内容，一并去掉，避免残留成孤立文本
-  if (/^[|>][-+]?\s*$/.test(inline)) {
+  // 块标量（|、>）和多行引号标量后面跟着缩进内容，一并去掉，避免残留成孤立文本
+  if (isMultilineScalar(inline)) {
     let cursor = index + 1;
     while (cursor < lines.length) {
       const next = lines[cursor] as string;
@@ -79,21 +86,49 @@ function nodeById(doc: unknown, nodeId: string): Record<string, unknown> | undef
   return graph?.nodes?.find((node) => node.id === nodeId)?.data;
 }
 
-function readField(document: Record<string, unknown> | undefined, field: EditableField): unknown {
+function readField(document: Record<string, unknown> | undefined, field: EditableField, promptIndex = 0): unknown {
   if (!document) return undefined;
   if (field === "title") return document["title"];
   if (field === "code") return document["code"];
   if (field === "template") return document["template"];
   const template = document["prompt_template"];
   if (!Array.isArray(template) || template.length === 0) return undefined;
-  return (template[0] as { text?: unknown })?.text;
+  return (template[promptIndex] as { text?: unknown })?.text;
+}
+
+/** 节点里每条 prompt message 的 `text:` 键所在行；按第一条的缩进对齐，避免吃到块标量正文。 */
+function promptTextLineIndexes(lines: string[], from: number, to: number): number[] {
+  const sectionIndex = lines.findIndex((line, index) => index >= from && index < to && /^\s*prompt_template:\s*$/.test(line));
+  if (sectionIndex < 0) return [];
+  const baseIndent = leadingSpaces(lines[sectionIndex] as string);
+  let textIndent: number | null = null;
+  const found: number[] = [];
+  for (let index = sectionIndex + 1; index < to; index += 1) {
+    const line = lines[index] as string;
+    if (line.trim() === "") continue;
+    const indent = leadingSpaces(line);
+    // 序列项（- id / - role）与 prompt_template 同缩进，不能当成块结束
+    if (indent < baseIndent) break;
+    if (indent === baseIndent && !/^\s*- /.test(line)) break;
+    if (!/^\s*text:/.test(line)) continue;
+    if (textIndent === null) textIndent = indent;
+    if (indent === textIndent) found.push(index);
+  }
+  return found;
+}
+
+/** 节点的提示词全文（多条 message 用空行连接），给镜像同步用。 */
+export function promptTextOf(raw: string, nodeId: string): string {
+  const template = nodeById(parse(raw), nodeId)?.["prompt_template"];
+  if (!Array.isArray(template)) return "";
+  return template.map((item) => String((item as { text?: unknown })?.text ?? "")).join("\n\n");
 }
 
 /**
  * 只替换指定节点的单个字段值，其余行原样保留（注释、缩进、长单行都不动）。
  * 写完立刻重新解析校验：节点数、节点 id 顺序、目标字段都必须对得上。
  */
-export function updateNodeField(raw: string, nodeId: string, field: EditableField, value: string): string {
+export function updateNodeField(raw: string, nodeId: string, field: EditableField, value: string, messageIndex?: number): string {
   const lines = raw.split("\n");
   const before = parse(raw) as unknown;
   const beforeData = nodeById(before, nodeId);
@@ -116,10 +151,17 @@ export function updateNodeField(raw: string, nodeId: string, field: EditableFiel
       index = findKeyLine(lines, start + 1, end, "template");
       key = "template";
       break;
-    case "prompt":
-      index = findKeyLine(lines, start + 1, end, "text", "prompt_template");
+    case "prompt": {
+      const textLines = promptTextLineIndexes(lines, start + 1, end);
+      if (textLines.length === 0) throw new YamlEditError(`节点 ${nodeId} 没有 prompt_template`);
+      const target = messageIndex ?? 0;
+      if (target < 0 || target >= textLines.length) {
+        throw new YamlEditError(`节点 ${nodeId} 只有 ${textLines.length} 条提示词消息，索引 ${target} 越界`);
+      }
+      index = textLines[target] as number;
       key = "text";
       break;
+    }
     default:
       throw new YamlEditError(`不支持的字段：${String(field)}`);
   }
@@ -131,7 +173,7 @@ export function updateNodeField(raw: string, nodeId: string, field: EditableFiel
   if (!afterData) throw new YamlEditError("写回后找不到节点");
   const afterCount = (after as { workflow: { graph: { nodes: unknown[] } } }).workflow.graph.nodes.length;
   if (afterCount !== beforeCount) throw new YamlEditError(`写回后节点数变化：${beforeCount} → ${afterCount}`);
-  const afterValue = readField(afterData, field);
+  const afterValue = readField(afterData, field, messageIndex ?? 0);
   if (afterValue !== value) {
     throw new YamlEditError(`写回校验失败：期望 ${value.length} 字符，实际 ${String(afterValue ?? "").length}`);
   }
@@ -360,6 +402,12 @@ function edgeLines(edge: { id: string; source: string; sourceHandle: string; tar
   ];
 }
 
+/** 结构编辑会 splice 出行数组，末尾空行容易被吃掉；原文件有换行结尾就补回来。 */
+function joinLike(lines: string[], raw: string): string {
+  const text = lines.join("\n");
+  return raw.endsWith("\n") && !text.endsWith("\n") ? `${text}\n` : text;
+}
+
 function uniqueEdgeId(edges: Array<{ id: string }>, base: string): string {
   let id = base;
   let suffix = 2;
@@ -420,7 +468,7 @@ export function addNode(raw: string, spec: NodeSpec): { raw: string; nodeId: str
     }, edgeIndent);
   }
 
-  const next = lines.join("\n");
+  const next = joinLike(lines, raw);
   const after = graphOf(parse(next) as unknown);
   if (!after.nodes.some((node) => node.id === baseId)) throw new YamlEditError("新增节点写回失败");
   if (edgeId && !after.edges.some((edge) => edge.id === edgeId)) throw new YamlEditError("新增连线写回失败");
@@ -464,7 +512,7 @@ export function removeNode(raw: string, nodeId: string): string {
   toRemove.sort((a, b) => b.start - a.start);
   for (const range of toRemove) lines.splice(range.start, range.end - range.start);
 
-  let next = lines.join("\n");
+  let next = joinLike(lines, raw);
 
   if (incoming.length === 1 && outgoing.length === 1) {
     const before = incoming[0];
@@ -514,7 +562,7 @@ export function connect(raw: string, spec: EdgeSpec): string {
     targetType,
     flags,
   }, indent);
-  const next = lines.join("\n");
+  const next = joinLike(lines, raw);
   const after = graphOf(parse(next) as unknown);
   if (!after.edges.some((edge) => edge.id === id)) throw new YamlEditError("连线写回失败");
   return next;
@@ -539,7 +587,7 @@ export function removeEdge(raw: string, edgeId: string): string {
       break;
     }
   }
-  const next = lines.join("\n");
+  const next = joinLike(lines, raw);
   if (graphOf(parse(next) as unknown).edges.some((edge) => edge.id === edgeId)) throw new YamlEditError("删除连线写回失败");
   return next;
 }

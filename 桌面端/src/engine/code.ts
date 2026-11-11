@@ -8,6 +8,7 @@ export interface CodeRunOptions {
   args: Record<string, unknown>;
   timeoutMs?: number;
   python?: string;
+  signal?: AbortSignal;
 }
 
 export interface CodeRunResult {
@@ -45,11 +46,19 @@ export async function runPythonCode(options: CodeRunOptions): Promise<CodeRunRes
 
     const python = options.python ?? process.env.WF_PYTHON ?? "python3";
     const started = Date.now();
-    const result = await new Promise<{ code: number | null; stdout: string; stderr: string; timedOut: boolean }>((resolve, reject) => {
+    const result = await new Promise<{ code: number | null; stdout: string; stderr: string; timedOut: boolean; aborted: boolean }>((resolve, reject) => {
       const child = spawn(python, [runnerPath, argsPath, codePath], { stdio: ["ignore", "pipe", "pipe"] });
       let stdout = "";
       let stderr = "";
       let timedOut = false;
+      let aborted = false;
+      const onAbort = () => {
+        aborted = true;
+        child.kill("SIGKILL");
+      };
+      options.signal?.addEventListener("abort", onAbort, { once: true });
+      if (options.signal?.aborted) onAbort();
+      const cleanup = () => options.signal?.removeEventListener("abort", onAbort);
       const timer = setTimeout(() => {
         timedOut = true;
         child.kill("SIGKILL");
@@ -66,14 +75,17 @@ export async function runPythonCode(options: CodeRunOptions): Promise<CodeRunRes
       });
       child.on("error", (error) => {
         clearTimeout(timer);
+        cleanup();
         reject(error);
       });
       child.on("close", (code) => {
         clearTimeout(timer);
-        resolve({ code, stdout, stderr, timedOut });
+        cleanup();
+        resolve({ code, stdout, stderr, timedOut, aborted });
       });
     });
 
+    if (result.aborted) throw new Error("已停止");
     if (result.timedOut) throw new Error(`Code 节点超时（${options.timeoutMs ?? 120000}ms）`);
     if (result.code !== 0) throw new Error(`Code 节点失败（exit ${result.code}）：${result.stderr.trim().slice(-1200)}`);
     const markerIndex = result.stdout.lastIndexOf("__WF_RESULT__");

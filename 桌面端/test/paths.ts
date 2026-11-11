@@ -13,6 +13,7 @@ function findWorkspace(): string {
 
 export const WORKSPACE = findWorkspace();
 export const WORKFLOW = resolve(WORKSPACE, "Dify工作流/04_黑帧口播_分组生成.yml");
+export const WORKFLOW_01 = resolve(WORKSPACE, "Dify工作流/01_有数字人完整视频工作流.yml");
 export const DESKTOP = resolve(WORKSPACE, "桌面端");
 export const FIXTURES = resolve(DESKTOP, "fixtures");
 export const STUB_DIR = resolve(FIXTURES, "stub");
