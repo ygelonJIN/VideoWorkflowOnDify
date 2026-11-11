@@ -9,7 +9,8 @@ import type { EnvInfo, RunInputs, RunResult, TraceEvent, WorkflowInfo } from "./
 
 const api = bridge();
 
-type Tab = "run" | "terminal" | "artifacts";
+type Tab = "run" | "terminal";
+type View = "canvas" | "artifacts";
 
 const EMPTY_INPUTS: RunInputs = {
   campaign_brief: "",
@@ -44,6 +45,9 @@ export function App() {
   const [canRedo, setCanRedo] = useState(false);
   const [connecting, setConnecting] = useState(false);
   const [connectFrom, setConnectFrom] = useState<string | null>(null);
+  const [view, setView] = useState<View>("canvas");
+  const [inspectorOpen, setInspectorOpen] = useState(true);
+  const [consoleOpen, setConsoleOpen] = useState(true);
 
   const open = useCallback(async (path: string) => {
     try {
@@ -245,27 +249,13 @@ export function App() {
 
   return (
     <div className="app">
-      <header className="topbar">
-        <div className="brand"><span className="mark">V</span>视频工作流 · Studio</div>
+      <header className="topbar card">
         <select className="select" value={graph?.path ?? ""} onChange={(event) => void open(event.target.value)}>
           {workflows.map((workflow) => (
             <option key={workflow.path} value={workflow.path}>{workflow.name}</option>
           ))}
         </select>
         <span className="spacer" />
-        {graph && <span className="pill">{graph.version || "DSL"}</span>}
-        {env && <span className="pill">{env.model}</span>}
-        <span className={`pill ${env?.hasKey ? "ok" : ""}`}>{env?.hasKey ? "key 已配置" : "无 key"}</span>
-        <label className="toggle">
-          <input type="checkbox" checked={stub} onChange={(event) => setStub(event.target.checked)} />
-          stub
-        </label>
-        <select className="select narrow" value={until} onChange={(event) => setUntil(event.target.value)}>
-          <option value="a03">停在 a03</option>
-          <option value="">跑全程</option>
-        </select>
-        <button className="btn" onClick={() => void undo()} disabled={!canUndo} title="撤销 ⌘Z">↶</button>
-        <button className="btn" onClick={() => void redo()} disabled={!canRedo} title="重做 ⇧⌘Z">↷</button>
         <select className="select narrow" value={addType} onChange={(event) => setAddType(event.target.value)}>
           <option value="code">Code</option>
           <option value="llm">LLM</option>
@@ -274,7 +264,7 @@ export function App() {
           <option value="http-request">HTTP</option>
           <option value="end">End</option>
         </select>
-        <button className="btn" onClick={() => void addNode()} disabled={!graph}>＋ 节点</button>
+        <button className="btn" onClick={() => void addNode()} disabled={!graph}>添加节点</button>
         <button
           className={`btn ${connecting ? "primary" : ""}`}
           onClick={() => {
@@ -287,91 +277,121 @@ export function App() {
         </button>
         <button className="btn" onClick={() => setShowInput(true)}>输入</button>
         <button className="btn primary" onClick={() => void run()} disabled={running || !graph}>
-          {running ? "运行中…" : "▶ 运行"}
+          {running ? "运行中…" : "运行"}
+        </button>
+        <button
+          className="btn ghost"
+          onClick={() => setInspectorOpen((value) => !value)}
+          disabled={view !== "canvas"}
+        >
+          {inspectorOpen ? "收起详情" : "展开详情"}
         </button>
       </header>
 
-      <div className="main">
-        <nav className="rail">
-          <span className="tool on" title="画布">▤</span>
-          <span className="tool" title="提示词">✎</span>
-          <span className="tool" title="产物">▣</span>
-          <span className="sep" />
-          <span className="tool" title="终端">⌘</span>
-        </nav>
-        {graph ? (
-          <Canvas
-            graph={graph}
-            selectedId={selectedId}
-            connectSource={connectFrom}
-            statuses={statuses}
-            onSelect={handleNodeClick}
-            onEdgeClick={(edgeId) => void handleEdgeClick(edgeId)}
-            onMoveNode={(nodeId, position) => void moveNode(nodeId, position)}
-          />
-        ) : (
-          <section className="canvas-wrap"><div className="empty">载入中…</div></section>
-        )}
-        {graph ? (
-          <Inspector
-            graph={graph}
-            node={selected}
-            result={result}
-            status={selectedId ? (statuses[selectedId] ?? "") : ""}
-            onUpdate={async (field, value) => {
-              if (!selected) return;
-              const updated = await api.updateNode({ path: graph.path, nodeId: selected.id, field, value });
-              applyUpdate(updated);
-            }}
-            onDelete={() => void deleteNode()}
-          />
-        ) : (
-          <aside className="inspector" />
-        )}
-      </div>
-
-      <footer className="bottom">
-        <div className="tabs">
-          <span className={`tab ${tab === "run" ? "on" : ""}`} onClick={() => setTab("run")}>运行台</span>
-          <span className={`tab ${tab === "terminal" ? "on" : ""}`} onClick={() => setTab("terminal")}>终端</span>
-          <span className={`tab ${tab === "artifacts" ? "on" : ""}`} onClick={() => setTab("artifacts")}>产物</span>
-          <span className="right">
-            {result ? `${result.status} · ${(result.ms / 1000).toFixed(2)}s` : running ? "运行中" : "就绪"}
-          </span>
+      <aside className="rail card">
+        <div className="brand">
+          <span className="name">视频工作流</span>
+          <span className="sub">Studio</span>
         </div>
-        <div className={`pane ${tab === "run" ? "" : "hidden"}`}>
-          <div className="log">
-            {error && <div className="err">{error}</div>}
-            {events.filter((event) => event.type !== "node_start").map((event) => (
-              <div key={event.seq}>
-                <span className="t">{timeOf(event.at)}</span>{" "}
-                <span className={event.type === "node_error" ? "err" : event.type === "run_end" ? "ok" : "dim"}>
-                  {event.type === "node_end" ? "✓" : event.type === "node_error" ? "✗" : "·"}
-                </span>{" "}
-                {event.title ?? event.type}
-                {event.ms !== undefined && <span className="dim"> · {event.ms}ms</span>}
-                {event.error && <span className="err"> · {event.error}</span>}
-              </div>
-            ))}
-            {events.length === 0 && <div className="dim">点右上「运行」开始；当前 stub 模式不调用模型。</div>}
-            {result && Object.keys(result.outputs).length > 0 && (
-              <div className="dim">产物：{Object.keys(result.outputs).join("、")}</div>
-            )}
+        <nav className="nav">
+          <button className={`tool ${view === "canvas" ? "on" : ""}`} onClick={() => setView("canvas")}>画布</button>
+          <button className={`tool ${view === "artifacts" ? "on" : ""}`} onClick={() => setView("artifacts")}>产物</button>
+        </nav>
+        <div className="rail-foot">
+          <div className="rail-actions">
+            <button className="btn sm" onClick={() => void undo()} disabled={!canUndo}>撤销</button>
+            <button className="btn sm" onClick={() => void redo()} disabled={!canRedo}>重做</button>
+          </div>
+          <div className="rail-state">
+            {graph ? (graph.appName || graph.name) : "未载入"}<br />
+            {graph ? `${graph.version || "DSL"} · ${graph.nodes.length} 节点` : ""}<br />
+            {env ? env.model : ""}<br />
+            {env?.hasKey ? "key 已配置" : "无 key"}{stub ? " · stub" : ""}
           </div>
         </div>
-        <div className={`pane term-pane ${tab === "terminal" ? "" : "hidden"}`}>
-          <Terminal />
+      </aside>
+
+      <div className="work">
+        <div className={`main ${!inspectorOpen || view !== "canvas" ? "no-inspector" : ""}`}>
+          {view === "artifacts" ? (
+            <Artifacts result={result} />
+          ) : graph ? (
+            <Canvas
+              graph={graph}
+              selectedId={selectedId}
+              connectSource={connectFrom}
+              statuses={statuses}
+              onSelect={handleNodeClick}
+              onEdgeClick={(edgeId) => void handleEdgeClick(edgeId)}
+              onMoveNode={(nodeId, position) => void moveNode(nodeId, position)}
+            />
+          ) : (
+            <section className="canvas-wrap card">
+              <div className="hint-text" style={{ padding: 16 }}>载入中…</div>
+            </section>
+          )}
+          {view === "canvas" && inspectorOpen && graph ? (
+            <Inspector
+              graph={graph}
+              node={selected}
+              result={result}
+              status={selectedId ? (statuses[selectedId] ?? "") : ""}
+              onUpdate={async (field, value) => {
+                if (!selected) return;
+                const updated = await api.updateNode({ path: graph.path, nodeId: selected.id, field, value });
+                applyUpdate(updated);
+              }}
+              onDelete={() => void deleteNode()}
+            />
+          ) : null}
         </div>
-        <div className={`pane ${tab === "artifacts" ? "" : "hidden"}`}>
-          <Artifacts result={result} />
-        </div>
-      </footer>
+
+        <footer className={`bottom card ${consoleOpen ? "" : "collapsed"}`}>
+          <div className="tabs">
+            <span className={`tab ${tab === "run" ? "on" : ""}`} onClick={() => setTab("run")}>运行台</span>
+            <span className={`tab ${tab === "terminal" ? "on" : ""}`} onClick={() => setTab("terminal")}>终端</span>
+            <span className="right">
+              {result ? `${result.status} · ${(result.ms / 1000).toFixed(2)}s` : running ? "运行中" : "就绪"}
+            </span>
+            <button className="btn sm ghost toggle" onClick={() => setConsoleOpen((value) => !value)}>
+              {consoleOpen ? "收起" : "展开"}
+            </button>
+          </div>
+          <div className={`pane ${tab === "run" ? "" : "hidden"}`}>
+            <div className="log">
+              {error && <div className="err">{error}</div>}
+              {events.filter((event) => event.type !== "node_start").map((event) => (
+                <div key={event.seq}>
+                  <span className="t">{timeOf(event.at)}</span>
+                  <span className={event.type === "node_error" ? "err" : event.type === "run_end" ? "ok" : "dim"}>
+                    {event.type === "node_end" ? "完成" : event.type === "node_error" ? "失败" : "事件"}
+                  </span>
+                  <span>{event.title ?? event.type}</span>
+                  {event.ms !== undefined && <span className="dim">{event.ms}ms</span>}
+                  {event.error && <span className="err">{event.error}</span>}
+                </div>
+              ))}
+              {events.length === 0 && <div className="dim">点右上「运行」开始；当前 stub 模式不调用模型。</div>}
+              {result && Object.keys(result.outputs).length > 0 && (
+                <div className="dim">产物：{Object.keys(result.outputs).join("、")}</div>
+              )}
+            </div>
+          </div>
+          <div className={`pane term-pane ${tab === "terminal" ? "" : "hidden"}`}>
+            <Terminal />
+          </div>
+        </footer>
+      </div>
 
       {showInput && (
         <InputPanel
           inputs={inputs}
           running={running}
+          stub={stub}
+          until={until}
           onChange={(patch) => setInputs((previous) => ({ ...previous, ...patch }))}
+          onStubChange={setStub}
+          onUntilChange={setUntil}
           onRun={() => {
             setShowInput(false);
             void run();

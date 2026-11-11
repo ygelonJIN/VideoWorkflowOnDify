@@ -88,8 +88,8 @@ export function Artifacts({ result }: { result: RunResult | null }) {
   }
 
   return (
-    <div className="artifact-panel">
-      <div className="artifact-col projects">
+    <div className="browser card">
+      <div className="col">
         <div className="col-title">项目</div>
         {projects.map((project) => (
           <button
@@ -101,18 +101,17 @@ export function Artifacts({ result }: { result: RunResult | null }) {
           </button>
         ))}
       </div>
-      <div className="artifact-col files">
+      <div className="col">
         <div className="col-title">{current?.name ?? "文件"}</div>
         {files.map((entry) => (
           <button key={entry.path} className="file-row" onClick={() => void openEntry(entry)}>
-            <span className={entry.type === "dir" ? "dir" : "file"}>{entry.type === "dir" ? "▸" : "·"}</span>
-            {entry.name}
+            <span className={entry.type === "dir" ? "dir" : "file"}>{entry.name}</span>
             <span className="dim">{sizeOf(entry.size)}</span>
           </button>
         ))}
-        {files.length === 0 && <div className="hint-text" style={{ padding: 8 }}>没有文件</div>}
+        {files.length === 0 && <div className="hint-text" style={{ padding: 12 }}>没有文件</div>}
       </div>
-      <div className="artifact-col preview">
+      <div className="col">
         <div className="col-title">
           {media ? media.path.split("/").slice(-2).join("/") : "预览"}
           <span className="col-action">
@@ -134,7 +133,7 @@ export function Artifacts({ result }: { result: RunResult | null }) {
         ) : result ? (
           <pre className="preview-text">{JSON.stringify(result.outputs, null, 2)}</pre>
         ) : (
-          <div className="hint-text" style={{ padding: 8 }}>
+          <div className="hint-text" style={{ padding: 12 }}>
             点左侧文件预览：文本就地看，HTML / 视频 / 图片内嵌显示，也可以交给系统应用。
           </div>
         )}

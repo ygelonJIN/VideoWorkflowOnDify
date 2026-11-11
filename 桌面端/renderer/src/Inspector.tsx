@@ -88,7 +88,7 @@ export function Inspector({ graph, node, result, status, onUpdate, onDelete }: P
         <span className={`pill ${status === "success" ? "ok" : status === "error" ? "bad" : ""}`}>
           {status || "未运行"}
         </span>
-        <button className="btn danger" onClick={onDelete} title="删除节点">删</button>
+        <button className="btn sm danger" onClick={onDelete} title="删除节点">删除</button>
       </div>
 
       {message && <div className="ok-text">{message}</div>}
@@ -151,7 +151,7 @@ export function Inspector({ graph, node, result, status, onUpdate, onDelete }: P
           {node.prompt !== undefined && (
             <Section
               title="提示词"
-              action={<button className="btn" onClick={() => setEditor({ field: "prompt", value: node.prompt ?? "" })}>编辑</button>}
+              action={<button className="btn sm" onClick={() => setEditor({ field: "prompt", value: node.prompt ?? "" })}>编辑</button>}
             >
               <div className="code">{node.prompt.slice(0, 2000)}</div>
             </Section>
@@ -160,7 +160,7 @@ export function Inspector({ graph, node, result, status, onUpdate, onDelete }: P
           {node.code !== undefined && (
             <Section
               title="代码"
-              action={<button className="btn" onClick={() => setEditor({ field: "code", value: node.code ?? "" })}>编辑</button>}
+              action={<button className="btn sm" onClick={() => setEditor({ field: "code", value: node.code ?? "" })}>编辑</button>}
             >
               <div className="code">{node.code.slice(0, 2000)}</div>
             </Section>
@@ -184,7 +184,7 @@ export function Inspector({ graph, node, result, status, onUpdate, onDelete }: P
             </Section>
           )}
 
-          <Section title="标题" action={<button className="btn" onClick={() => setEditor({ field: "title", value: node.title })}>改</button>}>
+          <Section title="标题" action={<button className="btn sm" onClick={() => setEditor({ field: "title", value: node.title })}>改名</button>}>
             <div className="input">{node.title}</div>
           </Section>
         </>

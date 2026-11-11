@@ -1,0 +1,84 @@
+/* ===========================================================================
+   Studio 视觉 v2 · 雾蓝 Mist（唯一主题）
+   方向：更圆润 / 内容更大 / 阴影更足 / 零图标 / 更精致
+   规则：组件只读语义变量，不写十六进制色值，不写裸 px 尺寸。
+   =========================================================================== */
+
+:root {
+  /* 字体 */
+  --font-ui: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC",
+             "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  --font-mono: "SF Mono", "JetBrains Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  --font-display: var(--font-ui);
+
+  /* 字号：正文 15px 起 */
+  --text-11: 11px;  --text-12: 12px;  --text-13: 13px;  --text-14: 14px;
+  --text-15: 15px;  --text-16: 16px;  --text-18: 18px;  --text-21: 21px;
+  --text-26: 26px;  --text-32: 32px;
+  --lh-tight: 1.24; --lh-snug: 1.45; --lh-normal: 1.62;
+  --fw-regular: 400; --fw-medium: 500; --fw-semibold: 600;
+  --tracking-wide: .12em;
+
+  /* 间距：8 的倍数为主 */
+  --sp-1: 4px;  --sp-2: 6px;  --sp-3: 8px;  --sp-4: 12px; --sp-5: 16px;
+  --sp-6: 20px; --sp-7: 24px; --sp-8: 32px; --sp-9: 40px; --sp-10: 56px;
+
+  /* 圆角 */
+  --radius-xs: 8px;  --radius-sm: 12px; --radius-md: 16px;
+  --radius-lg: 20px; --radius-xl: 26px; --radius-2xl: 34px;
+  --radius-full: 999px;
+
+  /* 动效 */
+  --dur-fast: 120ms; --dur: 200ms; --dur-slow: 340ms;
+  --ease: cubic-bezier(.22, .72, .24, 1);
+
+  /* 层级 */
+  --z-canvas: 0; --z-hud: 10; --z-pop: 100;
+
+  /* 骨架尺寸 */
+  --rail-w: 132px;
+  --insp-w: 404px;
+  --top-h: 66px;
+  --bottom-h: 224px;
+
+  /* 颜色：冷灰蓝工作区，钢蓝强调，克制的轻投影 */
+  --bg: #eef1f5;
+  --bg-canvas: #f1f4f8;
+  --bg-panel: #fbfcfe;
+  --bg-raised: #ffffff;
+  --bg-code: #e9eef4;
+  --bg-hover: #e5ebf2;
+
+  --border: #dde4ec;
+  --border-strong: #c7d2de;
+  --fg: #1b2430;
+  --fg-muted: #5d6b7c;
+  --fg-faint: #94a1b2;
+
+  --accent: #3d6fa8;
+  --accent-fg: #ffffff;
+  --accent-soft: #3d6fa812;
+  --accent-ring: #3d6fa838;
+
+  --ok: #2f7d5d;   --ok-soft: #2f7d5d14;
+  --warn: #9a7418; --warn-soft: #9a741816;
+  --err: #b2453f;  --err-soft: #b2453f14;
+  --run: #5b63c8;  --run-soft: #5b63c814;
+
+  --node-bg: #ffffff;
+  --node-border: #dde5ee;
+  --node-shadow: 0 1px 2px #14233c0d, 0 14px 30px -16px #14233c2b;
+  --node-shadow-lift: 0 2px 4px #14233c12, 0 24px 52px -22px #14233c3d;
+  --edge: #b8c6d6;
+  --grid: #14233c0d;
+
+
+  --shadow-1: 0 1px 2px #14233c0d;
+  --shadow-2: 0 6px 16px -6px #14233c1a;
+  --shadow-3: 0 16px 40px -18px #14233c30;
+  --shadow-4: 0 32px 80px -32px #14233c45;
+
+  --panel-radius: 20px;
+  --node-radius: 16px;
+  --btn-radius: 12px;
+}
