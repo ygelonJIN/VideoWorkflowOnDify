@@ -8,11 +8,14 @@ function subscribe(channel, handler) {
 
 contextBridge.exposeInMainWorld("wfs", {
   workflows: () => ipcRenderer.invoke("wf:workflows"),
+  pickWorkflow: () => ipcRenderer.invoke("wf:pick-workflow"),
   load: (filePath) => ipcRenderer.invoke("wf:load", filePath),
   rev: (filePath) => ipcRenderer.invoke("wf:rev", filePath),
   run: (options) => ipcRenderer.invoke("wf:run", options),
   cancel: (clientId) => ipcRenderer.invoke("wf:cancel", clientId),
   env: () => ipcRenderer.invoke("wf:env"),
+  settings: () => ipcRenderer.invoke("wf:settings"),
+  saveSettings: (payload) => ipcRenderer.invoke("wf:save-settings", payload),
   inputs: () => ipcRenderer.invoke("wf:inputs"),
   projects: () => ipcRenderer.invoke("wf:projects"),
   updateNode: (payload) => ipcRenderer.invoke("wf:update-node", payload),

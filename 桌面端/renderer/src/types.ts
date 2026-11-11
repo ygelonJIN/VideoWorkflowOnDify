@@ -67,6 +67,16 @@ export interface RunResult {
   error?: string;
 }
 
+export interface SettingsInfo {
+  path: string;
+  baseUrl: string;
+  model: string;
+  protocol: string;
+  hasKey: boolean;
+  keyHint: string;
+  inProcessEnv?: boolean;
+}
+
 export interface EnvInfo {
   hasKey: boolean;
   baseUrl: string;

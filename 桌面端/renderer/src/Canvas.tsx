@@ -48,6 +48,10 @@ export function Canvas({ graph, selectedId, connectSource, statuses, onSelect, o
       .slice(0, 8);
   }, [query, graph]);
 
+  /** 拖动中的节点用预览坐标，连线也要跟着走，不能只用图里的旧坐标。 */
+  const positionOf = (node: WorkflowInfo["nodes"][number]) =>
+    dragging?.id === node.id ? { x: dragging.x, y: dragging.y } : node.position;
+
   const focusNode = (id: string) => {
     const node = graph.nodes.find((item) => item.id === id);
     if (!node) return;
@@ -233,10 +237,12 @@ export function Canvas({ graph, selectedId, connectSource, statuses, onSelect, o
             const from = graph.nodes.find((node) => node.id === edge.source);
             const to = graph.nodes.find((node) => node.id === edge.target);
             if (!from || !to) return null;
-            const x1 = from.position.x + from.width;
-            const y1 = from.position.y + Math.min(from.height, 120) / 2;
-            const x2 = to.position.x;
-            const y2 = to.position.y + Math.min(to.height, 120) / 2;
+            const fromPos = positionOf(from);
+            const toPos = positionOf(to);
+            const x1 = fromPos.x + from.width;
+            const y1 = fromPos.y + Math.min(from.height, 120) / 2;
+            const x2 = toPos.x;
+            const y2 = toPos.y + Math.min(to.height, 120) / 2;
             const dx = Math.max(40, (x2 - x1) / 2);
             const path = `M ${x1} ${y1} C ${x1 + dx} ${y1}, ${x2 - dx} ${y2}, ${x2} ${y2}`;
             return (
@@ -285,11 +291,18 @@ export function Canvas({ graph, selectedId, connectSource, statuses, onSelect, o
               onPointerMove={(event) => {
                 if (!dragging || dragging.id !== node.id) return;
                 event.stopPropagation();
-                setDragging({
-                  ...dragging,
-                  x: dragging.originX + (event.clientX - dragging.startX),
-                  y: dragging.originY + (event.clientY - dragging.startY),
-                });
+                // 指针位移是屏幕像素，节点坐标是画布像素：要除以缩放，否则缩放后不跟手。
+                // 用函数式更新，避免高频 pointermove 拿到旧的 dragging。
+                const scale = viewRef.current.scale || 1;
+                setDragging((previous) =>
+                  previous
+                    ? {
+                        ...previous,
+                        x: previous.originX + (event.clientX - previous.startX) / scale,
+                        y: previous.originY + (event.clientY - previous.startY) / scale,
+                      }
+                    : previous,
+                );
               }}
               onPointerUp={(event) => {
                 if (!dragging || dragging.id !== node.id) return;

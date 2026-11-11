@@ -1,5 +1,5 @@
 /** Electron 主进程与浏览器调试壳共用的本地能力。 */
-import { readdir, readFile, rename, stat, writeFile } from "node:fs/promises";
+import { chmod, readdir, readFile, rename, stat, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { spawn } from "node:child_process";
@@ -31,6 +31,77 @@ export async function listWorkflows() {
   if (!existsSync(workflowDir)) return [];
   const names = (await readdir(workflowDir)).filter((name) => name.endsWith(".yml") || name.endsWith(".yaml")).sort();
   return names.map((name) => ({ name, path: path.join(workflowDir, name) }));
+}
+
+const ENV_PATH = path.join(desktopDir, ".env");
+
+function parseEnvText(text) {
+  const values = {};
+  for (const line of text.split("\n")) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) continue;
+    const index = trimmed.indexOf("=");
+    if (index <= 0) continue;
+    const key = trimmed.slice(0, index).trim();
+    let value = trimmed.slice(index + 1).trim();
+    if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+      value = value.slice(1, -1);
+    }
+    if (key) values[key] = value;
+  }
+  return values;
+}
+
+function upsertEnv(text, key, value) {
+  const lines = text ? text.replace(/\n$/, "").split("\n") : [];
+  let found = false;
+  const next = [];
+  for (const line of lines) {
+    if (new RegExp(`^${key}\\s*=`).test(line)) {
+      found = true;
+      if (value !== undefined && value !== "") next.push(`${key}=${value}`);
+      continue;
+    }
+    next.push(line);
+  }
+  if (!found && value !== undefined && value !== "") next.push(`${key}=${value}`);
+  return next.length > 0 ? `${next.join("\n")}\n` : "";
+}
+
+/** 设置面板读取：只回是否已配置和末四位，绝不把 Key 送回渲染层。 */
+export async function getSettings() {
+  const raw = await readFile(ENV_PATH, "utf8").catch(() => "");
+  const file = parseEnvText(raw);
+  const keyValue = file.WF_API_KEY ?? process.env.WF_API_KEY ?? "";
+  return {
+    path: path.join("桌面端", ".env"),
+    baseUrl: file.WF_BASE_URL ?? process.env.WF_BASE_URL ?? "https://opencode.ai/zen/go/v1",
+    model: file.WF_MODEL ?? process.env.WF_MODEL ?? "gpt-6-luna",
+    protocol: file.WF_PROTOCOL ?? "",
+    hasKey: keyValue.trim().length > 0,
+    keyHint: keyValue.trim() ? `末四位 ${keyValue.trim().slice(-4)}` : "",
+    inProcessEnv: Boolean(process.env.WF_API_KEY) && !file.WF_API_KEY,
+  };
+}
+
+export async function saveSettings({ baseUrl, model, protocol, apiKey, clearKey } = {}) {
+  const protocols = new Set(["", "chat", "responses", "anthropic"]);
+  if (protocol !== undefined && !protocols.has(String(protocol))) throw new Error(`不支持的协议：${protocol}`);
+  if (baseUrl !== undefined && String(baseUrl).trim() && !/^https?:\/\//.test(String(baseUrl).trim())) {
+    throw new Error("Base URL 必须以 http:// 或 https:// 开头");
+  }
+  for (const [name, value] of [["Base URL", baseUrl], ["模型", model], ["API Key", apiKey]]) {
+    if (value !== undefined && /[\r\n]/.test(String(value))) throw new Error(`${name} 不能包含换行`);
+  }
+  let text = await readFile(ENV_PATH, "utf8").catch(() => "");
+  text = upsertEnv(text, "WF_BASE_URL", baseUrl === undefined ? undefined : String(baseUrl).trim());
+  text = upsertEnv(text, "WF_MODEL", model === undefined ? undefined : String(model).trim());
+  text = upsertEnv(text, "WF_PROTOCOL", protocol === undefined ? undefined : String(protocol).trim());
+  if (clearKey) text = upsertEnv(text, "WF_API_KEY", undefined);
+  else if (apiKey !== undefined && String(apiKey).trim()) text = upsertEnv(text, "WF_API_KEY", String(apiKey).trim());
+  await writeFile(ENV_PATH, text, { mode: 0o600 });
+  await chmod(ENV_PATH, 0o600).catch(() => {});
+  return getSettings();
 }
 
 export async function envInfo() {

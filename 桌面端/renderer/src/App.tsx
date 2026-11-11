@@ -4,6 +4,9 @@ import { Inspector } from "./Inspector.js";
 import { Terminal } from "./Terminal.js";
 import { Artifacts } from "./Artifacts.js";
 import { InputPanel } from "./InputPanel.js";
+import { Select } from "./Select.js";
+import { Settings } from "./Settings.js";
+import type { SelectOption } from "./Select.js";
 import { bridge } from "./bridge.js";
 import type { EnvInfo, RunInputs, RunResult, TraceEvent, WorkflowInfo } from "./types.js";
 
@@ -13,6 +16,19 @@ type Tab = "run" | "terminal";
 type View = "canvas" | "artifacts";
 
 const EMPTY_INPUTS: RunInputs = {};
+
+const ADD_TYPE_OPTIONS: SelectOption[] = [
+  { value: "code", label: "Code" },
+  { value: "llm", label: "LLM" },
+  { value: "if-else", label: "if-else" },
+  { value: "template-transform", label: "模板" },
+  { value: "http-request", label: "HTTP" },
+  { value: "end", label: "End" },
+  { value: "iteration", label: "迭代", hint: "暂不支持新建", disabled: true },
+  { value: "loop", label: "循环", hint: "暂不支持新建", disabled: true },
+  { value: "question-classifier", label: "问题分类", hint: "引擎未实现", disabled: true },
+  { value: "variable-aggregator", label: "变量聚合", hint: "引擎未实现", disabled: true },
+];
 
 function timeOf(iso: string): string {
   const date = new Date(iso);
@@ -42,6 +58,7 @@ export function App() {
   const [view, setView] = useState<View>("canvas");
   const [inspectorOpen, setInspectorOpen] = useState(true);
   const [consoleOpen, setConsoleOpen] = useState(true);
+  const [showSettings, setShowSettings] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const runClientId = useRef<string | null>(null);
 
@@ -67,6 +84,21 @@ export function App() {
       setError((loadError as Error).message);
     }
   }, []);
+
+  const pickWorkflow = useCallback(async () => {
+    try {
+      const picked = await api.pickWorkflow();
+      if (!picked) return;
+      setWorkflows((previous) =>
+        previous.some((item) => item.path === picked)
+          ? previous
+          : [...previous, { name: picked.split("/").pop() ?? picked, path: picked }],
+      );
+      await open(picked);
+    } catch (cause) {
+      fail(cause);
+    }
+  }, [open]);
 
   useEffect(() => {
     let alive = true;
@@ -119,6 +151,9 @@ export function App() {
       setResult(runResult);
       if (runResult.status === "error" && runResult.error) setError(runResult.error);
       if (runResult.status === "stopped" && runResult.error) setNotice(runResult.error);
+      if (runResult.status === "stopped" && !runResult.error && until) {
+        setNotice(`已停在 ${until}；要跑全程，在「输入」里把「跑到哪」改成跑全程`);
+      }
     } catch (runError) {
       setError((runError as Error).message);
     } finally {
@@ -196,10 +231,25 @@ export function App() {
 
   async function moveNode(nodeId: string, position: { x: number; y: number }) {
     if (!graph) return;
+    const path = graph.path;
+    // 先本地落位，松手瞬间不闪回；写盘在后台完成，成功不再用返回的图覆盖画面
+    setGraph((previous) =>
+      previous
+        ? { ...previous, nodes: previous.nodes.map((node) => (node.id === nodeId ? { ...node, position } : node)) }
+        : previous,
+    );
     try {
-      applyUpdate(await api.moveNode({ path: graph.path, nodeId, position }));
+      const result = await api.moveNode({ path, nodeId, position });
+      if (typeof result.canUndo === "boolean") setCanUndo(result.canUndo);
+      if (typeof result.canRedo === "boolean") setCanRedo(result.canRedo);
+      setError(null);
     } catch (cause) {
       fail(cause);
+      try {
+        setGraph(await api.load(path));
+      } catch {
+        /* 保持当前画面，错误已经提示 */
+      }
     }
   }
 
@@ -283,20 +333,21 @@ export function App() {
   return (
     <div className="app">
       <header className="topbar card">
-        <select className="select" value={graph?.path ?? ""} onChange={(event) => void open(event.target.value)}>
-          {workflows.map((workflow) => (
-            <option key={workflow.path} value={workflow.path}>{workflow.name}</option>
-          ))}
-        </select>
+        <Select
+          value={graph?.path ?? ""}
+          width={260}
+          options={[
+            ...workflows.map((workflow) => ({ value: workflow.path, label: workflow.name })),
+            ...(graph && !workflows.some((workflow) => workflow.path === graph.path)
+              ? [{ value: graph.path, label: graph.name }]
+              : []),
+          ]}
+          onChange={(path) => void open(path)}
+          placeholder="选择工作流"
+        />
+        <button className="btn" onClick={() => void pickWorkflow()}>打开文件…</button>
         <span className="spacer" />
-        <select className="select narrow" value={addType} onChange={(event) => setAddType(event.target.value)}>
-          <option value="code">Code</option>
-          <option value="llm">LLM</option>
-          <option value="if-else">if-else</option>
-          <option value="template-transform">模板</option>
-          <option value="http-request">HTTP</option>
-          <option value="end">End</option>
-        </select>
+        <Select value={addType} width={150} options={ADD_TYPE_OPTIONS} onChange={setAddType} />
         <button className="btn" onClick={() => void addNode()} disabled={!graph}>添加节点</button>
         <button
           className={`btn ${connecting ? "primary" : ""}`}
@@ -312,7 +363,7 @@ export function App() {
         {running ? (
           <button className="btn danger" onClick={() => void stop()}>停止</button>
         ) : (
-          <button className="btn primary" onClick={() => void run()} disabled={!graph}>运行</button>
+          <button className="btn primary" onClick={() => setShowInput(true)} disabled={!graph}>运行</button>
         )}
         <button
           className="btn ghost"
@@ -333,15 +384,10 @@ export function App() {
           <button className={`tool ${view === "artifacts" ? "on" : ""}`} onClick={() => setView("artifacts")}>产物</button>
         </nav>
         <div className="rail-foot">
+          <button className="btn sm rail-settings" onClick={() => setShowSettings(true)}>设置</button>
           <div className="rail-actions">
             <button className="btn sm" onClick={() => void undo()} disabled={!canUndo}>撤销</button>
             <button className="btn sm" onClick={() => void redo()} disabled={!canRedo}>重做</button>
-          </div>
-          <div className="rail-state">
-            {graph ? (graph.appName || graph.name) : "未载入"}<br />
-            {graph ? `${graph.version || "DSL"} · ${graph.nodes.length} 节点` : ""}<br />
-            {env ? env.model : ""}<br />
-            {env?.hasKey ? "key 已配置" : "无 key"}{stub ? " · stub" : ""}
           </div>
         </div>
       </aside>
@@ -392,7 +438,13 @@ export function App() {
             <span className={`tab ${tab === "run" ? "on" : ""}`} onClick={() => setTab("run")}>运行台</span>
             <span className={`tab ${tab === "terminal" ? "on" : ""}`} onClick={() => setTab("terminal")}>终端</span>
             <span className="right">
-              {result ? `${result.status === "stopped" ? (result.error ? "已停止" : "已完成") : result.status} · ${(result.ms / 1000).toFixed(2)}s` : running ? "运行中" : "就绪"}
+              <span className="meta" title={graph?.path ?? ""}>
+                {graph ? `${graph.name} · ${graph.nodes.length} 节点` : "未载入"}
+                {env ? ` · ${env.model}` : ""}
+                {env?.hasKey ? " · key 已配置" : " · 无 key"}
+                {stub ? " · stub" : ""}
+              </span>
+              <span>{result ? `${result.status === "stopped" ? (result.error ? "已停止" : "已完成") : result.status} · ${(result.ms / 1000).toFixed(2)}s` : running ? "运行中" : "就绪"}</span>
             </span>
             <button className="btn sm ghost toggle" onClick={() => setConsoleOpen((value) => !value)}>
               {consoleOpen ? "收起" : "展开"}
@@ -439,6 +491,16 @@ export function App() {
             void run();
           }}
           onClose={() => setShowInput(false)}
+        />
+      )}
+
+      {showSettings && (
+        <Settings
+          onClose={() => setShowSettings(false)}
+          onSaved={(next) => {
+            api.env().then(setEnv).catch(() => {});
+            setNotice(next.hasKey ? "设置已保存" : "设置已保存（还没有 Key）");
+          }}
         />
       )}
 

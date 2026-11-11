@@ -1,12 +1,15 @@
-import type { EnvInfo, FileEntry, Project, RunInputs, RunResult, TermEvent, TermPreset, TraceEvent, WorkflowInfo } from "./types.js";
+import type { EnvInfo, FileEntry, Project, RunInputs, RunResult, SettingsInfo, TermEvent, TermPreset, TraceEvent, WorkflowInfo } from "./types.js";
 
 export interface Bridge {
   workflows(): Promise<Array<{ name: string; path: string }>>;
+  pickWorkflow(): Promise<string | null>;
   load(path: string): Promise<WorkflowInfo>;
   rev(path: string): Promise<{ rev: string }>;
   run(options: { path: string; stub: boolean; until?: string; inputs?: Partial<RunInputs>; clientId?: string }): Promise<RunResult>;
   cancel(clientId: string): Promise<{ ok: boolean; error?: string }>;
   env(): Promise<EnvInfo>;
+  settings(): Promise<SettingsInfo>;
+  saveSettings(payload: { baseUrl?: string; model?: string; protocol?: string; apiKey?: string; clearKey?: boolean }): Promise<SettingsInfo>;
   inputs(): Promise<Partial<RunInputs>>;
   onEvent(handler: (event: TraceEvent) => void): () => void;
   projects(): Promise<Project[]>;
@@ -40,11 +43,18 @@ async function post<T>(url: string, body: unknown): Promise<T> {
 
 const httpBridge: Bridge = {
   workflows: () => fetch("/api/workflows").then((response) => response.json()),
+  pickWorkflow: async () => {
+    // 浏览器调试壳没有原生文件框，退化成手填绝对路径
+    const typed = window.prompt("输入 YAML 的绝对路径");
+    return typed && typed.trim() ? typed.trim() : null;
+  },
   load: (path) => post<WorkflowInfo>("/api/load", { path }),
   rev: (path) => post<{ rev: string }>("/api/rev", { path }),
   run: (options) => post<RunResult>("/api/run", options),
   cancel: (clientId) => post<{ ok: boolean; error?: string }>("/api/cancel", { clientId }),
   env: () => fetch("/api/env").then((response) => response.json()),
+  settings: () => fetch("/api/settings").then((response) => response.json()),
+  saveSettings: (payload) => post<SettingsInfo>("/api/save-settings", payload),
   inputs: () => fetch("/api/inputs").then((response) => response.json()),
   projects: () => fetch("/api/projects").then((response) => response.json()),
   updateNode: (options) => post("/api/update-node", options),

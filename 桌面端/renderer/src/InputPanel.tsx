@@ -1,3 +1,4 @@
+import { Select } from "./Select.js";
 import type { RunInputs, StartVariable } from "./types.js";
 
 interface Props {
@@ -37,15 +38,15 @@ function InputField({
     );
   }
   if (variable.type === "select") {
-    const options = variable.options.includes(value) || value === "" ? variable.options : [value, ...variable.options];
+    const values = variable.options.includes(value) || value === "" ? variable.options : [value, ...variable.options];
     return (
       <label className="field">
         <span>{label}</span>
-        <select value={value} onChange={(event) => onChange(event.target.value)}>
-          {options.map((option) => (
-            <option key={option} value={option}>{option}</option>
-          ))}
-        </select>
+        <Select
+          value={value}
+          options={values.map((option) => ({ value: option, label: option }))}
+          onChange={onChange}
+        />
       </label>
     );
   }
@@ -95,21 +96,32 @@ export function InputPanel({ inputs, variables, running, stub, until, onChange, 
       <div className="field-row">
         <label className="field">
           <span>运行方式</span>
-          <select value={stub ? "stub" : "live"} onChange={(event) => onStubChange(event.target.value === "stub")}>
-            <option value="stub">stub（不调用模型）</option>
-            <option value="live">真实调用</option>
-          </select>
+          <Select
+            value={stub ? "stub" : "live"}
+            options={[
+              { value: "stub", label: "stub（不调用模型）" },
+              { value: "live", label: "真实调用" },
+            ]}
+            onChange={(value) => onStubChange(value === "stub")}
+          />
         </label>
         <label className="field">
           <span>跑到哪</span>
-          <select value={until} onChange={(event) => onUntilChange(event.target.value)}>
-            <option value="a03">停在 a03</option>
-            <option value="">跑全程</option>
-          </select>
+          <Select
+            value={until}
+            options={[
+              { value: "a03", label: "停在 a03" },
+              { value: "", label: "跑全程" },
+            ]}
+            onChange={onUntilChange}
+          />
         </label>
       </div>
       <button className="btn primary wide" onClick={onRun} disabled={running}>用这些输入运行</button>
-      <div className="hint-text">留空表示沿用 fixtures/input.json 的示例。stub 模式下不调用模型。</div>
+      <div className="hint-text">
+        留空表示沿用 fixtures/input.json 的示例。stub 只有 a01 的固定输出：想跑全程请选「真实调用」，
+        否则把「跑到哪」停在 a03。
+      </div>
     </div>
   );
 }

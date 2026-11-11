@@ -1,5 +1,6 @@
-import { app, BrowserWindow, ipcMain, protocol, shell } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, protocol, shell } from "electron";
 import { readFile, stat, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
 import { pathToFileURL } from "node:url";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -10,7 +11,18 @@ const desktopDir = path.resolve(here, "..");
 console.log(`[wfs] Electron ${process.versions.electron} · app ${desktopDir}`);
 
 ipcMain.handle("wf:workflows", () => core.listWorkflows());
+ipcMain.handle("wf:pick-workflow", async () => {
+  const result = await dialog.showOpenDialog({
+    title: "选择 Dify 工作流 YAML",
+    defaultPath: path.join(core.workspaceDir, "Dify工作流"),
+    properties: ["openFile"],
+    filters: [{ name: "Dify 工作流", extensions: ["yml", "yaml"] }],
+  });
+  return result.canceled || result.filePaths.length === 0 ? null : result.filePaths[0];
+});
 ipcMain.handle("wf:env", () => core.envInfo());
+ipcMain.handle("wf:settings", () => core.getSettings());
+ipcMain.handle("wf:save-settings", (_event, payload) => core.saveSettings(payload));
 ipcMain.handle("wf:inputs", () => core.inputDefaults());
 ipcMain.handle("wf:load", (_event, filePath) => core.loadGraph(filePath));
 ipcMain.handle("wf:rev", (_event, filePath) => core.fileRevision(filePath));
@@ -30,7 +42,8 @@ ipcMain.handle("wf:update-node", async (_event, payload) => {
 });
 ipcMain.handle("wf:file-url", async (_event, filePath) => {
   const safe = core.safePath(filePath);
-  return `wfs-file://${encodeURI(safe)}`;
+  // 固定 host + 整体编码：空 host 的标准 scheme 会把第一段目录当成 host（/Volumes 被吃掉）
+  return `wfs-file://local/${encodeURIComponent(safe)}`;
 });
 ipcMain.handle("wf:history", (_event, payload) => core.historyStatus(payload));
 ipcMain.handle("wf:undo", (_event, payload) => core.undo(payload));
@@ -91,7 +104,16 @@ function createWindow() {
   if (probe) {
     win.webContents.on("did-finish-load", async () => {
       const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-      const run = (code) => win.webContents.executeJavaScript(code);
+      let step = 0;
+      const run = async (code) => {
+        step += 1;
+        try {
+          return await win.webContents.executeJavaScript(code);
+        } catch (error) {
+          console.error(`PROBE STEP ${step} FAILED: ${String(code).replace(/\s+/g, ' ').slice(0, 400)}`);
+          throw error;
+        }
+      };
       try {
         for (let attempt = 0; attempt < 40; attempt += 1) {
           if ((await run("document.querySelectorAll('.node').length")) > 0) break;
@@ -108,6 +130,7 @@ function createWindow() {
           return true;
         };
 
+        const pickButton = await run(`[...document.querySelectorAll("button")].some((button) => button.textContent.trim() === "打开文件…")`);
         const before = await run(`({ zoom: document.querySelector(".canvas-hud .zoom").textContent, nodes: document.querySelectorAll(".node").length, edges: document.querySelectorAll(".canvas-edges path").length, rail: ${rect(".rail")}, railRadius: getComputedStyle(document.querySelector(".rail")).borderTopLeftRadius + " / " + getComputedStyle(document.querySelector(".rail")).borderTopRightRadius, lights: ${rect(".lights")}, topbar: ${rect(".topbar")}, bottom: ${rect("#root .bottom")}, canvas: ${rect(".canvas-wrap")}, inspector: ${rect(".inspector")}, icons: (document.body.innerText.match(/[▶◀✕✖＋−⤢▤▣✎⌘⚙●]/g) || []).length, termBg: getComputedStyle(document.querySelector(".term-output")).backgroundColor, termFg: getComputedStyle(document.querySelector(".term-output")).color, termPrompt: getComputedStyle(document.querySelector(".term-input .prompt")).color })`);
 
         const center = await run(`(() => { const n = document.querySelector(".node"); const r = n.getBoundingClientRect(); return { x: Math.round(r.x + r.width / 2), y: Math.round(r.y + r.height / 2) }; })()`);
@@ -149,14 +172,81 @@ function createWindow() {
 
         await run(clickText("产物"));
         await sleep(250);
-        const artifacts = await run(`({ browser: !!document.querySelector(".browser"), canvas: !!document.querySelector(".canvas-wrap"), inspector: !!document.querySelector(".inspector") })`);
+        const artifacts = await run(`({ browser: !!document.querySelector(".browser"), canvas: !!document.querySelector(".canvas-wrap"), inspector: !!document.querySelector(".inspector"), rows: document.querySelectorAll(".file-row").length, titles: [...document.querySelectorAll(".col-title")].map((item) => item.textContent.trim()), firstRows: [...document.querySelectorAll(".file-row")].slice(0, 5).map((item) => item.textContent.trim()) })`);
+
+        // 媒体协议自检：wfs-file:// 能否真的加载 PNG / MP4
+        const pngPath = path.join(desktopDir, "..", "HTML视频项目", "20261109-1355", "媒体", "图片", "jimeng-2026-11-09-3725-素面陶瓷盘放在同一蓝灰桌面的左下方，两根粗细相同的灰线从盘边松散分向不同方向，都....png");
+        const mp4Path = path.join(desktopDir, "..", "HTML视频项目", "20261109-1355", "成片", "最终视频.mp4");
+        const mediaProbe = await run(`(async () => {
+          const pngUrl = await window.wfs.fileUrl(${JSON.stringify(pngPath)});
+          const mp4Url = await window.wfs.fileUrl(${JSON.stringify(mp4Path)});
+          const img = new Image();
+          const imgResult = await new Promise((resolve) => {
+            img.onload = () => resolve({ ok: true, w: img.naturalWidth, h: img.naturalHeight });
+            img.onerror = () => resolve({ ok: false });
+            img.src = pngUrl;
+            setTimeout(() => resolve({ ok: false, timeout: true }), 4000);
+          });
+          const video = document.createElement("video");
+          video.src = mp4Url;
+          video.preload = "metadata";
+          const videoResult = await new Promise((resolve) => {
+            video.onloadedmetadata = () => resolve({ ok: true, duration: video.duration, w: video.videoWidth, h: video.videoHeight });
+            video.onerror = () => resolve({ ok: false, code: video.error && video.error.code, message: video.error && video.error.message });
+            setTimeout(() => resolve({ ok: false, timeout: true, readyState: video.readyState, networkState: video.networkState }), 5000);
+          });
+          let fetchInfo = null;
+          try {
+            const res = await fetch(pngUrl);
+            const text = await res.text();
+            fetchInfo = { status: res.status, type: res.headers.get("content-type"), body: text.slice(0, 300) };
+          } catch (error) {
+            fetchInfo = { error: String(error && error.message || error) };
+          }
+          return { pngUrl, mp4Url, img: imgResult, video: videoResult, fetchInfo };
+        })()`);
+        // 产物：进项目 → 子目录 → 视频/图片，检查内嵌预览与返回
+        const artProject = await run(`(() => { const rows = [...document.querySelectorAll(".browser .col:nth-child(1) .file-row")]; const row = rows.find((item) => item.textContent.includes("20261109-1355")); if (!row) return { ok: false, sample: rows.slice(0, 40).map((item) => item.textContent.trim()), browser: Boolean(document.querySelector(".browser")), canvas: Boolean(document.querySelector(".canvas-wrap")), text: document.body.innerText.slice(0, 120) }; row.click(); return { ok: true }; })()`);
+        await sleep(600);
+        const artDir = await run(`(() => { const row = [...document.querySelectorAll(".browser .col:nth-child(2) .file-row")].find((item) => item.textContent.includes("成片")); if (!row) return false; row.click(); return true; })()`);
+        await sleep(600);
+        const artFile = await run(`(() => { const row = [...document.querySelectorAll(".browser .col:nth-child(2) .file-row")].find((item) => item.textContent.includes("最终视频.mp4")); if (!row) return false; row.click(); return true; })()`);
+        await sleep(1500);
+        const artVideo = await run(`(() => {
+          const video = document.querySelector(".media-video");
+          if (!video) return null;
+          const rect = video.getBoundingClientRect();
+          return { ready: video.readyState, w: video.videoWidth, h: video.videoHeight, err: video.error ? video.error.code : 0, rect: [Math.round(rect.width), Math.round(rect.height)] };
+        })()`);
+        const artBackList = await run(clickText("返回列表"));
+        await sleep(300);
+        const artBackState = await run(`({ video: Boolean(document.querySelector(".media-video")), rows: document.querySelectorAll(".file-row").length })`);
+        await run(clickText("← 返回"));
+        await sleep(600);
+        const artMediaDir = await run(`(() => { const row = [...document.querySelectorAll(".browser .col:nth-child(2) .file-row")].find((item) => item.textContent.includes("媒体")); if (!row) return false; row.click(); return true; })()`);
+        await sleep(600);
+        const artImageDir = await run(`(() => { const row = [...document.querySelectorAll(".browser .col:nth-child(2) .file-row")].find((item) => item.textContent.includes("图片")); if (!row) return false; row.click(); return true; })()`);
+        await sleep(1000);
+        const artPng = await run(`(() => { const rows = [...document.querySelectorAll(".browser .col:nth-child(2) .file-row")]; const row = rows.find((item) => item.textContent.includes(".png")); if (!row) return { ok: false, sample: rows.slice(0, 10).map((item) => item.textContent.trim()) }; row.click(); return { ok: true }; })()`);
+        await sleep(1200);
+        const artImage = await run(`(() => {
+          const image = document.querySelector(".media-image");
+          if (!image) return null;
+          const rect = image.getBoundingClientRect();
+          return { w: image.naturalWidth, h: image.naturalHeight, rect: [Math.round(rect.width), Math.round(rect.height)] };
+        })()`);
+
         await run(clickText("画布"));
         await sleep(200);
         const back = await run(`({ zoom: document.querySelector(".canvas-hud .zoom").textContent, canvas: !!document.querySelector(".canvas-wrap") })`);
 
         // 跑一次 stub（默认停在 a03），验证运行台、节点输出值和「停止」按钮的显隐
         const reopened = await run(clickText("展开详情"));
+        // 「运行」现在先开输入抽屉，确认后才跑
         const clickedRun = await run(clickText("运行"));
+        await sleep(300);
+        const runDialog = await run(`({ open: Boolean(document.querySelector(".drawer")), fields: document.querySelectorAll(".drawer .field").length })`);
+        const clickedStart = await run(clickText("用这些输入运行"));
         let settle = "";
         for (let attempt = 0; attempt < 80; attempt += 1) {
           await sleep(250);
@@ -169,6 +259,7 @@ function createWindow() {
           win.webContents.sendInputEvent({ type: "mouseUp", x: nodeCenter.x, y: nodeCenter.y, button: "left", clickCount: 1 });
           await sleep(300);
         }
+        const untilToast = await run(`document.querySelector(".toast")?.textContent?.trim() || ""`);
         const afterRun = await run(`({
           settle: document.querySelector(".tabs .right")?.textContent?.trim() || "",
           selected: document.querySelector(".insp-head h2")?.textContent || "",
@@ -191,6 +282,40 @@ function createWindow() {
           return { found: Boolean(section), items: section ? section.querySelectorAll(".out-item").length : 0 };
         })()`);
 
+        // 下拉：点旁边（画布）要能收起来
+        await run(`document.querySelector(".topbar .sel-btn").click()`);
+        await sleep(200);
+        const menuOpen = await run(`document.querySelectorAll(".sel-menu li").length`);
+        await run(`document.querySelector(".canvas-wrap").dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }))`);
+        await sleep(200);
+        const menuClosed = await run(`document.querySelectorAll(".sel-menu li").length === 0`);
+
+        // 设置面板：能打开、有四个字段、关闭后不残留
+        const clickedSettings = await run(clickText("设置"));
+        await sleep(300);
+        const settingsPanel = await run(`({
+          open: Boolean(document.querySelector(".drawer.settings")),
+          inputs: document.querySelectorAll(".drawer.settings input").length,
+          selects: document.querySelectorAll(".drawer.settings .sel-btn").length,
+          keyPlaceholder: document.querySelector(".drawer.settings input[type=password]")?.placeholder || ""
+        })`);
+        await run(clickText("关闭"));
+        await sleep(150);
+        const settingsClosed = await run(`!document.querySelector(".drawer.settings")`);
+        const railLayout = await run(`(() => {
+          const tool = document.querySelector(".rail .tool");
+          const rail = document.querySelector(".rail");
+          const actions = document.querySelector(".rail-actions");
+          const railRect = rail.getBoundingClientRect();
+          const actionsRect = actions.getBoundingClientRect();
+          return {
+            toolJustify: getComputedStyle(tool).justifyContent,
+            actionsToBottom: Math.round(railRect.bottom - actionsRect.bottom),
+            hasSettings: [...document.querySelectorAll(".rail button")].some((button) => button.textContent.trim() === "设置"),
+            meta: document.querySelector(".tabs .meta")?.textContent?.trim() || ""
+          };
+        })()`);
+
         // 输入抽屉按 start 变量动态生成：04 应出现 10 个变量 + 2 个运行控制
         await run(clickText("输入"));
         await sleep(250);
@@ -202,14 +327,69 @@ function createWindow() {
         })`);
         await run(clickText("关闭"));
 
+        // 拖动：连线要跟着节点走；原地放回不写盘
+        const workflowPath = path.join(desktopDir, "..", "Dify工作流", "04_黑帧口播_分组生成.yml");
+        const hashFile = async (filePath) => createHash("sha1").update(await readFile(filePath)).digest("hex");
+        const hashBefore = await hashFile(workflowPath);
+        const dragStart = await run(`(() => {
+          const node = [...document.querySelectorAll(".node")].find((item) => item.textContent.includes("A00_输入活动需求"));
+          if (!node) return null;
+          const rect = node.getBoundingClientRect();
+          return { x: Math.round(rect.x + rect.width / 2), y: Math.round(rect.y + rect.height / 2), left: Math.round(rect.left), top: Math.round(rect.top) };
+        })()`);
+        let dragTest = { skipped: true };
+        if (dragStart) {
+          const beforeEdges = await run(`[...document.querySelectorAll(".canvas-edges path")].map((item) => item.getAttribute("d"))`);
+          win.webContents.sendInputEvent({ type: "mouseDown", x: dragStart.x, y: dragStart.y, button: "left", clickCount: 1 });
+          await sleep(100);
+          win.webContents.sendInputEvent({ type: "mouseMove", x: dragStart.x + 60, y: dragStart.y + 30, button: "left" });
+          win.webContents.sendInputEvent({ type: "mouseMove", x: dragStart.x + 120, y: dragStart.y + 60, button: "left" });
+          await sleep(250);
+          const mid = await run(`(() => {
+            const node = [...document.querySelectorAll(".node")].find((item) => item.textContent.includes("A00_输入活动需求"));
+            const rect = node.getBoundingClientRect();
+            return {
+              dx: Math.round(rect.left) - ${dragStart.left},
+              dy: Math.round(rect.top) - ${dragStart.top},
+              dragging: node.className.includes("dragging"),
+              edges: [...document.querySelectorAll(".canvas-edges path")].map((item) => item.getAttribute("d"))
+            };
+          })()`);
+          // 先用 DOM pointermove 把节点挪回原点，再 pointerup：moved=false，不应写 YAML
+          await run(`(() => {
+            const node = [...document.querySelectorAll(".node")].find((item) => item.textContent.includes("A00_输入活动需求"));
+            node.dispatchEvent(new PointerEvent("pointermove", { bubbles: true, clientX: ${dragStart.x}, clientY: ${dragStart.y}, pointerId: 1 }));
+            return true;
+          })()`);
+          await sleep(200);
+          await run(`(() => {
+            const node = [...document.querySelectorAll(".node")].find((item) => item.textContent.includes("A00_输入活动需求"));
+            node.dispatchEvent(new PointerEvent("pointerup", { bubbles: true, clientX: ${dragStart.x}, clientY: ${dragStart.y}, pointerId: 1 }));
+            return true;
+          })()`);
+          await sleep(500);
+          const after = await run(`(() => {
+            const node = [...document.querySelectorAll(".node")].find((item) => item.textContent.includes("A00_输入活动需求"));
+            const rect = node.getBoundingClientRect();
+            return { dx: Math.round(rect.left) - ${dragStart.left}, dy: Math.round(rect.top) - ${dragStart.top}, dragging: node.className.includes("dragging") };
+          })()`);
+          const hashAfter = await hashFile(workflowPath);
+          dragTest = {
+            mid,
+            after,
+            edgesChanged: JSON.stringify(beforeEdges) !== JSON.stringify(mid.edges),
+            fileUnchanged: hashBefore === hashAfter,
+          };
+        }
+
         // 切到 01 看多消息提示词：d01 应拆成 system / user 两块，各自可编辑
+        const openedWorkflowMenu = await run(`(() => { const button = document.querySelector(".topbar .sel-btn"); if (!button) return false; button.click(); return true; })()`);
+        await sleep(250);
+        const workflowMenu = await run(`[...document.querySelectorAll(".sel-menu li")].map((item) => item.textContent.trim())`);
         const switched = await run(`(() => {
-          const select = document.querySelector(".topbar select");
-          const option = [...select.options].find((item) => item.textContent.includes("01_"));
+          const option = [...document.querySelectorAll(".sel-menu li")].find((item) => item.textContent.includes("01_"));
           if (!option) return false;
-          const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value").set;
-          setter.call(select, option.value);
-          select.dispatchEvent(new Event("change", { bubbles: true }));
+          option.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
           return true;
         })()`);
         await sleep(1200);
@@ -269,7 +449,7 @@ function createWindow() {
           }
         }
 
-        console.log("PROBE", JSON.stringify({ before, afterSelect, afterWheel, clickedZoomIn, afterZoomIn, clickedFit, afterFit, clicked100, after100, afterMin, widthBefore, collapsed, bottomBefore, consoleCollapsed, consoleBack, artifacts, back, reopened, clickedRun, afterRun, inputDrawer, switched, clickedD01, multiMessage, clickedA01, inputValues, searchTyped, searchResults, searchPicked, afterSearch, externalSync }, null, 2));
+        console.log("PROBE", JSON.stringify({ before, afterSelect, afterWheel, clickedZoomIn, afterZoomIn, clickedFit, afterFit, clicked100, after100, afterMin, widthBefore, collapsed, bottomBefore, consoleCollapsed, consoleBack, artifacts, mediaProbe, pickButton, dragTest, menuOpen, menuClosed, clickedSettings, settingsPanel, settingsClosed, railLayout, untilToast, artProject, artDir, artFile, artVideo, artBackList, artBackState, artMediaDir, artImageDir, artPng, artImage, back, reopened, clickedRun, runDialog, clickedStart, afterRun, inputDrawer, openedWorkflowMenu, workflowMenu, switched, clickedD01, multiMessage, clickedA01, inputValues, searchTyped, searchResults, searchPicked, afterSearch, externalSync }, null, 2));
         app.exit(0);
       } catch (error) {
         console.error("PROBE FAILED", error);
@@ -315,7 +495,7 @@ app.whenReady().then(() => {
   protocol.handle("wfs-file", async (request) => {
     try {
       const url = new URL(request.url);
-      const filePath = decodeURIComponent(url.pathname);
+      const filePath = decodeURIComponent(url.pathname.replace(/^\/+/, ""));
       const safe = core.safePath(filePath);
       const info = await stat(safe);
       const buffer = await readFile(safe);

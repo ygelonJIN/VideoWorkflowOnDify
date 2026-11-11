@@ -58,6 +58,10 @@ const server = createServer(async (request, response) => {
     }
     if (url.pathname === "/api/workflows") return send(response, 200, await core.listWorkflows());
     if (url.pathname === "/api/env") return send(response, 200, await core.envInfo());
+    if (url.pathname === "/api/settings") return send(response, 200, await core.getSettings());
+    if (url.pathname === "/api/save-settings" && request.method === "POST") {
+      return send(response, 200, await core.saveSettings(await jsonBody(request)));
+    }
     if (url.pathname === "/api/inputs") return send(response, 200, await core.inputDefaults());
     if (url.pathname === "/api/projects") return send(response, 200, await core.listProjects());
     if (url.pathname === "/api/update-node" && request.method === "POST") {
