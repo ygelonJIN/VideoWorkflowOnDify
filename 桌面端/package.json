@@ -1,0 +1,33 @@
+{
+  "name": "video-workflow-studio",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "description": "视频工作流桌面端：本地执行 Dify DSL、画布、运行台、终端、产物",
+  "scripts": {
+    "build": "node node_modules/typescript/bin/tsc -p tsconfig.build.json",
+    "build:renderer": "node scripts/build-renderer.mjs",
+    "typecheck": "node node_modules/typescript/bin/tsc --noEmit",
+    "test": "npm run build && node --test dist/test/*.test.js",
+    "cli": "node dist/src/cli.js",
+    "app": "npm run build && npm run build:renderer && bash scripts/run-app.sh",
+    "app:fast": "bash scripts/run-app.sh",
+    "design": "node design/build.mjs",
+    "dev": "node scripts/dev-server.mjs",
+    "smoke": "npm run build:renderer && bash scripts/run-app.sh --smoke --no-sandbox"
+  },
+  "dependencies": {
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "yaml": "^2.6.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.9.0",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "esbuild": "^0.25.12",
+    "typescript": "^5.6.3",
+    "electron": "37.10.3"
+  },
+  "main": "electron/main.mjs"
+}

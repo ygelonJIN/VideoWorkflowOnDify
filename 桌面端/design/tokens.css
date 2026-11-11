@@ -1,0 +1,237 @@
+/* ===========================================================================
+   桌面端全局设计 token
+   主题切换：<html data-theme="graphite|paper|deepspace|film">
+   规则：组件只读 --语义变量，不直接写十六进制色值。
+   =========================================================================== */
+
+:root {
+  /* 字体 */
+  --font-ui: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC",
+             "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  --font-mono: "SF Mono", "JetBrains Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  --font-display: var(--font-ui);
+
+  /* 字号 / 行高 / 字重 */
+  --text-10: 10px;  --text-11: 11px;  --text-12: 12px;  --text-13: 13px;
+  --text-14: 14px;  --text-16: 16px;  --text-20: 20px;  --text-26: 26px;
+  --lh-tight: 1.2;  --lh-snug: 1.4;  --lh-normal: 1.6;
+  --fw-regular: 400; --fw-medium: 500; --fw-semibold: 600;
+  --tracking-wide: .08em;
+
+  /* 间距（4 的倍数） */
+  --sp-1: 4px;  --sp-2: 8px;  --sp-3: 12px; --sp-4: 16px;
+  --sp-5: 20px; --sp-6: 24px; --sp-8: 32px;
+
+  /* 圆角 */
+  --radius-xs: 4px; --radius-sm: 6px; --radius-md: 8px;
+  --radius-lg: 10px; --radius-xl: 14px; --radius-full: 999px;
+
+  /* 动效 */
+  --ease: cubic-bezier(.2, .7, .3, 1);
+  --dur-fast: 120ms; --dur: 180ms; --dur-slow: 260ms;
+
+  /* 层级 */
+  --z-canvas: 0; --z-overlay: 10; --z-pop: 100;
+}
+
+/* ---------------------------------------------------------------------------
+   01 石墨 Graphite — 深色中性工作区，蓝强调，紧凑，IDE 感
+   --------------------------------------------------------------------------- */
+[data-theme="graphite"] {
+  --bg: #0f1115;
+  --bg-canvas: #0c0e12;
+  --bg-panel: #12151b;
+  --bg-raised: #171b22;
+  --bg-code: #0b0d11;
+  --bg-hover: #1d222b;
+
+  --border: #23283340;
+  --border-strong: #333a47;
+  --fg: #e6e9ef;
+  --fg-muted: #9aa4b2;
+  --fg-faint: #6b7482;
+
+  --accent: #4d7cff;
+  --accent-fg: #ffffff;
+  --accent-soft: #4d7cff1f;
+  --accent-border: #4d7cff55;
+
+  --ok: #2fbf71;  --ok-soft: #2fbf711f;
+  --warn: #e0a93a; --warn-soft: #e0a93a1f;
+  --err: #ff5c5c;  --err-soft: #ff5c5c1f;
+  --run: #5aa9ff;  --run-soft: #5aa9ff1f;
+
+  --node-bg: #151920;
+  --node-border: #2a3140;
+  --node-shadow: 0 1px 2px #00000066, 0 8px 24px #00000033;
+  --edge: #3a4354;
+  --edge-active: #4d7cff;
+  --grid: #ffffff0d;
+
+  --term-bg: #0a0c10;
+  --term-fg: #c8d0dc;
+  --term-dim: #6b7482;
+  --term-green: #3ddc97;
+  --term-yellow: #f0c36a;
+  --term-red: #ff7b7b;
+  --term-blue: #7fb0ff;
+
+  --shadow-sm: 0 1px 2px #00000040;
+  --shadow-md: 0 4px 16px #00000040;
+  --shadow-pop: 0 16px 48px #00000066;
+  --focus: 0 0 0 2px #4d7cff66;
+
+  --radius-md: 6px; --radius-lg: 8px;
+}
+
+/* ---------------------------------------------------------------------------
+   02 纸白 Paper — 暖白纸面，墨蓝强调，编辑型，适合长提示词阅读
+   --------------------------------------------------------------------------- */
+[data-theme="paper"] {
+  --bg: #f4f1ea;
+  --bg-canvas: #f7f4ee;
+  --bg-panel: #fbf9f4;
+  --bg-raised: #ffffff;
+  --bg-code: #f0ece3;
+  --bg-hover: #ece7dc;
+
+  --border: #e0dacd;
+  --border-strong: #cfc7b6;
+  --fg: #201e1a;
+  --fg-muted: #6c665b;
+  --fg-faint: #9a9384;
+
+  --accent: #2d5bd1;
+  --accent-fg: #ffffff;
+  --accent-soft: #2d5bd114;
+  --accent-border: #2d5bd155;
+
+  --ok: #1f8a5b;  --ok-soft: #1f8a5b14;
+  --warn: #b7791f; --warn-soft: #b7791f18;
+  --err: #c4443a;  --err-soft: #c4443a14;
+  --run: #2d6fd1;  --run-soft: #2d6fd114;
+
+  --node-bg: #ffffff;
+  --node-border: #ded7c8;
+  --node-shadow: 0 1px 2px #2a241514, 0 10px 28px #2a24150f;
+  --edge: #c8c0ae;
+  --edge-active: #2d5bd1;
+  --grid: #2a24150a;
+
+  --term-bg: #26231d;
+  --term-fg: #eae3d5;
+  --term-dim: #a89f8e;
+  --term-green: #8fd6a8;
+  --term-yellow: #f0d08a;
+  --term-red: #f0a49a;
+  --term-blue: #9fc0f0;
+
+  --shadow-sm: 0 1px 2px #2a241510;
+  --shadow-md: 0 4px 16px #2a241514;
+  --shadow-pop: 0 16px 48px #2a241526;
+  --focus: 0 0 0 2px #2d5bd140;
+
+  --radius-md: 8px; --radius-lg: 10px;
+}
+
+/* ---------------------------------------------------------------------------
+   03 深空 Deep Space — 近黑，紫青双强调，发光边，密度偏低
+   --------------------------------------------------------------------------- */
+[data-theme="deepspace"] {
+  --bg: #07080c;
+  --bg-canvas: #05060a;
+  --bg-panel: #0b0d15;
+  --bg-raised: #11141f;
+  --bg-code: #080910;
+  --bg-hover: #171b29;
+
+  --border: #1c2233;
+  --border-strong: #2b3450;
+  --fg: #e8ecf7;
+  --fg-muted: #8e97b5;
+  --fg-faint: #5d6684;
+
+  --accent: #7c5cff;
+  --accent-2: #22d3ee;
+  --accent-fg: #ffffff;
+  --accent-soft: #7c5cff24;
+  --accent-border: #7c5cff66;
+
+  --ok: #34d399;  --ok-soft: #34d3991c;
+  --warn: #fbbf24; --warn-soft: #fbbf241c;
+  --err: #fb7185;  --err-soft: #fb71851c;
+  --run: #22d3ee;  --run-soft: #22d3ee1c;
+
+  --node-bg: #0d1019;
+  --node-border: #232a42;
+  --node-shadow: 0 0 0 1px #7c5cff0d, 0 10px 30px #00000099;
+  --edge: #2c3450;
+  --edge-active: #22d3ee;
+  --grid: #ffffff08;
+
+  --term-bg: #04050a;
+  --term-fg: #cfd6ea;
+  --term-dim: #5d6684;
+  --term-green: #5ef0b0;
+  --term-yellow: #ffd479;
+  --term-red: #ff8fa3;
+  --term-blue: #9bafff;
+
+  --shadow-sm: 0 1px 2px #00000080;
+  --shadow-md: 0 6px 20px #00000080;
+  --shadow-pop: 0 20px 60px #000000b3;
+  --focus: 0 0 0 2px #7c5cff55;
+
+  --radius-md: 10px; --radius-lg: 12px;
+}
+
+/* ---------------------------------------------------------------------------
+   04 胶片 Film — 暖深褐，赭石强调，衬线标题，影视制作气质
+   --------------------------------------------------------------------------- */
+[data-theme="film"] {
+  --bg: #14110e;
+  --bg-canvas: #110e0b;
+  --bg-panel: #191510;
+  --bg-raised: #211c16;
+  --bg-code: #0f0c09;
+  --bg-hover: #2a231b;
+
+  --border: #2c241d;
+  --border-strong: #42382c;
+  --fg: #f1e9dc;
+  --fg-muted: #a89a86;
+  --fg-faint: #786c5c;
+
+  --accent: #e0a458;
+  --accent-fg: #1b130a;
+  --accent-soft: #e0a4581f;
+  --accent-border: #e0a45866;
+
+  --ok: #7fa86b;  --ok-soft: #7fa86b1f;
+  --warn: #d9a441; --warn-soft: #d9a4411f;
+  --err: #c96a4e;  --err-soft: #c96a4e1f;
+  --run: #d9b382;  --run-soft: #d9b3821f;
+
+  --node-bg: #1b1712;
+  --node-border: #352c23;
+  --node-shadow: 0 1px 2px #00000080, 0 10px 26px #00000059;
+  --edge: #4a3d2f;
+  --edge-active: #e0a458;
+  --grid: #ffffff0a;
+
+  --term-bg: #0e0b08;
+  --term-fg: #ded2c0;
+  --term-dim: #786c5c;
+  --term-green: #a8c98a;
+  --term-yellow: #e8c07a;
+  --term-red: #e0917a;
+  --term-blue: #b3a4e0;
+
+  --shadow-sm: 0 1px 2px #00000059;
+  --shadow-md: 0 4px 16px #00000059;
+  --shadow-pop: 0 16px 48px #00000080;
+  --focus: 0 0 0 2px #e0a45855;
+
+  --font-display: "Songti SC", "Source Han Serif SC", Georgia, serif;
+  --radius-md: 4px; --radius-lg: 6px;
+}

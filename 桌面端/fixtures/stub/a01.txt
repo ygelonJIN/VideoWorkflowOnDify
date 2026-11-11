@@ -1,0 +1,49 @@
+{
+  "topic_record": {
+    "topic": "纪念逝者的方式不该被统一成家族聚餐",
+    "source_text": "家里长辈走了以后，亲戚们默认要聚在一起吃顿饭，说这才叫纪念。但我不想参加，不是没时间，也不是去不了，只是我和他不熟。我妈说这是不孝。我觉得纪念一个人的方式不该被统一成家族聚餐，去不去应该自己选。有人会重做两个人一起做过的一件小事，有人就是安静待着，这些也算纪念。",
+    "audience_hint": "家庭关系话题的普通观众",
+    "context": {},
+    "facts_confirmed": [
+      "提问者不想参加家族聚餐",
+      "提问者与逝者并不熟悉",
+      "家里长辈希望用聚餐纪念"
+    ],
+    "constraints": ["不说教", "不出现具体人物和真实姓名"],
+    "duration_seconds": 30
+  },
+  "distill": {
+    "source_form": "idea",
+    "thesis": "纪念逝者不该被统一成家族聚餐，是否参加应当是个人选择",
+    "thesis_source": "user_stated",
+    "thesis_type": "judgment",
+    "arguments": [
+      {
+        "id": "a1",
+        "claim": "把某种仪式变成义务，表达思念就容易变成证明亲情的考核",
+        "evidence": "",
+        "support": "mechanism",
+        "strength": "high"
+      },
+      {
+        "id": "a2",
+        "claim": "不参加聚餐，并不能一概解释成来不及或去不了",
+        "evidence": "",
+        "support": "counterexample",
+        "strength": "medium"
+      },
+      {
+        "id": "a3",
+        "claim": "纪念可以是个人的：重做共同的小事，或安静地想念",
+        "evidence": "",
+        "support": "experience",
+        "strength": "medium"
+      }
+    ],
+    "counterpoints": ["家族聚餐确实能让亲属彼此走动，也能承载思念"],
+    "dropped": ["寒暄", "时间细节"],
+    "open_questions": ["不参加的具体原因应由本人说明，不能替当事人推断"]
+  },
+  "creative": {"topic_mode": "rotate", "angle_preference": ""},
+  "history": {}
+}

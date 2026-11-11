@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="graphite">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>设计 Token 速查 · 桌面端</title>
+<link rel="stylesheet" href="tokens.css">
+<link rel="stylesheet" href="app.css">
+<style>
+  .chiprow { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .shadow-demo { display: flex; gap: 22px; }
+  .shadow-demo > div { width: 120px; height: 64px; border-radius: var(--radius-md);
+    background: var(--bg-raised); border: 1px solid var(--border);
+    display: grid; place-items: center; font-family: var(--font-mono); font-size: var(--text-10); color: var(--fg-muted); }
+  .fontrow { display: grid; gap: 10px; }
+  .fontrow > div { padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--bg-panel); }
+</style>
+</head>
+<body>
+<main class="doc">
+  <h1>设计 Token 速查</h1>
+  <p class="lead">组件只读语义变量；切换主题时所有色值、圆角、字体一起换。下面是当前主题的实际取值。</p>
+
+  <div class="group">
+    <h3>色彩 · 表面与文字</h3>
+    <div class="swatches">
+      <div class="sw" data-token="--bg"><div class="chip" style="background:var(--bg)"></div><div class="lbl"><b>--bg</b><span>窗口底</span></div></div>
+      <div class="sw" data-token="--bg-canvas"><div class="chip" style="background:var(--bg-canvas)"></div><div class="lbl"><b>--bg-canvas</b><span>画布底</span></div></div>
+      <div class="sw" data-token="--bg-panel"><div class="chip" style="background:var(--bg-panel)"></div><div class="lbl"><b>--bg-panel</b><span>侧栏/面板</span></div></div>
+      <div class="sw" data-token="--bg-raised"><div class="chip" style="background:var(--bg-raised)"></div><div class="lbl"><b>--bg-raised</b><span>输入框/卡片</span></div></div>
+      <div class="sw" data-token="--border"><div class="chip" style="background:var(--border)"></div><div class="lbl"><b>--border</b><span>常规描边</span></div></div>
+      <div class="sw" data-token="--border-strong"><div class="chip" style="background:var(--border-strong)"></div><div class="lbl"><b>--border-strong</b><span>强描边</span></div></div>
+      <div class="sw" data-token="--fg"><div class="chip" style="background:var(--fg)"></div><div class="lbl"><b>--fg</b><span>正文</span></div></div>
+      <div class="sw" data-token="--fg-muted"><div class="chip" style="background:var(--fg-muted)"></div><div class="lbl"><b>--fg-muted</b><span>次要</span></div></div>
+      <div class="sw" data-token="--fg-faint"><div class="chip" style="background:var(--fg-faint)"></div><div class="lbl"><b>--fg-faint</b><span>弱化</span></div></div>
+    </div>
+  </div>
+
+  <div class="group">
+    <h3>色彩 · 强调与状态</h3>
+    <div class="swatches">
+      <div class="sw" data-token="--accent"><div class="chip" style="background:var(--accent)"></div><div class="lbl"><b>--accent</b><span>主色</span></div></div>
+      <div class="sw" data-token="--accent-soft"><div class="chip" style="background:var(--accent-soft)"></div><div class="lbl"><b>--accent-soft</b><span>主色淡底</span></div></div>
+      <div class="sw" data-token="--ok"><div class="chip" style="background:var(--ok)"></div><div class="lbl"><b>--ok</b><span>成功</span></div></div>
+      <div class="sw" data-token="--warn"><div class="chip" style="background:var(--warn)"></div><div class="lbl"><b>--warn</b><span>警告</span></div></div>
+      <div class="sw" data-token="--err"><div class="chip" style="background:var(--err)"></div><div class="lbl"><b>--err</b><span>错误</span></div></div>
+      <div class="sw" data-token="--run"><div class="chip" style="background:var(--run)"></div><div class="lbl"><b>--run</b><span>运行中</span></div></div>
+      <div class="sw" data-token="--term-bg"><div class="chip" style="background:var(--term-bg)"></div><div class="lbl"><b>--term-bg</b><span>终端底</span></div></div>
+      <div class="sw" data-token="--term-green"><div class="chip" style="background:var(--term-green)"></div><div class="lbl"><b>--term-green</b><span>终端绿</span></div></div>
+    </div>
+  </div>
+
+  <div class="group">
+    <h3>字号</h3>
+    <div class="typescale">
+      <div><span>--text-26</span><span style="font-size:var(--text-26);color:var(--fg);font-family:var(--font-display)">分镜脚本 · Scene 08</span></div>
+      <div><span>--text-20</span><span style="font-size:var(--text-20);color:var(--fg);font-family:var(--font-display)">口播文案与画面节奏</span></div>
+      <div><span>--text-16</span><span style="font-size:var(--text-16);color:var(--fg)">A03 标准化 Brief 门禁</span></div>
+      <div><span>--text-13</span><span style="font-size:var(--text-13);color:var(--fg)">正文：当前运行已产出 3 份中间产物</span></div>
+      <div><span>--text-11</span><span style="font-size:var(--text-11);color:var(--fg-muted)">辅助：变量选择器 · 2.1k→1.8k tok</span></div>
+      <div><span>--text-10</span><span style="font-size:var(--text-10);color:var(--fg-faint);font-family:var(--font-mono)">CODE · PYTHON3 · 0.02S</span></div>
+    </div>
+  </div>
+
+  <div class="group">
+    <h3>圆角</h3>
+    <div class="radii">
+      <div><i style="border-radius:var(--radius-xs)"></i>xs 4</div>
+      <div><i style="border-radius:var(--radius-sm)"></i>sm 6</div>
+      <div><i style="border-radius:var(--radius-md)"></i>md</div>
+      <div><i style="border-radius:var(--radius-lg)"></i>lg</div>
+      <div><i style="border-radius:var(--radius-xl)"></i>xl 14</div>
+      <div><i style="border-radius:var(--radius-full);width:56px"></i>full</div>
+    </div>
+  </div>
+
+  <div class="group">
+    <h3>间距</h3>
+    <div class="spacing">
+      <div><i style="width:4px;height:4px"></i>1</div>
+      <div><i style="width:8px;height:8px"></i>2</div>
+      <div><i style="width:12px;height:12px"></i>3</div>
+      <div><i style="width:16px;height:16px"></i>4</div>
+      <div><i style="width:20px;height:20px"></i>5</div>
+      <div><i style="width:24px;height:24px"></i>6</div>
+      <div><i style="width:32px;height:32px"></i>8</div>
+    </div>
+  </div>
+
+  <div class="group">
+    <h3>阴影</h3>
+    <div class="shadow-demo">
+      <div style="box-shadow:var(--shadow-sm)">--shadow-sm</div>
+      <div style="box-shadow:var(--shadow-md)">--shadow-md</div>
+      <div style="box-shadow:var(--shadow-pop)">--shadow-pop</div>
+    </div>
+  </div>
+
+  <div class="group">
+    <h3>字体</h3>
+    <div class="fontrow">
+      <div style="font-family:var(--font-ui);color:var(--fg)">--font-ui　系统 UI 字：界面、按钮、正文</div>
+      <div style="font-family:var(--font-mono);color:var(--fg);font-size:12px">--font-mono　节点 ID、变量、终端：a01 · {{#a02.campaign_json#}}</div>
+      <div style="font-family:var(--font-display);color:var(--fg);font-size:18px">--font-display　标题：黑帧口播 · 生产台</div>
+    </div>
+  </div>
+
+  <div class="group">
+    <h3>动效</h3>
+    <div class="chiprow" style="font-family:var(--font-mono);font-size:11px;color:var(--fg-muted)">
+      <span class="pill">--dur-fast 120ms</span>
+      <span class="pill">--dur 180ms</span>
+      <span class="pill">--dur-slow 260ms</span>
+      <span class="pill">--ease cubic-bezier(.2,.7,.3,1)</span>
+    </div>
+  </div>
+</main>
+
+<div class="themer">
+  <button data-theme-set="graphite" aria-pressed="true">石墨</button>
+  <button data-theme-set="paper" aria-pressed="false">纸白</button>
+  <button data-theme-set="deepspace" aria-pressed="false">深空</button>
+  <button data-theme-set="film" aria-pressed="false">胶片</button>
+</div>
+
+<script>
+function paint() {
+  document.querySelectorAll('.sw[data-token]').forEach((sw) => {
+    const token = sw.getAttribute('data-token');
+    const value = getComputedStyle(document.documentElement).getPropertyValue(token).trim();
+    const span = sw.querySelector('.lbl span');
+    if (span && value) span.textContent = value;
+  });
+}
+document.querySelectorAll('[data-theme-set]').forEach((b) => {
+  b.addEventListener('click', () => {
+    document.documentElement.setAttribute('data-theme', b.getAttribute('data-theme-set'));
+    document.querySelectorAll('[data-theme-set]').forEach((x) =>
+      x.setAttribute('aria-pressed', String(x === b)));
+    paint();
+  });
+});
+paint();
+</script>
+</body>
+</html>
