@@ -24,6 +24,7 @@ interface Props {
   status: string;
   onUpdate: (field: EditableField, value: string, messageIndex?: number) => Promise<void>;
   onDelete: () => void;
+  onProduce?: () => void;
 }
 
 function Section({ title, action, children }: { title: string; action?: React.ReactNode; children: React.ReactNode }) {
@@ -38,7 +39,7 @@ function Section({ title, action, children }: { title: string; action?: React.Re
   );
 }
 
-export function Inspector({ graph, node, result, status, onUpdate, onDelete }: Props) {
+export function Inspector({ graph, node, result, status, onUpdate, onDelete, onProduce }: Props) {
   const [editor, setEditor] = useState<{ field: EditableField; value: string; index?: number } | null>(null);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -208,6 +209,13 @@ export function Inspector({ graph, node, result, status, onUpdate, onDelete }: P
           {node.conditions !== undefined && (
             <Section title="条件">
               <div className="code">{JSON.stringify(node.conditions, null, 2).slice(0, 2000)}</div>
+            </Section>
+          )}
+
+          {node.type === "end" && runNode?.status === "success" && onProduce && (
+            <Section title="下一步">
+              <div className="hint-text">这个终点已经跑完。接着去「出片」：准备项目 → 复制提示词 → 放图 → 渲染成片。</div>
+              <button className="btn primary" onClick={onProduce}>去出片</button>
             </Section>
           )}
 

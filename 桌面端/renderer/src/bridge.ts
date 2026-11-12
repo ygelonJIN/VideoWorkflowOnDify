@@ -5,7 +5,7 @@ export interface Bridge {
   pickWorkflow(): Promise<string | null>;
   load(path: string): Promise<WorkflowInfo>;
   rev(path: string): Promise<{ rev: string }>;
-  run(options: { path: string; until?: string; inputs?: Partial<RunInputs>; clientId?: string }): Promise<RunResult>;
+  run(options: { path: string; until?: string; inputs?: Partial<RunInputs>; clientId?: string; precomputed?: Record<string, Record<string, unknown>> }): Promise<RunResult>;
   cancel(clientId: string): Promise<{ ok: boolean; error?: string }>;
   env(): Promise<EnvInfo>;
   settings(): Promise<SettingsInfo>;
@@ -29,7 +29,7 @@ export interface Bridge {
   presets(): Promise<TermPreset[]>;
   copyText(text: string): Promise<{ ok: boolean }>;
   projectImages(payload: { projectPath: string }): Promise<{ dir: string; files: InboxFile[] }>;
-  projectImageSave(payload: { projectPath: string; name: string; base64: string }): Promise<InboxFile>;
+  projectImageSave(payload: { projectPath: string; name: string; base64: string; mtime?: number }): Promise<InboxFile>;
   mimoStatus(): Promise<{ hasKey: boolean; hint: string }>;
   build(payload: BuildRequest): Promise<BuildStarted>;
   onBuild(handler: (event: BuildEvent) => void): () => void;

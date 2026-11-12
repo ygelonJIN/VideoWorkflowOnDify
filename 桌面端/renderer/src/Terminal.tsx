@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
 import { bridge } from "./bridge.js";
-import type { TermPreset } from "./types.js";
 
 const api = bridge();
 
@@ -12,12 +11,7 @@ export function Terminal() {
   const [output, setOutput] = useState("");
   const [command, setCommand] = useState("");
   const [running, setRunning] = useState(false);
-  const [presets, setPresets] = useState<TermPreset[]>([]);
   const box = useRef<HTMLPreElement>(null);
-
-  useEffect(() => {
-    api.presets().then(setPresets).catch(() => setPresets([]));
-  }, []);
 
   useEffect(() => {
     const off = api.onTerm((event) => {
@@ -50,15 +44,11 @@ export function Terminal() {
   return (
     <div className="term-panel">
       <div className="term-presets">
-        {presets.map((preset) => (
-          <button key={preset.id} className="btn" onClick={() => void run(preset.cmd)} disabled={running}>
-            {preset.label}
-          </button>
-        ))}
+        <span className="hint-text">自由命令，在工作区根目录执行。出片流程在左栏「出片」，不用这里。</span>
         <span className="spacer" />
         <button className="btn" onClick={() => setOutput("")} disabled={running}>清空</button>
       </div>
-      <pre className="term-output" ref={box}>{output || "命令输出会显示在这里。预设命令都在工作区根目录执行。\n"}</pre>
+      <pre className="term-output" ref={box}>{output || "命令输出会显示在这里。\n"}</pre>
       <form
         className="term-input"
         onSubmit={(event) => {

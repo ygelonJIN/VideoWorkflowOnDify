@@ -160,6 +160,7 @@ export interface BuildRequest {
   outputs: Record<string, unknown>;
   tts?: { provider?: string; baseUrl?: string; model?: string; voice?: string };
   allowMissing?: boolean;
+  replace?: boolean;
 }
 
 export interface BuildEvent {

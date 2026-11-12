@@ -213,6 +213,14 @@ export function Canvas({ graph, selectedId, connectSource, statuses, onSelect, o
     >
       <div className="canvas-hud">
         <span>{graph.nodes.length} 节点 · {graph.edges.length} 连线</span>
+        {runningNodeId && (
+          <span className="run-live">
+            <i />
+            运行中 · {graph.nodes.find((node) => node.id === runningNodeId)?.title ?? runningNodeId} · 已完成
+            {" "}
+            {Object.values(statuses).filter((state) => state === "success").length}
+          </span>
+        )}
         <span className="zoom">{Math.round(view.scale * 100)}%</span>
         <span className="hint">滚轮缩放 · 拖空白平移 · 点节点看详情</span>
       </div>
@@ -244,7 +252,7 @@ export function Canvas({ graph, selectedId, connectSource, statuses, onSelect, o
         )}
       </div>
       <div
-        className="stage"
+        className={`stage ${runningNodeId ? "running" : ""}`}
         style={{ transform: `translate(${view.x}px, ${view.y}px) scale(${view.scale})` }}
       >
         <svg className="canvas-edges" width={bounds.width} height={bounds.height} viewBox={`0 0 ${bounds.width} ${bounds.height}`}>
@@ -262,7 +270,7 @@ export function Canvas({ graph, selectedId, connectSource, statuses, onSelect, o
             const path = `M ${x1} ${y1} C ${x1 + dx} ${y1}, ${x2 - dx} ${y2}, ${x2} ${y2}`;
             return (
               <g key={edge.id}>
-                <path d={path} />
+                <path className={runningNodeId && edge.target === runningNodeId ? "active" : ""} d={path} />
                 <path
                   d={path}
                   fill="none"

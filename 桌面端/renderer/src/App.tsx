@@ -6,18 +6,16 @@ import { Artifacts } from "./Artifacts.js";
 import { InputPanel } from "./InputPanel.js";
 import { Select } from "./Select.js";
 import { Settings } from "./Settings.js";
-import { ImagePrompts } from "./ImagePrompts.js";
-import { ProjectImages } from "./ProjectImages.js";
-import { MakePanel } from "./MakePanel.js";
-import { findImagePlan } from "../../src/engine/imagePlan.js";
+import { Produce } from "./Produce.js";
+import { ReviewPanel } from "./ReviewPanel.js";
 import type { SelectOption } from "./Select.js";
 import { bridge } from "./bridge.js";
 import type { EnvInfo, RunInputs, RunResult, TraceEvent, WorkflowInfo } from "./types.js";
 
 const api = bridge();
 
-type Tab = "run" | "make" | "terminal" | "inbox" | "images";
-type View = "canvas" | "artifacts";
+type Tab = "run" | "terminal";
+type View = "canvas" | "produce" | "artifacts";
 
 const EMPTY_INPUTS: RunInputs = {};
 
@@ -37,6 +35,72 @@ const ADD_TYPE_OPTIONS: SelectOption[] = [
 function timeOf(iso: string): string {
   const date = new Date(iso);
   return Number.isNaN(date.getTime()) ? "" : date.toTimeString().slice(0, 8);
+}
+
+const LAST_RUN_KEY = "studio.lastRun";
+
+/** 重启应用后还能接着出片：只存 End 输出和节点状态，不存每个节点的大段输入输出。 */
+function readLastRun(): { path: string; at: number; result: RunResult } | null {
+  try {
+    const raw = localStorage.getItem(LAST_RUN_KEY);
+    if (!raw) return null;
+    const saved = JSON.parse(raw) as { path?: string; at?: number; result?: RunResult };
+    if (!saved?.result || typeof saved.result.outputs !== "object" || !saved.result.outputs) return null;
+    return { path: saved.path ?? "", at: saved.at ?? 0, result: saved.result };
+  } catch {
+    return null;
+  }
+}
+
+function saveLastRun(path: string, result: RunResult): void {
+  try {
+    const slim: RunResult = {
+      ...result,
+      nodes: result.nodes.map((node) => ({ ...node, inputs: undefined, outputs: undefined })),
+      outputsByNode: undefined,
+    };
+    localStorage.setItem(LAST_RUN_KEY, JSON.stringify({ path, at: Date.now(), result: slim }));
+  } catch {
+    /* 容量不够就放弃恢复，不影响本次运行 */
+  }
+}
+
+const PENDING_REVIEW_KEY = "studio.pendingReview";
+
+/** 待审阅的这次运行：停在 A07，结果只在内存里等于迟早会丢，所以单独存一份。 */
+interface PendingReview {
+  path: string;
+  at: number;
+  result: RunResult;
+  inputs: RunInputs;
+}
+
+function readPendingReview(): PendingReview | null {
+  try {
+    const raw = localStorage.getItem(PENDING_REVIEW_KEY);
+    if (!raw) return null;
+    const saved = JSON.parse(raw) as Partial<PendingReview>;
+    if (!saved?.result || !Array.isArray(saved.result.nodes)) return null;
+    return { path: saved.path ?? "", at: saved.at ?? 0, result: saved.result, inputs: saved.inputs ?? {} };
+  } catch {
+    return null;
+  }
+}
+
+function savePendingReview(next: PendingReview): void {
+  try {
+    localStorage.setItem(PENDING_REVIEW_KEY, JSON.stringify(next));
+  } catch {
+    /* 结果太大存不下：内存里那份照常能审阅，只是重启后回不来 */
+  }
+}
+
+function clearPendingReview(): void {
+  try {
+    localStorage.removeItem(PENDING_REVIEW_KEY);
+  } catch {
+    /* 忽略 */
+  }
 }
 
 export function App() {
@@ -63,7 +127,13 @@ export function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [runningNodeId, setRunningNodeId] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [reviewGate, setReviewGate] = useState(() => localStorage.getItem("studio.reviewGate") !== "0");
+  const [review, setReview] = useState<PendingReview | null>(null);
+  const [reviewOpen, setReviewOpen] = useState(false);
+  const [reviewNotes, setReviewNotes] = useState("");
   const runClientId = useRef<string | null>(null);
+  // 闸门停在 a07：口播一出来就审，不等到 A17 烧完分镜/动效/合规
+  const canReview = Boolean(graph?.nodes.some((node) => node.id === "a07"));
 
   const open = useCallback(async (path: string) => {
     try {
@@ -83,6 +153,17 @@ export function App() {
       setEvents([]);
       setResult(null);
       setError(null);
+      // 换工作流时，待审阅的那份只属于它自己的流程：同一条路径就恢复成收起状态，顶栏能点开
+      const pending = readPendingReview();
+      if (pending && pending.path === path) {
+        setReview(pending);
+        setReviewOpen(false);
+        setReviewNotes("");
+        setNotice("有一份待审阅的文案已恢复：点顶栏「文案待审阅」继续看。");
+      } else {
+        setReview(null);
+        setReviewOpen(false);
+      }
     } catch (loadError) {
       setError((loadError as Error).message);
     }
@@ -104,6 +185,10 @@ export function App() {
   }, [open]);
 
   useEffect(() => {
+    localStorage.setItem("studio.reviewGate", reviewGate ? "1" : "0");
+  }, [reviewGate]);
+
+  useEffect(() => {
     let alive = true;
     Promise.all([api.workflows(), api.env(), api.inputs()]).then(([list, envInfo, defaults]) => {
       if (!alive) return;
@@ -122,8 +207,10 @@ export function App() {
     };
   }, [open]);
 
-  const run = useCallback(async () => {
+  const run = useCallback(async (overrides?: { inputs?: RunInputs; precomputed?: Record<string, Record<string, unknown>> }) => {
     if (!graph || running) return;
+    const effectiveInputs = overrides?.inputs ?? inputs;
+    const gate = reviewGate && canReview && !overrides?.precomputed;
     const clientId = crypto.randomUUID();
     runClientId.current = clientId;
     setRunning(true);
@@ -153,10 +240,28 @@ export function App() {
       const runResult = await api.run({
         path: graph.path,
         clientId,
-        inputs,
+        inputs: effectiveInputs,
+        ...(gate ? { until: "a07" } : {}),
+        ...(overrides?.precomputed ? { precomputed: overrides.precomputed } : {}),
       });
+      if (gate && runResult.status === "stopped" && runResult.outputsByNode?.["a07"]) {
+        const pending: PendingReview = { path: graph.path, at: Date.now(), result: runResult, inputs: effectiveInputs };
+        setReview(pending);
+        setReviewOpen(true);
+        setReviewNotes("");
+        savePendingReview(pending);
+        setNotice("口播已生成，先审阅：重跑文案 / 继续生成画面 / 放弃这次运行");
+        return;
+      }
       setResult(runResult);
-      if (findImagePlan(runResult.outputsByNode)) setTab("images");
+      // 只记成功的结果：重跑失败时别把上一次能出片的运行覆盖掉
+      if (runResult.status === "success") saveLastRun(graph.path, runResult);
+      const produced =
+        typeof runResult.outputs.html_document === "string" && typeof runResult.outputs.voiceover_script === "string";
+      if (runResult.status === "success" && produced) {
+        setView("produce");
+        setNotice("运行完成，接着按「准备项目 → 复制提示词 → 放图 → 渲染成片」走");
+      }
       if (runResult.status === "error" && runResult.error) setError(runResult.error);
       if (runResult.status !== "success" && runResult.error) setNotice(runResult.error);
     } catch (runError) {
@@ -166,7 +271,7 @@ export function App() {
       runClientId.current = null;
       setRunning(false);
     }
-  }, [graph, running, inputs]);
+  }, [graph, running, inputs, reviewGate, canReview]);
 
   const stop = useCallback(async () => {
     const clientId = runClientId.current;
@@ -178,6 +283,61 @@ export function App() {
       setNotice(`停止失败：${(cause as Error).message}`);
     }
   }, []);
+
+  const continueFromReview = useCallback(() => {
+    if (!review) return;
+    const precomputed: Record<string, Record<string, unknown>> = {};
+    for (const node of review.result.nodes) {
+      if ((node.type === "llm" || node.type === "code") && node.status === "success" && node.outputs) {
+        precomputed[node.nodeId] = node.outputs;
+      }
+    }
+    const next = review;
+    clearPendingReview();
+    setReview(null);
+    setReviewOpen(false);
+    void run({ inputs: next.inputs, precomputed });
+  }, [review, run]);
+
+  const rerunFromReview = useCallback((notes: string) => {
+    if (!review) return;
+    const base = review.inputs;
+    const next: RunInputs = { ...base };
+    const note = notes.trim();
+    if (note) {
+      next.creative_preferences = [base.creative_preferences, "修改意见：" + note].filter(Boolean).join("\n");
+    }
+    setInputs(next);
+    clearPendingReview();
+    setReview(null);
+    setReviewOpen(false);
+    void run({ inputs: next });
+  }, [review, run]);
+
+  /** 只把卡片收起来：这次 A 段结果留着，顶栏有入口点回来。 */
+  const collapseReview = useCallback(() => {
+    setReviewOpen(false);
+    setNotice("审阅卡已收起：文案还在，点顶栏「文案待审阅」可以点回来。");
+  }, []);
+
+  /** 真的放弃这次运行：丢掉 A 段结果和本地备份。 */
+  const discardReview = useCallback(() => {
+    clearPendingReview();
+    setReview(null);
+    setReviewOpen(false);
+    setResult(null);
+    setNotice("已放弃这次运行，未生成画面；改完输入可以重新运行。");
+  }, []);
+
+  useEffect(() => {
+    if (!graph || result || running || review) return;
+    const saved = readLastRun();
+    if (!saved || saved.path !== graph.path) return;
+    setResult(saved.result);
+    const when = saved.at ? new Date(saved.at).toLocaleString() : "";
+    setNotice(`已恢复上次运行结果${when ? `（${when}）` : ""}，可直接去「出片」接着做`);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [graph?.path, result, running, review]);
 
   // 别的脚本（sync_prompts_to_yaml.py 等）改了 YAML 时，窗口重新获得焦点就同步一次
   const syncExternal = useCallback(async () => {
@@ -203,7 +363,6 @@ export function App() {
   }, [syncExternal]);
 
   const selected = useMemo(() => graph?.nodes.find((node) => node.id === selectedId) ?? null, [graph, selectedId]);
-  const imagePlan = useMemo(() => findImagePlan(result?.outputsByNode), [result]);
 
   useEffect(() => {
     const prevent = (event: DragEvent) => event.preventDefault();
@@ -376,6 +535,18 @@ export function App() {
           {connecting ? (connectFrom ? "选目标…" : "选起点…") : "连线"}
         </button>
         <button className="btn" onClick={() => setShowInput(true)}>输入</button>
+        {review && !reviewOpen && (
+          <button
+            className="btn pending"
+            onClick={() => {
+              setReviewOpen(true);
+              setNotice(null);
+            }}
+            title="回到 A07 口播审阅卡：重跑文案 / 继续生成画面 / 放弃这次运行"
+          >
+            文案待审阅 · 点开
+          </button>
+        )}
         {running ? (
           <button className="btn danger" onClick={() => void stop()}>停止</button>
         ) : (
@@ -397,6 +568,13 @@ export function App() {
         </div>
         <nav className="nav">
           <button className={`tool ${view === "canvas" ? "on" : ""}`} onClick={() => setView("canvas")}>画布</button>
+          <button
+            className={`tool ${view === "produce" ? "on" : ""}`}
+            onClick={() => setView("produce")}
+            title="运行完成后：准备项目 → 出图提示词 → 放图 → 渲染成片"
+          >
+            出片
+          </button>
           <button className={`tool ${view === "artifacts" ? "on" : ""}`} onClick={() => setView("artifacts")}>产物</button>
         </nav>
         <div className="rail-foot">
@@ -412,22 +590,24 @@ export function App() {
         <div className={`main ${!inspectorOpen || view !== "canvas" ? "no-inspector" : ""}`}>
           {view === "artifacts" ? (
             <Artifacts result={result} />
-          ) : graph ? (
-            <Canvas
-              graph={graph}
-              selectedId={selectedId}
-              connectSource={connectFrom}
-              statuses={statuses}
-              onSelect={handleNodeClick}
-              onEdgeClick={(edgeId) => void handleEdgeClick(edgeId)}
-              onMoveNode={(nodeId, position) => void moveNode(nodeId, position)}
-              runningNodeId={runningNodeId}
-            />
-          ) : (
-            <section className="canvas-wrap card">
-              <div className="hint-text" style={{ padding: 16 }}>载入中…</div>
-            </section>
-          )}
+          ) : view === "canvas" ? (
+            graph ? (
+              <Canvas
+                graph={graph}
+                selectedId={selectedId}
+                connectSource={connectFrom}
+                statuses={statuses}
+                onSelect={handleNodeClick}
+                onEdgeClick={(edgeId) => void handleEdgeClick(edgeId)}
+                onMoveNode={(nodeId, position) => void moveNode(nodeId, position)}
+                runningNodeId={runningNodeId}
+              />
+            ) : (
+              <section className="canvas-wrap card">
+                <div className="hint-text" style={{ padding: 16 }}>载入中…</div>
+              </section>
+            )
+          ) : null}
           {view === "canvas" && inspectorOpen && graph ? (
             <Inspector
               graph={graph}
@@ -446,19 +626,24 @@ export function App() {
                 applyUpdate(updated);
               }}
               onDelete={() => void deleteNode()}
+              onProduce={() => setView("produce")}
             />
           ) : null}
+          <div className="produce-layer" hidden={view !== "produce"}>
+            <Produce
+              result={result}
+              inputs={inputs}
+              onRun={() => setShowInput(true)}
+              onArtifacts={() => setView("artifacts")}
+              onNotice={setNotice}
+            />
+          </div>
         </div>
 
         <footer className={`bottom card ${consoleOpen ? "" : "collapsed"}`}>
           <div className="tabs">
             <span className={`tab ${tab === "run" ? "on" : ""}`} onClick={() => setTab("run")}>运行台</span>
-            <span className={`tab ${tab === "make" ? "on" : ""}`} onClick={() => setTab("make")}>制作</span>
             <span className={`tab ${tab === "terminal" ? "on" : ""}`} onClick={() => setTab("terminal")}>终端</span>
-            <span className={`tab ${tab === "inbox" ? "on" : ""}`} onClick={() => setTab("inbox")}>图片</span>
-            <span className={`tab ${tab === "images" ? "on" : ""}`} onClick={() => setTab("images")}>
-              图像提示词{imagePlan ? ` ${imagePlan.images.length}` : ""}
-            </span>
             <span className="right">
               <span className="meta" title={graph?.path ?? ""}>
                 {graph ? `${graph.name} · ${graph.nodes.length} 节点` : "未载入"}
@@ -473,6 +658,13 @@ export function App() {
           </div>
           <div className={`pane ${tab === "run" ? "" : "hidden"}`}>
             <div className="log">
+              {result && result.status === "success" && typeof result.outputs.html_document === "string" && (
+                <div className="run-next">
+                  <span>运行完成 · {result.nodes.length} 节点 · {(result.ms / 1000).toFixed(1)}s</span>
+                  <span className="spacer" />
+                  <button className="btn sm primary" onClick={() => setView("produce")}>下一步：去出片</button>
+                </div>
+              )}
               {error && <div className="err">{error}</div>}
               {[...events].reverse().filter((event) => event.type !== "node_start").slice(0, 300).map((event) => (
                 <div key={event.seq}>
@@ -485,23 +677,15 @@ export function App() {
                   {event.error && <span className="err">{event.error}</span>}
                 </div>
               ))}
-              {events.length === 0 && <div className="dim">点右上「运行」开始；会真实调用模型（先在左栏「设置」里配 Key）。</div>}
+              {events.length === 0 && !result && <div className="dim">点右上「运行」开始；会真实调用模型（先在左栏「设置」里配 Key）。</div>}
+              {events.length === 0 && result && <div className="dim">逐节点事件没有保留（应用重启过）；End 输出已恢复，可直接去「出片」。</div>}
               {result && Object.keys(result.outputs).length > 0 && (
                 <div className="dim">产物：{Object.keys(result.outputs).join("、")}</div>
               )}
             </div>
           </div>
-          <div className={`pane ${tab === "make" ? "" : "hidden"}`}>
-            <MakePanel result={result} inputs={inputs} onNotice={setNotice} />
-          </div>
           <div className={`pane term-pane ${tab === "terminal" ? "" : "hidden"}`}>
             <Terminal />
-          </div>
-          <div className={`pane ${tab === "inbox" ? "" : "hidden"}`}>
-            <ProjectImages />
-          </div>
-          <div className={`pane ${tab === "images" ? "" : "hidden"}`}>
-            <ImagePrompts plan={imagePlan} />
           </div>
         </footer>
       </div>
@@ -513,11 +697,32 @@ export function App() {
           running={running}
           onChange={(patch) => setInputs((previous) => ({ ...previous, ...patch }))}
           hasKey={Boolean(env?.hasKey)}
+          reviewGate={reviewGate}
+          canReview={canReview}
+          onReviewGateChange={setReviewGate}
           onRun={() => {
             setShowInput(false);
+            if (review) {
+              // 新跑一轮会顶掉那份待审阅的文案：先问一句，别像点遮罩那样悄悄丢掉
+              if (!window.confirm("还有一份待审阅的文案没处理，重新运行会把它丢掉。继续？")) return;
+              discardReview();
+            }
             void run();
           }}
           onClose={() => setShowInput(false)}
+        />
+      )}
+
+      {review && reviewOpen && (
+        <ReviewPanel
+          result={review.result}
+          busy={running}
+          notes={reviewNotes}
+          onNotesChange={setReviewNotes}
+          onContinue={continueFromReview}
+          onRerun={rerunFromReview}
+          onCollapse={collapseReview}
+          onDiscard={discardReview}
         />
       )}
 

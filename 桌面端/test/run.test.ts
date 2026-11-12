@@ -190,3 +190,93 @@ describe("stub 提示", () => {
     );
   });
 });
+
+const PRECOMPUTED_YAML = `
+version: "0.7.0"
+kind: app
+app:
+  name: 文案缓存测试
+  mode: workflow
+workflow:
+  graph:
+    nodes:
+      - id: s
+        type: custom
+        data:
+          type: start
+          title: S
+          variables:
+            - variable: x
+              label: X
+              type: text-input
+              required: true
+      - id: a
+        type: custom
+        data:
+          type: code
+          title: A
+          code_language: python3
+          code: |
+            def main(x: str) -> dict:
+                return {"a_out": "A-" + x}
+          variables:
+            - variable: x
+              value_selector: [s, x]
+              value_type: string
+      - id: b
+        type: custom
+        data:
+          type: code
+          title: B
+          code_language: python3
+          code: |
+            def main(a_out: str) -> dict:
+                return {"b_out": a_out + "b"}
+          variables:
+            - variable: a_out
+              value_selector: [a, a_out]
+              value_type: string
+      - id: e
+        type: custom
+        data:
+          type: end
+          title: E
+          outputs:
+            - variable: e_out
+              value_selector: [b, b_out]
+    edges:
+      - id: e1
+        source: s
+        target: a
+      - id: e2
+        source: a
+        target: b
+      - id: e3
+        source: b
+        target: e
+`;
+
+describe("文案闸门缓存", () => {
+  it("precomputed 命中时跳过 A 段节点，只跑后面的", async () => {
+    const workflow = parseWorkflow(PRECOMPUTED_YAML, "<precomputed>");
+    const result = await runGraph(workflow, {
+      inputs: { x: "X" },
+      provider: providerFromEnv({ WF_STUB: "1" }),
+      precomputed: { a: { a_out: "CACHED" } },
+    });
+    assert.equal(result.status, "success");
+    assert.equal(result.outputs["e_out"], "CACHEDb");
+    const a = result.nodes.find((node) => node.nodeId === "a");
+    assert.equal(a?.status, "success");
+    assert.equal(a?.ms, 0);
+  });
+
+  it("没有 precomputed 时照常执行 A 段", async () => {
+    const workflow = parseWorkflow(PRECOMPUTED_YAML, "<precomputed-none>");
+    const result = await runGraph(workflow, {
+      inputs: { x: "X" },
+      provider: providerFromEnv({ WF_STUB: "1" }),
+    });
+    assert.equal(result.outputs["e_out"], "A-Xb");
+  });
+});

@@ -6,6 +6,9 @@ interface Props {
   variables: StartVariable[];
   running: boolean;
   hasKey: boolean;
+  reviewGate: boolean;
+  canReview: boolean;
+  onReviewGateChange: (value: boolean) => void;
   onChange: (patch: Record<string, string>) => void;
   onRun: () => void;
   onClose: () => void;
@@ -59,9 +62,10 @@ function InputField({
   );
 }
 
-export function InputPanel({ inputs, variables, running, hasKey, onChange, onRun, onClose }: Props) {
+export function InputPanel({ inputs, variables, running, hasKey, reviewGate, canReview, onReviewGateChange, onChange, onRun, onClose }: Props) {
   const longFields = variables.filter((variable) => variable.type === "paragraph");
   const shortFields = variables.filter((variable) => variable.type !== "paragraph");
+  const missing = variables.filter((variable) => variable.required && !(inputs[variable.variable] ?? "").trim());
   return (
     <div className="drawer card">
       <div className="drawer-head">
@@ -94,10 +98,25 @@ export function InputPanel({ inputs, variables, running, hasKey, onChange, onRun
         <div className="warn-box">还没有 API Key，运行会直接失败；先在左栏「设置」里填 Key。</div>
       )}
       {hasKey && (
-        <div className="hint-text">每次运行都会跑完整条链路（16 个 LLM 节点 + 逐屏生成），耗时和费用请留意。</div>
+        <div className="hint-text">每次运行都会跑完整链路；开着「口播后暂停」会先停在 A07，审完口播再跑分镜和画面。</div>
       )}
-      <button className="btn primary wide" onClick={onRun} disabled={running || !hasKey}>用这些输入运行</button>
-      <div className="hint-text">留空表示沿用 fixtures/input.json 的示例；运行一律调用真实模型。</div>
+      {missing.length > 0 && (
+        <div className="warn-box">还有必填项没填：{missing.map((variable) => variable.label || variable.variable).join("、")}</div>
+      )}
+      {canReview && (
+        <label className="check" style={{ marginTop: 12 }}>
+          <input type="checkbox" checked={reviewGate} onChange={(event) => onReviewGateChange(event.target.checked)} />
+          口播生成后暂停审阅（推荐）
+        </label>
+      )}
+      {canReview && (
+        <div className="hint-text">
+          {reviewGate
+            ? "跑到 A07 停住：先看口播，再决定重跑文案或继续跑分镜/画面。省掉审阅前的 3 次分镜/动效/合规调用。"
+            : "关掉就一路跑到成片；文案不对只能整条重跑。"}
+        </div>
+      )}
+      <button className="btn primary wide" onClick={onRun} disabled={running || !hasKey || missing.length > 0}>用这些输入运行</button>
     </div>
   );
 }

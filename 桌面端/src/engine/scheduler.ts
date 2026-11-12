@@ -15,6 +15,8 @@ export interface RunOptions {
   sys?: Record<string, unknown>;
   stub?: StubSource;
   until?: string;
+  /** 文案阶段已跑完的节点输出：第二段只跑 H 段，不重复调用模型。 */
+  precomputed?: Record<string, Record<string, unknown>>;
   maxSteps?: number;
   codeTimeoutMs?: number;
   /** 手动停止：节点之间检查，模型请求 / Code 子进程会收到中断。 */
@@ -322,6 +324,10 @@ async function executeLoop(ctx: RunContext, node: DslNode): Promise<Record<strin
   return { ...(ctx.pool.getNodeOutputs(node.id) ?? {}), loop_round: round };
 }
 
+function isCacheable(node: DslNode): boolean {
+  return node.data.type === "llm" || node.data.type === "code";
+}
+
 async function runContainer(ctx: RunContext, startIds: string[], containerId: string | undefined): Promise<"done" | "stopped"> {
   const queue = [...startIds];
   const visited = new Set<string>();
@@ -337,6 +343,27 @@ async function runContainer(ctx: RunContext, startIds: string[], containerId: st
     if (ctx.steps > ctx.maxSteps) throw new StopRun("error", `超过最大节点步数 ${ctx.maxSteps}`);
     if (node.data.type === "iteration-start" || node.data.type === "loop-start") {
       // 容器入口占位节点：不执行、不上报，但要把出边接上
+      for (const nextId of resolveNextNodeIds(ctx.workflow, nodeId, undefined, containerId)) {
+        if (!visited.has(nextId)) queue.push(nextId);
+      }
+    } else if (containerId === undefined && isCacheable(node) && ctx.options.precomputed?.[node.id]) {
+      const outputs = ctx.options.precomputed[node.id] ?? {};
+      const record: NodeRunRecord = {
+        nodeId: node.id,
+        type: nodeType(node),
+        title: nodeTitle(node),
+        status: "success",
+        ms: 0,
+        outputs,
+      };
+      ctx.records.push(record);
+      ctx.statuses.set(node.id, "success");
+      ctx.pool.setNodeOutputs(node.id, outputs);
+      ctx.outputsByNode[node.id] = outputs;
+      ctx.lastExecuted = node.id;
+      ctx.emit({ type: "node_start", nodeId: node.id, nodeType: record.type, title: record.title });
+      ctx.emit({ type: "node_end", nodeId: node.id, nodeType: record.type, title: record.title, status: "success", ms: 0 });
+      if (ctx.options.until === nodeId) return "stopped";
       for (const nextId of resolveNextNodeIds(ctx.workflow, nodeId, undefined, containerId)) {
         if (!visited.has(nextId)) queue.push(nextId);
       }

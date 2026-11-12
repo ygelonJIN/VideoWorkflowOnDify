@@ -1,5 +1,5 @@
 /** Electron 主进程与浏览器调试壳共用的本地能力。 */
-import { chmod, mkdir, readdir, readFile, rename, stat, writeFile } from "node:fs/promises";
+import { chmod, mkdir, readdir, readFile, rename, stat, utimes, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { spawn } from "node:child_process";
@@ -193,13 +193,12 @@ export function cancelRun(clientId) {
   return { ok: true };
 }
 
-export async function runWorkflow({ path: workflowPath, inputs = {}, until, clientId, onEvent }) {
+export async function runWorkflow({ path: workflowPath, inputs = {}, until, precomputed, clientId, onEvent }) {
   const { config, runner } = await engine();
   const env = { ...config.loadEnvFile(path.join(desktopDir, ".env")), ...process.env };
   const provider = config.providerFromEnv(env, { stub: false });
-  const defaults = JSON.parse(await readFile(path.join(desktopDir, "fixtures", "input.json"), "utf8"));
-  const provided = Object.fromEntries(Object.entries(inputs).filter(([, value]) => value !== "" && value !== undefined));
-  const merged = { ...defaults, ...provided };
+  // 不再用 fixtures 兜底：留空的字段就是空，不把示例文案偷偷带进真实运行
+  const merged = Object.fromEntries(Object.entries(inputs).filter(([, value]) => value !== undefined));
   const controller = clientId ? new AbortController() : null;
   if (clientId && controller) activeRuns.set(String(clientId), controller);
   try {
@@ -208,6 +207,7 @@ export async function runWorkflow({ path: workflowPath, inputs = {}, until, clie
       inputs: merged,
       provider,
       ...(until ? { until } : {}),
+      ...(precomputed ? { precomputed } : {}),
       ...(controller ? { signal: controller.signal } : {}),
       ...(onEvent ? { onEvent } : {}),
     });
@@ -247,14 +247,19 @@ function imageIdsFromOutputs(outputs) {
   if (typeof raw !== "string") return [];
   try {
     const plan = JSON.parse(raw);
-    return (plan.images || []).map((item) => String(item?.id ?? "")).filter(Boolean);
+    // role=html 的屏不生成照片，期望图片只数真正要出图的
+    return (plan.images || [])
+      .filter((item) => String(item?.role ?? "").toLowerCase() !== "html")
+      .map((item) => String(item?.id ?? ""))
+      .filter(Boolean);
   } catch {
     return [];
   }
 }
 
 /** 准备项目 / 渲染成片：把本次运行的 End 输出写成 build 脚本认识的输入，再流式跑 Python。 */
-export async function startBuild({ kind, projectName, outputs, tts = {}, allowMissing = false, onData, onExit } = {}) {
+export async function startBuild({ kind, action, projectName, outputs, tts = {}, allowMissing = false, replace = false, onData, onExit } = {}) {
+  kind = kind ?? action;
   if (kind !== "prepare" && kind !== "render") throw new Error(`未知的构建动作：${kind}`);
   const name = String(projectName ?? "").trim();
   if (!/^[A-Za-z0-9._-]+$/.test(name)) throw new Error("项目名只能包含字母、数字、点、下划线、横线");
@@ -263,6 +268,23 @@ export async function startBuild({ kind, projectName, outputs, tts = {}, allowMi
   if (typeof html !== "string" || !html.trim()) throw new Error("这次运行没有 html_document，先跑完整条链路");
   if (typeof voiceover !== "string" || !voiceover.trim()) throw new Error("这次运行没有 voiceover_script");
 
+  // TTS 的 Base 地址在开始节点是中文选项，真正 URL 由 A16 写进 approved_package_json
+  let approvedTts = {};
+  try {
+    const approved = outputs?.approved_package_json;
+    if (typeof approved === "string") approvedTts = JSON.parse(approved)?.tts_config ?? {};
+  } catch {
+    approvedTts = {};
+  }
+  const text = (value) => String(value ?? "").trim();
+  const inputBase = text(tts.baseUrl);
+  const ttsResolved = {
+    provider: text(tts.provider) || text(approvedTts.provider) || "mimo",
+    base_url: /^https?:\/\//i.test(inputBase) ? inputBase : text(approvedTts.base_url),
+    model: text(tts.model) || text(approvedTts.model),
+    voice: text(tts.voice) || text(approvedTts.voice) || "mimo_default",
+  };
+
   const payload = {
     build_package_json: {
       html_document: html,
@@ -270,10 +292,10 @@ export async function startBuild({ kind, projectName, outputs, tts = {}, allowMi
       ...(outputs?.image_plan_json ? { image_plan_json: outputs.image_plan_json } : {}),
       ...(outputs?.approved_package_json ? { approved_package_json: outputs.approved_package_json } : {}),
       tts_config: {
-        provider: String(tts.provider || "mimo"),
-        base_url: String(tts.baseUrl || ""),
-        model: String(tts.model || ""),
-        voice: String(tts.voice || "mimo_default"),
+        provider: ttsResolved.provider,
+        base_url: ttsResolved.base_url,
+        model: ttsResolved.model,
+        voice: ttsResolved.voice,
       },
     },
   };
@@ -287,11 +309,12 @@ export async function startBuild({ kind, projectName, outputs, tts = {}, allowMi
   else {
     args.push("--skip-images");
     if (allowMissing) args.push("--allow-missing-images");
+    if (replace) args.push("--replace");
   }
-  if (tts.provider) args.push("--tts-provider", String(tts.provider));
-  if (tts.baseUrl) args.push("--tts-base-url", String(tts.baseUrl));
-  if (tts.model) args.push("--tts-model", String(tts.model));
-  if (tts.voice) args.push("--tts-voice", String(tts.voice));
+  if (ttsResolved.provider) args.push("--tts-provider", ttsResolved.provider);
+  if (ttsResolved.base_url) args.push("--tts-base-url", ttsResolved.base_url);
+  if (ttsResolved.model) args.push("--tts-model", ttsResolved.model);
+  if (ttsResolved.voice) args.push("--voice-name", ttsResolved.voice);
 
   const env = { ...process.env };
   const mimoKey = await resolveMimoKey();
@@ -325,8 +348,16 @@ export async function startBuild({ kind, projectName, outputs, tts = {}, allowMi
   return { runId, projectDir, inputPath, expectedIds, hasMimoKey: Boolean(mimoKey) };
 }
 
+/** 运行输入不再预填示例正文；只保留 TTS 这类配置默认值，request_id 每次自动生成。 */
 export async function inputDefaults() {
-  return JSON.parse(await readFile(path.join(desktopDir, "fixtures", "input.json"), "utf8"));
+  const fixture = JSON.parse(await readFile(path.join(desktopDir, "fixtures", "input.json"), "utf8"));
+  const defaults = {};
+  for (const key of ["tts_provider", "tts_model", "tts_base_url", "tts_voice"]) {
+    if (typeof fixture[key] === "string") defaults[key] = fixture[key];
+  }
+  const stamp = new Date().toISOString().replace(/[-:.TZ]/g, "").slice(0, 14);
+  defaults.request_id = `studio-${stamp}`;
+  return defaults;
 }
 
 const MIRROR_TOOL = path.join(workspaceDir, "HTML视频项目", "workflow_runtime", "tools", "sync_prompts_to_yaml.py");
@@ -498,8 +529,8 @@ export async function listProjectImages({ projectPath } = {}) {
   return { dir, files: files.sort((left, right) => right.mtime - left.mtime) };
 }
 
-/** 拖进「图片」页签的图片直接落到当前项目的 媒体/图片/，不改工作流、不改 YAML。 */
-export async function saveProjectImage({ projectPath, name, base64 } = {}) {
+/** 图片直接落到当前项目的 媒体/图片/：保留原文件名（s02.png 就能按 id 对上）和原修改时间（按出图时间对号）。 */
+export async function saveProjectImage({ projectPath, name, base64, mtime } = {}) {
   if (typeof base64 !== "string" || !base64) throw new Error("没有收到图片数据");
   const buffer = Buffer.from(base64, "base64");
   if (buffer.length === 0) throw new Error("图片内容为空");
@@ -509,10 +540,15 @@ export async function saveProjectImage({ projectPath, name, base64 } = {}) {
   if (!IMAGE_EXT.has(ext)) throw new Error("只接受图片文件（png / jpg / jpeg / webp / gif）");
   const dir = projectMediaPath(projectPath, "图片");
   await mkdir(dir, { recursive: true });
-  const stamp = new Date().toISOString().replace(/[-:.TZ]/g, "").slice(0, 14);
-  const target = path.join(dir, `${stamp}-${safeName}`);
+  const target = path.join(dir, safeName);
   await writeFile(target, buffer);
-  return { path: target, name: path.basename(target), size: buffer.length };
+  // 用图片自己的修改时间覆盖落盘时间：拖进来的先后顺序不参与对号
+  const when = new Date(Number(mtime));
+  if (Number.isFinite(when.getTime()) && when.getTime() > 0) {
+    await utimes(target, when, when).catch(() => {});
+  }
+  const info = await stat(target).catch(() => null);
+  return { path: target, name: path.basename(target), size: buffer.length, mtime: info?.mtimeMs ?? Date.now() };
 }
 
 const SKIP_DIRS = new Set(["node_modules", "vendor", ".hyperframes", ".git", "__pycache__"]);
@@ -553,15 +589,8 @@ export async function readText(filePath, limit = 200_000) {
   return { path: safe, text: data.subarray(0, limit).toString("utf8"), truncated: data.length > limit };
 }
 
-const TERM_PRESETS = [
-  {
-    id: "prepare",
-    label: "准备（--prepare）",
-    cmd: "bash HTML视频项目/workflow_runtime/tools/run_dify_output.sh --prepare",
-  },
-  { id: "render", label: "出片（--skip-images）", cmd: "bash HTML视频项目/workflow_runtime/tools/run_dify_output.sh --skip-images" },
-  { id: "images", label: "只出图", cmd: "bash HTML视频项目/workflow_runtime/tools/run_dify_output.sh --images-only" },
-];
+/* 旧流程（run_dify_output.sh → TextEdit 贴 Dify 文本）已经不用；终端只保留自由命令。 */
+const TERM_PRESETS = [];
 
 export function termPresets() {
   return TERM_PRESETS;
