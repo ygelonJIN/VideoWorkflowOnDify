@@ -63,6 +63,7 @@ export interface RunResult {
   ms: number;
   nodes: RunNodeRecord[];
   outputs: Record<string, unknown>;
+  outputsByNode?: Record<string, Record<string, unknown>>;
   warnings: string[];
   error?: string;
 }
@@ -81,7 +82,13 @@ export interface EnvInfo {
   hasKey: boolean;
   baseUrl: string;
   model: string;
-  stub?: boolean;
+}
+
+export interface InboxFile {
+  name: string;
+  path: string;
+  size: number;
+  mtime: number;
 }
 
 export interface Project {
@@ -137,4 +144,33 @@ declare global {
   interface Window {
     wfs?: import("./bridge.js").Bridge;
   }
+}
+
+export interface BuildStarted {
+  runId: string;
+  projectDir: string;
+  inputPath: string;
+  expectedIds: string[];
+  hasMimoKey: boolean;
+}
+
+export interface BuildRequest {
+  action: "prepare" | "render";
+  projectName: string;
+  outputs: Record<string, unknown>;
+  tts?: { provider?: string; baseUrl?: string; model?: string; voice?: string };
+  allowMissing?: boolean;
+}
+
+export interface BuildEvent {
+  kind: "data" | "done";
+  runId: string;
+  action: "prepare" | "render";
+  stream?: "out" | "err";
+  text?: string;
+  code?: number;
+  ms?: number;
+  projectDir?: string;
+  expectedIds?: string[];
+  error?: string;
 }

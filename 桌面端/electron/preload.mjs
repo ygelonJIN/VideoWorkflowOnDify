@@ -32,6 +32,19 @@ contextBridge.exposeInMainWorld("wfs", {
   readText: (filePath) => ipcRenderer.invoke("wf:read", filePath),
   open: (filePath) => ipcRenderer.invoke("wf:open", filePath),
   presets: () => ipcRenderer.invoke("wf:presets"),
+  copyText: (text) => ipcRenderer.invoke("wf:copy", text),
+  mimoStatus: () => ipcRenderer.invoke("wf:mimo"),
+  build: (payload) => ipcRenderer.invoke("wf:build", payload),
+  onBuild: (handler) => {
+    const offData = subscribe("wf:build", (payload) => handler({ kind: "data", ...payload }));
+    const offDone = subscribe("wf:build-done", (payload) => handler({ kind: "done", ...payload }));
+    return () => {
+      offData();
+      offDone();
+    };
+  },
+  projectImages: (payload) => ipcRenderer.invoke("wf:project-images", payload),
+  projectImageSave: (payload) => ipcRenderer.invoke("wf:project-image-save", payload),
   exec: (options) => ipcRenderer.invoke("wf:exec", options),
   onEvent: (handler) => subscribe("wf:event", handler),
   onTerm: (handler) => {

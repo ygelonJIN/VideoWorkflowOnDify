@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { parseImagePlanValue } from "../../src/engine/imagePlan.js";
+import { CopyButton } from "./CopyButton.js";
 import type { RunResult, WorkflowInfo, WorkflowNode } from "./types.js";
 
 type EditableField = "title" | "prompt" | "code";
@@ -9,6 +11,10 @@ const OUTPUT_LIMIT = 4000;
 function formatOutput(value: unknown): string {
   const text = typeof value === "string" ? value : (JSON.stringify(value, null, 2) ?? String(value));
   return text.length > OUTPUT_LIMIT ? `${text.slice(0, OUTPUT_LIMIT)}\n…（已截断，共 ${text.length} 字符）` : text;
+}
+
+function rawText(value: unknown): string {
+  return typeof value === "string" ? value : (JSON.stringify(value, null, 2) ?? String(value));
 }
 
 interface Props {
@@ -85,6 +91,7 @@ export function Inspector({ graph, node, result, status, onUpdate, onDelete }: P
   }
 
   const runNode = result?.nodes.find((item) => item.nodeId === node.id);
+  const imagePlan = parseImagePlanValue(runNode?.outputs?.["image_plan_json"]);
 
   return (
     <aside className="inspector">
@@ -161,7 +168,12 @@ export function Inspector({ graph, node, result, status, onUpdate, onDelete }: P
           {node.promptSections && node.promptSections.length > 0 && node.promptSections.length === 1 && (
             <Section
               title="提示词"
-              action={<button className="btn sm" onClick={() => setEditor({ field: "prompt", value: node.promptSections?.[0]?.text ?? "", index: 0 })}>编辑</button>}
+              action={
+                <>
+                  <CopyButton text={node.promptSections[0]?.text ?? ""} />
+                  <button className="btn sm" onClick={() => setEditor({ field: "prompt", value: node.promptSections?.[0]?.text ?? "", index: 0 })}>编辑</button>
+                </>
+              }
             >
               <div className="code">{(node.promptSections[0]?.text ?? "").slice(0, 2000)}</div>
             </Section>
@@ -173,7 +185,10 @@ export function Inspector({ graph, node, result, status, onUpdate, onDelete }: P
                 <div className="prompt-msg" key={section.id}>
                   <div className="prompt-msg-head">
                     <span className="prompt-role">{section.role} #{index + 1}</span>
-                    <button className="btn sm" onClick={() => setEditor({ field: "prompt", value: section.text, index })}>编辑这条</button>
+                    <span className="sec-action">
+                      <CopyButton text={section.text} />
+                      <button className="btn sm" onClick={() => setEditor({ field: "prompt", value: section.text, index })}>编辑这条</button>
+                    </span>
                   </div>
                   <div className="code">{section.text.slice(0, 1200)}</div>
                 </div>
@@ -213,8 +228,30 @@ export function Inspector({ graph, node, result, status, onUpdate, onDelete }: P
             <Section title="输入值">
               {Object.entries(runNode.inputs).map(([name, value]) => (
                 <div className="out-item" key={name}>
-                  <div className="out-name">{name}</div>
+                  <div className="out-name"><span>{name}</span><CopyButton text={value} /></div>
                   <pre className="out-value">{value}</pre>
+                </div>
+              ))}
+            </Section>
+          )}
+
+          {imagePlan && imagePlan.images.length > 0 && (
+            <Section title={`图像提示词（${imagePlan.images.length} 张）`}>
+              {imagePlan.prefix && (
+                <div className="out-item">
+                  <div className="out-name"><span>prompt_prefix</span><CopyButton text={imagePlan.prefix} /></div>
+                  <pre className="out-value">{imagePlan.prefix}</pre>
+                </div>
+              )}
+              {imagePlan.images.map((image, index) => (
+                <div className="out-item" key={image.id ?? `${index}`}>
+                  <div className="out-name">
+                    <span>{image.id ?? image.scene_id ?? `#${index + 1}`}{image.role ? ` · ${image.role}` : ""}</span>
+                    {image.prompt && <CopyButton text={image.prompt} label="复制英文" />}
+                    {image.prompt_zh && <CopyButton text={image.prompt_zh} label="复制中文" />}
+                  </div>
+                  {image.prompt && <pre className="out-value">{image.prompt}</pre>}
+                  {image.prompt_zh && <pre className="out-value out-zh">{image.prompt_zh}</pre>}
                 </div>
               ))}
             </Section>
@@ -224,7 +261,7 @@ export function Inspector({ graph, node, result, status, onUpdate, onDelete }: P
             <Section title="输出值">
               {Object.entries(runNode.outputs).map(([name, value]) => (
                 <div className="out-item" key={name}>
-                  <div className="out-name">{name}</div>
+                  <div className="out-name"><span>{name}</span><CopyButton text={rawText(value)} /></div>
                   <pre className="out-value">{formatOutput(value)}</pre>
                 </div>
               ))}

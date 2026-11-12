@@ -6,13 +6,17 @@ import { Artifacts } from "./Artifacts.js";
 import { InputPanel } from "./InputPanel.js";
 import { Select } from "./Select.js";
 import { Settings } from "./Settings.js";
+import { ImagePrompts } from "./ImagePrompts.js";
+import { ProjectImages } from "./ProjectImages.js";
+import { MakePanel } from "./MakePanel.js";
+import { findImagePlan } from "../../src/engine/imagePlan.js";
 import type { SelectOption } from "./Select.js";
 import { bridge } from "./bridge.js";
 import type { EnvInfo, RunInputs, RunResult, TraceEvent, WorkflowInfo } from "./types.js";
 
 const api = bridge();
 
-type Tab = "run" | "terminal";
+type Tab = "run" | "make" | "terminal" | "inbox" | "images";
 type View = "canvas" | "artifacts";
 
 const EMPTY_INPUTS: RunInputs = {};
@@ -43,8 +47,6 @@ export function App() {
   const [events, setEvents] = useState<TraceEvent[]>([]);
   const [result, setResult] = useState<RunResult | null>(null);
   const [running, setRunning] = useState(false);
-  const [stub, setStub] = useState(true);
-  const [until, setUntil] = useState("a03");
   const [tab, setTab] = useState<Tab>("run");
   const [env, setEnv] = useState<EnvInfo | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -59,6 +61,7 @@ export function App() {
   const [inspectorOpen, setInspectorOpen] = useState(true);
   const [consoleOpen, setConsoleOpen] = useState(true);
   const [showSettings, setShowSettings] = useState(false);
+  const [runningNodeId, setRunningNodeId] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const runClientId = useRef<string | null>(null);
 
@@ -129,6 +132,7 @@ export function App() {
     setResult(null);
     setError(null);
     setNotice(null);
+    setRunningNodeId(null);
     setTab("run");
     const unsubscribe = api.onEvent((event) => {
       setEvents((previous) => [...previous, event]);
@@ -138,22 +142,23 @@ export function App() {
           [event.nodeId as string]:
             event.type === "node_start" ? "running" : event.type === "node_end" ? "success" : (event.status ?? "error"),
         }));
+        if (event.type === "node_start") {
+          setRunningNodeId(event.nodeId);
+          setSelectedId(event.nodeId);
+        }
       }
+      if (event.type === "run_end") setRunningNodeId(null);
     });
     try {
       const runResult = await api.run({
         path: graph.path,
-        stub,
         clientId,
-        ...(until ? { until } : {}),
         inputs,
       });
       setResult(runResult);
+      if (findImagePlan(runResult.outputsByNode)) setTab("images");
       if (runResult.status === "error" && runResult.error) setError(runResult.error);
-      if (runResult.status === "stopped" && runResult.error) setNotice(runResult.error);
-      if (runResult.status === "stopped" && !runResult.error && until) {
-        setNotice(`已停在 ${until}；要跑全程，在「输入」里把「跑到哪」改成跑全程`);
-      }
+      if (runResult.status !== "success" && runResult.error) setNotice(runResult.error);
     } catch (runError) {
       setError((runError as Error).message);
     } finally {
@@ -161,7 +166,7 @@ export function App() {
       runClientId.current = null;
       setRunning(false);
     }
-  }, [graph, running, stub, until, inputs]);
+  }, [graph, running, inputs]);
 
   const stop = useCallback(async () => {
     const clientId = runClientId.current;
@@ -198,6 +203,17 @@ export function App() {
   }, [syncExternal]);
 
   const selected = useMemo(() => graph?.nodes.find((node) => node.id === selectedId) ?? null, [graph, selectedId]);
+  const imagePlan = useMemo(() => findImagePlan(result?.outputsByNode), [result]);
+
+  useEffect(() => {
+    const prevent = (event: DragEvent) => event.preventDefault();
+    window.addEventListener("dragover", prevent);
+    window.addEventListener("drop", prevent);
+    return () => {
+      window.removeEventListener("dragover", prevent);
+      window.removeEventListener("drop", prevent);
+    };
+  }, []);
 
   const fail = (cause: unknown) => setError((cause as Error).message);
 
@@ -405,6 +421,7 @@ export function App() {
               onSelect={handleNodeClick}
               onEdgeClick={(edgeId) => void handleEdgeClick(edgeId)}
               onMoveNode={(nodeId, position) => void moveNode(nodeId, position)}
+              runningNodeId={runningNodeId}
             />
           ) : (
             <section className="canvas-wrap card">
@@ -436,13 +453,17 @@ export function App() {
         <footer className={`bottom card ${consoleOpen ? "" : "collapsed"}`}>
           <div className="tabs">
             <span className={`tab ${tab === "run" ? "on" : ""}`} onClick={() => setTab("run")}>运行台</span>
+            <span className={`tab ${tab === "make" ? "on" : ""}`} onClick={() => setTab("make")}>制作</span>
             <span className={`tab ${tab === "terminal" ? "on" : ""}`} onClick={() => setTab("terminal")}>终端</span>
+            <span className={`tab ${tab === "inbox" ? "on" : ""}`} onClick={() => setTab("inbox")}>图片</span>
+            <span className={`tab ${tab === "images" ? "on" : ""}`} onClick={() => setTab("images")}>
+              图像提示词{imagePlan ? ` ${imagePlan.images.length}` : ""}
+            </span>
             <span className="right">
               <span className="meta" title={graph?.path ?? ""}>
                 {graph ? `${graph.name} · ${graph.nodes.length} 节点` : "未载入"}
                 {env ? ` · ${env.model}` : ""}
                 {env?.hasKey ? " · key 已配置" : " · 无 key"}
-                {stub ? " · stub" : ""}
               </span>
               <span>{result ? `${result.status === "stopped" ? (result.error ? "已停止" : "已完成") : result.status} · ${(result.ms / 1000).toFixed(2)}s` : running ? "运行中" : "就绪"}</span>
             </span>
@@ -453,7 +474,7 @@ export function App() {
           <div className={`pane ${tab === "run" ? "" : "hidden"}`}>
             <div className="log">
               {error && <div className="err">{error}</div>}
-              {events.filter((event) => event.type !== "node_start").map((event) => (
+              {[...events].reverse().filter((event) => event.type !== "node_start").slice(0, 300).map((event) => (
                 <div key={event.seq}>
                   <span className="t">{timeOf(event.at)}</span>
                   <span className={event.type === "node_error" ? "err" : event.type === "run_end" ? "ok" : "dim"}>
@@ -464,14 +485,23 @@ export function App() {
                   {event.error && <span className="err">{event.error}</span>}
                 </div>
               ))}
-              {events.length === 0 && <div className="dim">点右上「运行」开始；当前 stub 模式不调用模型。</div>}
+              {events.length === 0 && <div className="dim">点右上「运行」开始；会真实调用模型（先在左栏「设置」里配 Key）。</div>}
               {result && Object.keys(result.outputs).length > 0 && (
                 <div className="dim">产物：{Object.keys(result.outputs).join("、")}</div>
               )}
             </div>
           </div>
+          <div className={`pane ${tab === "make" ? "" : "hidden"}`}>
+            <MakePanel result={result} inputs={inputs} onNotice={setNotice} />
+          </div>
           <div className={`pane term-pane ${tab === "terminal" ? "" : "hidden"}`}>
             <Terminal />
+          </div>
+          <div className={`pane ${tab === "inbox" ? "" : "hidden"}`}>
+            <ProjectImages />
+          </div>
+          <div className={`pane ${tab === "images" ? "" : "hidden"}`}>
+            <ImagePrompts plan={imagePlan} />
           </div>
         </footer>
       </div>
@@ -481,11 +511,8 @@ export function App() {
           inputs={inputs}
           variables={graph?.startVariables ?? []}
           running={running}
-          stub={stub}
-          until={until}
           onChange={(patch) => setInputs((previous) => ({ ...previous, ...patch }))}
-          onStubChange={setStub}
-          onUntilChange={setUntil}
+          hasKey={Boolean(env?.hasKey)}
           onRun={() => {
             setShowInput(false);
             void run();

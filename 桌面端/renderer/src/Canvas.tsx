@@ -9,6 +9,7 @@ interface Props {
   onSelect: (id: string) => void;
   onEdgeClick: (edgeId: string) => void;
   onMoveNode: (id: string, position: { x: number; y: number }) => void;
+  runningNodeId?: string | null;
 }
 
 interface View {
@@ -28,7 +29,7 @@ const clamp = (value: number, min: number, max: number) => Math.min(max, Math.ma
 const STATE_TEXT: Record<string, string> = { success: "成功", running: "运行中", error: "失败", stopped: "已停止" };
 const STATE_CLASS: Record<string, string> = { success: "ok", running: "run", error: "err", stopped: "stop" };
 
-export function Canvas({ graph, selectedId, connectSource, statuses, onSelect, onEdgeClick, onMoveNode }: Props) {
+export function Canvas({ graph, selectedId, connectSource, statuses, onSelect, onEdgeClick, onMoveNode, runningNodeId }: Props) {
   const ref = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ width: 900, height: 600 });
   const [view, setView] = useState<View>({ scale: 0.5, x: 40, y: 40 });
@@ -52,16 +53,30 @@ export function Canvas({ graph, selectedId, connectSource, statuses, onSelect, o
   const positionOf = (node: WorkflowInfo["nodes"][number]) =>
     dragging?.id === node.id ? { x: dragging.x, y: dragging.y } : node.position;
 
+  const centerOn = (node: WorkflowInfo["nodes"][number], scale = viewRef.current.scale) => {
+    const next = clamp(Math.max(scale, minScaleRef.current), minScaleRef.current, 1.2);
+    const centerX = node.position.x + node.width / 2;
+    const centerY = node.position.y + node.height / 2;
+    setView({ scale: next, x: size.width / 2 - centerX * next, y: size.height / 2 - centerY * next });
+  };
+
   const focusNode = (id: string) => {
     const node = graph.nodes.find((item) => item.id === id);
     if (!node) return;
     onSelect(id);
-    const scale = clamp(Math.max(view.scale, 0.5), minScaleRef.current, 1);
-    const centerX = node.position.x + node.width / 2;
-    const centerY = node.position.y + node.height / 2;
-    setView({ scale, x: size.width / 2 - centerX * scale, y: size.height / 2 - centerY * scale });
+    centerOn(node, Math.max(viewRef.current.scale, 0.5));
     setQuery("");
   };
+
+  /* 运行中的节点走到哪，镜头跟到哪（运行时由 App 传进来） */
+  useEffect(() => {
+    if (!runningNodeId) return;
+    if (size.width < 40 || size.height < 40) return;
+    const node = graph.nodes.find((item) => item.id === runningNodeId);
+    if (!node) return;
+    centerOn(node, Math.max(viewRef.current.scale, 0.6));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [runningNodeId]);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -271,7 +286,7 @@ export function Canvas({ graph, selectedId, connectSource, statuses, onSelect, o
           return (
             <div
               key={node.id}
-              className={`node ${selectedId === node.id ? "sel" : ""} ${connectSource === node.id ? "connect-source" : ""} ${active ? "dragging" : ""} ${status === "error" ? "failed" : ""}`}
+              className={`node ${selectedId === node.id ? "sel" : ""} ${connectSource === node.id ? "connect-source" : ""} ${active ? "dragging" : ""} ${status === "error" ? "failed" : ""} ${status ? `st-${status}` : ""}`}
               style={{ left: x, top: y, width: node.width, minHeight: 96 }}
               onClick={() => onSelect(node.id)}
               onPointerDown={(event) => {

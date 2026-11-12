@@ -46,6 +46,7 @@ export function Artifacts({ result }: { result: RunResult | null }) {
   const [media, setMedia] = useState<{ url: string; kind: MediaKind; path: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [copiedResult, setCopiedResult] = useState(false);
 
   useEffect(() => {
     api.projects()
@@ -167,6 +168,19 @@ export function Artifacts({ result }: { result: RunResult | null }) {
         <div className="col-title">
           <span className="path-name">{title}</span>
           <span className="col-action">
+            {!media && !preview && result && (
+              <button
+                className="btn sm ghost"
+                onClick={() => {
+                  void api.copyText(JSON.stringify(result.outputs, null, 2)).then(() => {
+                    setCopiedResult(true);
+                    window.setTimeout(() => setCopiedResult(false), 1200);
+                  });
+                }}
+              >
+                {copiedResult ? "已复制" : "复制 JSON"}
+              </button>
+            )}
             {(media || preview) && (
               <button className="btn sm ghost" onClick={() => resetView()}>返回列表</button>
             )}

@@ -59,6 +59,22 @@ const server = createServer(async (request, response) => {
     if (url.pathname === "/api/workflows") return send(response, 200, await core.listWorkflows());
     if (url.pathname === "/api/env") return send(response, 200, await core.envInfo());
     if (url.pathname === "/api/settings") return send(response, 200, await core.getSettings());
+    if (url.pathname === "/api/mimo") return send(response, 200, await core.mimoKeyStatus());
+    if (url.pathname === "/api/build" && request.method === "POST") {
+      const payload = await jsonBody(request);
+      const started = await core.startBuild({
+        ...payload,
+        onData: (data) => broadcast("build", data),
+        onExit: (data) => broadcast("build-done", data),
+      });
+      return send(response, 200, started);
+    }
+    if (url.pathname === "/api/project-images" && request.method === "POST") {
+      return send(response, 200, await core.listProjectImages(await jsonBody(request)));
+    }
+    if (url.pathname === "/api/project-image-save" && request.method === "POST") {
+      return send(response, 200, await core.saveProjectImage(await jsonBody(request)));
+    }
     if (url.pathname === "/api/save-settings" && request.method === "POST") {
       return send(response, 200, await core.saveSettings(await jsonBody(request)));
     }

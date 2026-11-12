@@ -1,5 +1,5 @@
 /** Electron 主进程与浏览器调试壳共用的本地能力。 */
-import { chmod, readdir, readFile, rename, stat, writeFile } from "node:fs/promises";
+import { chmod, mkdir, readdir, readFile, rename, stat, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { spawn } from "node:child_process";
@@ -111,7 +111,6 @@ export async function envInfo() {
     hasKey: Boolean(env.WF_API_KEY),
     baseUrl: env.WF_BASE_URL ?? "https://opencode.ai/zen/go/v1",
     model: env.WF_MODEL ?? "gpt-6-luna",
-    stub: env.WF_STUB === "1",
   };
 }
 
@@ -194,14 +193,13 @@ export function cancelRun(clientId) {
   return { ok: true };
 }
 
-export async function runWorkflow({ path: workflowPath, inputs = {}, stub = false, until, clientId, onEvent }) {
+export async function runWorkflow({ path: workflowPath, inputs = {}, until, clientId, onEvent }) {
   const { config, runner } = await engine();
   const env = { ...config.loadEnvFile(path.join(desktopDir, ".env")), ...process.env };
-  const provider = config.providerFromEnv(env, { stub });
+  const provider = config.providerFromEnv(env, { stub: false });
   const defaults = JSON.parse(await readFile(path.join(desktopDir, "fixtures", "input.json"), "utf8"));
   const provided = Object.fromEntries(Object.entries(inputs).filter(([, value]) => value !== "" && value !== undefined));
   const merged = { ...defaults, ...provided };
-  const stubSource = stub ? runner.fileStubSource(path.join(desktopDir, "fixtures", "stub")) : undefined;
   const controller = clientId ? new AbortController() : null;
   if (clientId && controller) activeRuns.set(String(clientId), controller);
   try {
@@ -209,7 +207,6 @@ export async function runWorkflow({ path: workflowPath, inputs = {}, stub = fals
       workflowPath,
       inputs: merged,
       provider,
-      ...(stubSource ? { stub: stubSource } : {}),
       ...(until ? { until } : {}),
       ...(controller ? { signal: controller.signal } : {}),
       ...(onEvent ? { onEvent } : {}),
@@ -219,6 +216,113 @@ export async function runWorkflow({ path: workflowPath, inputs = {}, stub = fals
   } finally {
     if (clientId) activeRuns.delete(String(clientId));
   }
+}
+
+const BUILD_SCRIPT = path.join(workspaceDir, "HTML视频项目", "workflow_runtime", "tools", "build_black_frame_project.py");
+let mimoKeyCache;
+
+/** TTS 的 MIMO_API_KEY：优先进程环境，其次从登录 zsh（~/.zshrc）里读，不落盘、不回传渲染层。 */
+export async function resolveMimoKey() {
+  if (process.env.MIMO_API_KEY) return process.env.MIMO_API_KEY;
+  if (mimoKeyCache !== undefined) return mimoKeyCache;
+  mimoKeyCache = await new Promise((resolve) => {
+    let output = "";
+    // .zshrc 只在交互/显式 source 时加载；只取 printenv 的结果，别把 rc 的输出混进来
+    const child = spawn("zsh", ["-lc", "source ~/.zshrc >/dev/null 2>&1; printenv MIMO_API_KEY"], { stdio: ["ignore", "pipe", "ignore"] });
+    child.stdout.setEncoding("utf8");
+    child.stdout.on("data", (chunk) => { output += chunk; });
+    child.on("error", () => resolve(""));
+    child.on("close", () => resolve(output.trim()));
+  });
+  return mimoKeyCache;
+}
+
+export async function mimoKeyStatus() {
+  const key = await resolveMimoKey();
+  return { hasKey: Boolean(key), hint: key ? `从终端读取（末四位 ${key.slice(-4)}）` : "没找到 MIMO_API_KEY" };
+}
+
+function imageIdsFromOutputs(outputs) {
+  const raw = outputs?.image_plan_json;
+  if (typeof raw !== "string") return [];
+  try {
+    const plan = JSON.parse(raw);
+    return (plan.images || []).map((item) => String(item?.id ?? "")).filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
+/** 准备项目 / 渲染成片：把本次运行的 End 输出写成 build 脚本认识的输入，再流式跑 Python。 */
+export async function startBuild({ kind, projectName, outputs, tts = {}, allowMissing = false, onData, onExit } = {}) {
+  if (kind !== "prepare" && kind !== "render") throw new Error(`未知的构建动作：${kind}`);
+  const name = String(projectName ?? "").trim();
+  if (!/^[A-Za-z0-9._-]+$/.test(name)) throw new Error("项目名只能包含字母、数字、点、下划线、横线");
+  const html = outputs?.html_document;
+  const voiceover = outputs?.voiceover_script;
+  if (typeof html !== "string" || !html.trim()) throw new Error("这次运行没有 html_document，先跑完整条链路");
+  if (typeof voiceover !== "string" || !voiceover.trim()) throw new Error("这次运行没有 voiceover_script");
+
+  const payload = {
+    build_package_json: {
+      html_document: html,
+      voiceover_script: voiceover,
+      ...(outputs?.image_plan_json ? { image_plan_json: outputs.image_plan_json } : {}),
+      ...(outputs?.approved_package_json ? { approved_package_json: outputs.approved_package_json } : {}),
+      tts_config: {
+        provider: String(tts.provider || "mimo"),
+        base_url: String(tts.baseUrl || ""),
+        model: String(tts.model || ""),
+        voice: String(tts.voice || "mimo_default"),
+      },
+    },
+  };
+  const inputDir = path.join(workspaceDir, "HTML视频项目", "Dify输出");
+  await mkdir(inputDir, { recursive: true });
+  const inputPath = path.join(inputDir, `${name}-blackframe-input.json`);
+  await writeFile(inputPath, JSON.stringify(payload, null, 2), "utf8");
+
+  const args = [BUILD_SCRIPT, name, "--input-file", inputPath, "--no-open"];
+  if (kind === "prepare") args.push("--prepare");
+  else {
+    args.push("--skip-images");
+    if (allowMissing) args.push("--allow-missing-images");
+  }
+  if (tts.provider) args.push("--tts-provider", String(tts.provider));
+  if (tts.baseUrl) args.push("--tts-base-url", String(tts.baseUrl));
+  if (tts.model) args.push("--tts-model", String(tts.model));
+  if (tts.voice) args.push("--tts-voice", String(tts.voice));
+
+  const env = { ...process.env };
+  const mimoKey = await resolveMimoKey();
+  if (mimoKey) env.MIMO_API_KEY = mimoKey;
+
+  const projectDir = path.join(workspaceDir, "HTML视频项目", name);
+  const expectedIds = imageIdsFromOutputs(outputs);
+  const runId = `build-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+  const started = Date.now();
+  const child = spawn("python3", args, {
+    cwd: path.join(workspaceDir, "HTML视频项目", "workflow_runtime"),
+    env,
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  const emit = (stream, text) => onData?.({ runId, action: kind, stream, text });
+  child.stdout.setEncoding("utf8");
+  child.stderr.setEncoding("utf8");
+  child.stdout.on("data", (chunk) => emit("out", chunk));
+  child.stderr.on("data", (chunk) => emit("err", chunk));
+  let exited = false;
+  const done = (code, extra = {}) => {
+    if (exited) return;
+    exited = true;
+    onExit?.({ runId, action: kind, code, ms: Date.now() - started, projectDir, expectedIds, ...extra });
+  };
+  child.on("error", (error) => {
+    emit("err", String(error.message));
+    done(-1, { error: String(error.message) });
+  });
+  child.on("close", (code) => done(code ?? -1));
+  return { runId, projectDir, inputPath, expectedIds, hasMimoKey: Boolean(mimoKey) };
 }
 
 export async function inputDefaults() {
@@ -364,6 +468,51 @@ export async function listProjects() {
     projects.push({ name: entry.name, path: full, mtime: info?.mtimeMs ?? 0 });
   }
   return projects.sort((a, b) => b.mtime - a.mtime);
+}
+
+const IMAGE_EXT = new Set([".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp"]);
+
+function safeImageName(name) {
+  const base = path.basename(String(name ?? "")).replace(/[\u0000-\u001f]/g, "").trim();
+  const cleaned = base.replace(/[\\/:*?"<>|]/g, "_").replace(/^\.+/, "");
+  return (cleaned || `image-${Date.now()}.png`).slice(0, 120);
+}
+
+/** 项目里的媒体目录：提示词在 媒体/出图，成图在 媒体/图片（_resolved 是渲染用的安全文件名副本）。 */
+export function projectMediaPath(projectPath, sub) {
+  return path.join(safePath(projectPath), "媒体", sub);
+}
+
+export async function listProjectImages({ projectPath } = {}) {
+  const dir = projectMediaPath(projectPath, "图片");
+  await mkdir(dir, { recursive: true });
+  const entries = await readdir(dir, { withFileTypes: true });
+  const files = [];
+  for (const entry of entries) {
+    if (!entry.isFile() || entry.name.startsWith(".")) continue;
+    if (!IMAGE_EXT.has(path.extname(entry.name).toLowerCase())) continue;
+    const full = path.join(dir, entry.name);
+    const info = await stat(full).catch(() => null);
+    files.push({ name: entry.name, path: full, size: info?.size ?? 0, mtime: info?.mtimeMs ?? 0 });
+  }
+  return { dir, files: files.sort((left, right) => right.mtime - left.mtime) };
+}
+
+/** 拖进「图片」页签的图片直接落到当前项目的 媒体/图片/，不改工作流、不改 YAML。 */
+export async function saveProjectImage({ projectPath, name, base64 } = {}) {
+  if (typeof base64 !== "string" || !base64) throw new Error("没有收到图片数据");
+  const buffer = Buffer.from(base64, "base64");
+  if (buffer.length === 0) throw new Error("图片内容为空");
+  if (buffer.length > 40 * 1024 * 1024) throw new Error("单张图片超过 40MB");
+  const safeName = safeImageName(name);
+  const ext = path.extname(safeName).toLowerCase();
+  if (!IMAGE_EXT.has(ext)) throw new Error("只接受图片文件（png / jpg / jpeg / webp / gif）");
+  const dir = projectMediaPath(projectPath, "图片");
+  await mkdir(dir, { recursive: true });
+  const stamp = new Date().toISOString().replace(/[-:.TZ]/g, "").slice(0, 14);
+  const target = path.join(dir, `${stamp}-${safeName}`);
+  await writeFile(target, buffer);
+  return { path: target, name: path.basename(target), size: buffer.length };
 }
 
 const SKIP_DIRS = new Set(["node_modules", "vendor", ".hyperframes", ".git", "__pycache__"]);

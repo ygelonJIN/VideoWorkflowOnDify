@@ -5,11 +5,8 @@ interface Props {
   inputs: RunInputs;
   variables: StartVariable[];
   running: boolean;
-  stub: boolean;
-  until: string;
+  hasKey: boolean;
   onChange: (patch: Record<string, string>) => void;
-  onStubChange: (value: boolean) => void;
-  onUntilChange: (value: string) => void;
   onRun: () => void;
   onClose: () => void;
 }
@@ -62,7 +59,7 @@ function InputField({
   );
 }
 
-export function InputPanel({ inputs, variables, running, stub, until, onChange, onStubChange, onUntilChange, onRun, onClose }: Props) {
+export function InputPanel({ inputs, variables, running, hasKey, onChange, onRun, onClose }: Props) {
   const longFields = variables.filter((variable) => variable.type === "paragraph");
   const shortFields = variables.filter((variable) => variable.type !== "paragraph");
   return (
@@ -93,35 +90,14 @@ export function InputPanel({ inputs, variables, running, stub, until, onChange, 
           ))}
         </div>
       )}
-      <div className="field-row">
-        <label className="field">
-          <span>运行方式</span>
-          <Select
-            value={stub ? "stub" : "live"}
-            options={[
-              { value: "stub", label: "stub（不调用模型）" },
-              { value: "live", label: "真实调用" },
-            ]}
-            onChange={(value) => onStubChange(value === "stub")}
-          />
-        </label>
-        <label className="field">
-          <span>跑到哪</span>
-          <Select
-            value={until}
-            options={[
-              { value: "a03", label: "停在 a03" },
-              { value: "", label: "跑全程" },
-            ]}
-            onChange={onUntilChange}
-          />
-        </label>
-      </div>
-      <button className="btn primary wide" onClick={onRun} disabled={running}>用这些输入运行</button>
-      <div className="hint-text">
-        留空表示沿用 fixtures/input.json 的示例。stub 只有 a01 的固定输出：想跑全程请选「真实调用」，
-        否则把「跑到哪」停在 a03。
-      </div>
+      {!hasKey && (
+        <div className="warn-box">还没有 API Key，运行会直接失败；先在左栏「设置」里填 Key。</div>
+      )}
+      {hasKey && (
+        <div className="hint-text">每次运行都会跑完整条链路（16 个 LLM 节点 + 逐屏生成），耗时和费用请留意。</div>
+      )}
+      <button className="btn primary wide" onClick={onRun} disabled={running || !hasKey}>用这些输入运行</button>
+      <div className="hint-text">留空表示沿用 fixtures/input.json 的示例；运行一律调用真实模型。</div>
     </div>
   );
 }

@@ -173,3 +173,20 @@ describe("节点输入值", () => {
     assert.equal(result.outputs["result"], "HELLO");
   });
 });
+
+describe("stub 提示", () => {
+  it("stub 缺 fixture 时给出可操作的提示", async () => {
+    const workflow = loadWorkflow(WORKFLOW);
+    const node = workflow.nodes.get("a04");
+    assert.ok(node);
+    await assert.rejects(
+      () => executeNode({ node, pool: new VariablePool({}, {}), provider: providerFromEnv({ WF_STUB: "1" }), stub: { get: () => undefined } }),
+      (error: unknown) => {
+        const message = (error as Error).message;
+        assert.match(message, /stub 模式没有节点 a04/);
+        assert.match(message, /停在 a03/);
+        return true;
+      },
+    );
+  });
+});

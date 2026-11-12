@@ -1,11 +1,11 @@
-import type { EnvInfo, FileEntry, Project, RunInputs, RunResult, SettingsInfo, TermEvent, TermPreset, TraceEvent, WorkflowInfo } from "./types.js";
+import type { BuildEvent, BuildRequest, BuildStarted, EnvInfo, FileEntry, InboxFile, Project, RunInputs, RunResult, SettingsInfo, TermEvent, TermPreset, TraceEvent, WorkflowInfo } from "./types.js";
 
 export interface Bridge {
   workflows(): Promise<Array<{ name: string; path: string }>>;
   pickWorkflow(): Promise<string | null>;
   load(path: string): Promise<WorkflowInfo>;
   rev(path: string): Promise<{ rev: string }>;
-  run(options: { path: string; stub: boolean; until?: string; inputs?: Partial<RunInputs>; clientId?: string }): Promise<RunResult>;
+  run(options: { path: string; until?: string; inputs?: Partial<RunInputs>; clientId?: string }): Promise<RunResult>;
   cancel(clientId: string): Promise<{ ok: boolean; error?: string }>;
   env(): Promise<EnvInfo>;
   settings(): Promise<SettingsInfo>;
@@ -27,6 +27,12 @@ export interface Bridge {
   readText(filePath: string): Promise<{ path: string; text: string; truncated: boolean }>;
   open(filePath: string): Promise<{ ok: boolean; error?: string }>;
   presets(): Promise<TermPreset[]>;
+  copyText(text: string): Promise<{ ok: boolean }>;
+  projectImages(payload: { projectPath: string }): Promise<{ dir: string; files: InboxFile[] }>;
+  projectImageSave(payload: { projectPath: string; name: string; base64: string }): Promise<InboxFile>;
+  mimoStatus(): Promise<{ hasKey: boolean; hint: string }>;
+  build(payload: BuildRequest): Promise<BuildStarted>;
+  onBuild(handler: (event: BuildEvent) => void): () => void;
   exec(options: { cmd: string; cwd?: string }): Promise<{ id: string }>;
   onTerm(handler: (event: TermEvent) => void): () => void;
 }
@@ -77,6 +83,38 @@ const httpBridge: Bridge = {
     return { ok: true };
   },
   presets: () => fetch("/api/presets").then((response) => response.json()),
+  copyText: async (text) => {
+    await navigator.clipboard.writeText(text);
+    return { ok: true };
+  },
+  projectImages: (payload) => post<{ dir: string; files: InboxFile[] }>("/api/project-images", payload),
+  projectImageSave: (payload) => post<InboxFile>("/api/project-image-save", payload),
+  mimoStatus: () => fetch("/api/mimo").then((response) => response.json()),
+  build: (payload) => post<BuildStarted>("/api/build", payload),
+  onBuild: (handler) => {
+    const source = new EventSource("/api/events");
+    const data = (event: MessageEvent) => {
+      try {
+        handler({ kind: "data", ...(JSON.parse(String(event.data)) as Omit<BuildEvent, "kind">) });
+      } catch {
+        /* ignore */
+      }
+    };
+    const done = (event: MessageEvent) => {
+      try {
+        handler({ kind: "done", ...(JSON.parse(String(event.data)) as Omit<BuildEvent, "kind">) });
+      } catch {
+        /* ignore */
+      }
+    };
+    source.addEventListener("build", data as EventListener);
+    source.addEventListener("build-done", done as EventListener);
+    return () => {
+      source.removeEventListener("build", data as EventListener);
+      source.removeEventListener("build-done", done as EventListener);
+      source.close();
+    };
+  },
   exec: (options) => post<{ id: string }>("/api/exec", options),
   onEvent: (handler) => {
     const source = new EventSource("/api/events");

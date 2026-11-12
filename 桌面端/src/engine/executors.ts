@@ -259,7 +259,12 @@ export async function executeNode(context: ExecuteContext): Promise<ExecuteResul
         const messages = llmMessages(node, pool);
         if (provider.stub) {
           const text = context.stub?.get(node.id);
-          if (text === undefined) throw new Error(`--stub 缺少节点 ${node.id} 的输出 fixture`);
+          if (text === undefined) {
+            throw new Error(
+              `stub 模式没有节点 ${node.id} 的固定输出；把「跑到哪」改成停在 a03，` +
+              "或在左栏「设置」里配置 API Key 后切「真实调用」",
+            );
+          }
           return { outputs: { text, files: [], usage: {} }, protocol: "stub" };
         }
         const params = (node.data["model"] as Record<string, unknown> | undefined)?.["completion_params"] as

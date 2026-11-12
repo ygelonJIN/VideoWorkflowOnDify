@@ -88,31 +88,36 @@ function headersFor(provider: ProviderConfig): Record<string, string> {
   return base;
 }
 
-function requestBody(provider: ProviderConfig, messages: ChatMessage[]): { url: string; body: Record<string, unknown> } {
+export function buildRequestBody(provider: ProviderConfig, messages: ChatMessage[]): { url: string; body: Record<string, unknown> } {
   const base = provider.baseUrl;
+  const system = messages.filter((m) => m.role === "system").map((m) => m.content).join("\n\n");
+  const conversational = messages.filter((m) => m.role !== "system");
+  // 04 的 LLM 节点几乎都是「只有 system」的提示词；Responses / Anthropic 不接受空消息数组，
+  // 以前会发 "input": [] 然后 400。这里把它当成唯一一条 user 消息发出去。
+  const onlySystem = conversational.length === 0;
+  const soloMessages: ChatMessage[] = onlySystem
+    ? [{ role: "user", content: system || "请按系统指令输出。" }]
+    : conversational;
+
   if (provider.protocol === "anthropic") {
-    const system = messages.filter((m) => m.role === "system").map((m) => m.content).join("\n\n");
     return {
       url: `${base}/messages`,
       body: {
         model: provider.model,
         max_tokens: provider.maxOutputTokens ?? 8192,
-        ...(system ? { system } : {}),
-        messages: messages.filter((m) => m.role !== "system").map((m) => ({ role: m.role, content: m.content })),
+        ...(!onlySystem && system ? { system } : {}),
+        messages: soloMessages.map((m) => ({ role: m.role, content: m.content })),
         ...(provider.temperature !== undefined ? { temperature: provider.temperature } : {}),
       },
     };
   }
   if (provider.protocol === "responses") {
-    const system = messages.filter((m) => m.role === "system").map((m) => m.content).join("\n\n");
     return {
       url: `${base}/responses`,
       body: {
         model: provider.model,
-        input: messages
-          .filter((m) => m.role !== "system")
-          .map((m) => ({ role: m.role, content: m.content })),
-        ...(system ? { instructions: system } : {}),
+        input: soloMessages.map((m) => ({ role: m.role, content: m.content })),
+        ...(!onlySystem && system ? { instructions: system } : {}),
         ...(provider.maxOutputTokens ? { max_output_tokens: provider.maxOutputTokens } : {}),
         ...(provider.temperature !== undefined ? { temperature: provider.temperature } : {}),
       },
@@ -122,7 +127,7 @@ function requestBody(provider: ProviderConfig, messages: ChatMessage[]): { url: 
     url: `${base}/chat/completions`,
     body: {
       model: provider.model,
-      messages,
+      messages: onlySystem ? soloMessages : messages,
       stream: false,
       ...(provider.maxOutputTokens ? { max_tokens: provider.maxOutputTokens } : {}),
       ...(provider.temperature !== undefined ? { temperature: provider.temperature } : {}),
@@ -140,7 +145,7 @@ export async function complete(provider: ProviderConfig, messages: ChatMessage[]
   if (!provider.apiKey) {
     throw new LlmError("缺少 API Key：设置 WF_API_KEY，或用 --stub 走固定输出");
   }
-  const { url, body } = requestBody(provider, messages);
+  const { url, body } = buildRequestBody(provider, messages);
   if (options.maxTokens) {
     if (provider.protocol === "anthropic") body["max_tokens"] = options.maxTokens;
     else if (provider.protocol === "responses") body["max_output_tokens"] = options.maxTokens;
