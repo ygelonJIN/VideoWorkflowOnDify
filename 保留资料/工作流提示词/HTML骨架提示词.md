@@ -111,5 +111,6 @@
 - 不要写任何具体某一屏的版式、组件、文案。
 - 不要出现 `.gA-` / `.gB-` / `.gC-` / `.gD-` 选择器。
 - 不要改主时间线脚本，不要把它包进其它作用域。
+- 不要手写 `<script src="素材/vendor/gsap.min.js">` 或 `motion-kit.js`：本地渲染前会自动注入这两个运行时。
 - 不要用 `Math.random`、`performance.now`、`requestAnimationFrame`、`setTimeout` 当时钟。
 - 不要写死背景样式（背景来自 `background_css` / `background_js`），也不要写转场（转场来自转场脚本节点）。

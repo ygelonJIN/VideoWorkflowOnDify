@@ -144,6 +144,20 @@ const report = await page.evaluate(() => {
       return painted && r.width*r.height > 15000 && !fullCanvas && el.textContent.trim().length > 0;
     });
 
+    // 2026-11-11：正文最小 34px、每屏至少一个 >=88px 的视觉锚（实测 30px 的字在竖屏上看不清）
+    {
+      const sizes = textLeaves.map(el => parseFloat(getComputedStyle(el).fontSize) || 0);
+      const tiny = textLeaves.filter((el, i) => sizes[i] > 0 && sizes[i] < 34);
+      if (tiny.length) {
+        warnings.push(`${scene.dataset.scene}: ${tiny.length} 段文字小于 34px（最小 ${Math.min(...tiny.map((el)=>parseFloat(getComputedStyle(el).fontSize))).toFixed(0)}px），竖屏看不清：` +
+          tiny.slice(0,3).map(el=>`“${el.textContent.trim().slice(0,8)}”`).join('、'));
+      }
+      const anchorSize = Math.max(0, ...sizes);
+      if (textLeaves.length && anchorSize < 88) {
+        warnings.push(`${scene.dataset.scene}: 全屏最大文字只有 ${anchorSize.toFixed(0)}px，缺少视觉锚（建议 >=88px 的标题或数字）`);
+      }
+    }
+
     for (const text of textLeaves) {
       const tr = rect(text);
       for (const component of components) {

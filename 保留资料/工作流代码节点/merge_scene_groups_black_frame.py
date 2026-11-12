@@ -1,4 +1,4 @@
-def main(skeleton_html: str, group_a: str, motion_script: str, transition_script: str, scene_total: int, group_b: str = "", group_c: str = "", group_d: str = "", image_plan_json: str = "", approved_package_json: str = "") -> dict:
+def main(skeleton_html: str, group_a: str, transition_script: str, scene_total: int, group_b: str = "", group_c: str = "", group_d: str = "", image_plan_json: str = "", approved_package_json: str = "") -> dict:
     import html as html_lib
     import json
     import re
@@ -85,7 +85,9 @@ def main(skeleton_html: str, group_a: str, motion_script: str, transition_script
             uses_seek = "hf-seek" in body
             if is_module or uses_seek:
                 return block
-            if "timeline." in body:
+            # 2026-11-11：逐屏动效由 H02SM 写进各屏，必须保留；
+            # 只有「不带 builder 的裸 timeline. 调用」才是越权写法。
+            if "timeline." in body and "__sceneBuilders.push" not in body:
                 removed += 1
                 return ""
             return block
@@ -173,7 +175,9 @@ def main(skeleton_html: str, group_a: str, motion_script: str, transition_script
                 html = html[:start_at] + block + "\n" + html[start_at:]
         return code
 
-    motion_code = place_script(motion_script, "动效脚本", "<!-- MOTION_SCRIPTS -->", "<!-- no motion -->")
+    # 2026-11-11：逐屏动效由 H02SM 写进各屏，合并阶段不再注入整段脚本，只清占位注释。
+    motion_code = "\n".join(re.findall(r"<script\b[^>]*>([\s\S]*?)</script>", group_a, flags=re.I))
+    skeleton_html = skeleton_html.replace("<!-- MOTION_SCRIPTS -->", "")
     place_script(transition_script, "转场脚本", "<!-- TRANSITION_SCRIPTS -->", "<!-- no transition -->")
 
     if "__timelines" not in html:

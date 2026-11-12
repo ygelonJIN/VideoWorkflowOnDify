@@ -1,5 +1,6 @@
 def main(approved_package_json: str, motion_plan_json: str) -> dict:
     import json
+    import re
 
     package = json.loads(approved_package_json or "{}")
     storyboard = package.get("storyboard") or {}
@@ -76,6 +77,7 @@ def main(approved_package_json: str, motion_plan_json: str) -> dict:
 
     # 逐屏载荷：迭代节点一次只给模型一屏，附带前后屏的构图，方便它避开相邻同构。
     scene_payloads = []
+    previous_component = ""
     for index, scene in enumerate(scenes):
         item = dict(scene)
         item["composition"] = dict(ledger[index]) if index < len(ledger) else {}
@@ -85,6 +87,32 @@ def main(approved_package_json: str, motion_plan_json: str) -> dict:
         item["next_scene"] = ledger[index + 1]["scene_id"] if index + 1 < len(ledger) else ""
         item["prev_composition"] = ledger[index - 1] if index > 0 else {}
         item["next_composition"] = ledger[index + 1] if index + 1 < len(ledger) else {}
+        # 全片视觉编号：背景 B + 组件 U，由这一个节点统一分配，画面阶段只套库、不自己画。
+        background_pool = ["B05", "B01", "B03", "B06", "B04", "B07", "B02"]
+        text = (str(item.get("on_screen_text") or "") + " " + str(item.get("voiceover_text") or "")).strip()
+        component = "U01"
+        if re.search(r"[0-9]+|[一二三四五六七八九十百千万亿]{1,}(?:万|亿|块|元|%|天|次)", text):
+            component = "U05"
+        elif text.count("、") >= 2 or "步骤" in text or ("先" in text and "再" in text):
+            component = "U02"
+        elif any(word in text for word in ("不是", "却", "选择", "对比")):
+            component = "U03"
+        if component == previous_component:
+            order = ["U01", "U03", "U05", "U02", "U04"]
+            component = order[(order.index(component) + 1) % len(order)]
+        previous_component = component
+        item["visual_budget"] = {
+            "background": background_pool[index % len(background_pool)],
+            "components": [component],
+        }
+
+        # 全片动效编号：逐屏循环前由这一个节点统一分配，相邻不重复、单编号不超过一半屏数。
+        entrance_pool = ["T02", "T01", "T03", "T09"]
+        state_pool = ["X02", "X01"]
+        item["motion_budget"] = {
+            "entrance": entrance_pool[index % len(entrance_pool)],
+            "state": state_pool[index % len(state_pool)],
+        }
         scene_payloads.append(json.dumps(item, ensure_ascii=False))
     distinct_families = len({entry["family"] for entry in ledger if entry["family"]})
     need_families = min(4, len(ledger))
@@ -122,7 +150,7 @@ def main(approved_package_json: str, motion_plan_json: str) -> dict:
         return ""
 
     # 版式与主运动不再按序号轮转：每屏的视觉承担者由 H01P 的 role 决定，
-    # 版面与动作由 H02A–D / H02M 按内容判断。这里只做分组和动效切片。
+    # 版面与动作由 H02S / H02SM 按内容判断。这里只做分组和动效切片。
 
     payload = []
     for index, group in enumerate(groups):

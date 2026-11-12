@@ -1257,7 +1257,59 @@ SCENE_OFFSET_SCRIPT = """
   var list = window.__sceneBuilders = window.__sceneBuilders || [];
   if (list.__sceneOffsetPatched) { return; }
   list.__sceneOffsetPatched = true;
+  // 动效违规记录：越界被夹到屏尾、位置算到屏外等情况记在这里，由
+  // check_html_timing.mjs 读取并硬拦。以前这些情况被静默修正，成片里
+  // 表现为"元素在屏尾最后几毫秒才出现"（2026-11-12 实测）。
+  window.__motionViolations = window.__motionViolations || [];
   var originalPush = Array.prototype.push;
+  function recordViolation(entry){
+    var bag = window.__motionViolations;
+    if (!bag) { return; }
+    for (var i = 0; i < bag.length; i += 1) {
+      var item = bag[i];
+      if (item.kind === entry.kind && item.key === entry.key) { return; }
+    }
+    bag.push(entry);
+  }
+  function sceneLabelOf(target){
+    var element = targetElement(target);
+    if (!element || !element.closest) { return '?'; }
+    var scene = element.closest('.scene');
+    return scene ? (scene.getAttribute('data-scene') || scene.id || '?') : '?';
+  }
+  function varsOf(args){
+    for (var i = args.length - 1; i >= 1; i -= 1) {
+      var value = args[i];
+      if (value && typeof value === 'object' && !value.nodeType && typeof value.length !== 'number') { return value; }
+    }
+    return null;
+  }
+  // 转场脚本（__absolutePositions）在进入屏起点的瞬间写透明度/缩放/遮罩，
+  // 就会盖掉这一屏自己的入场。2026-11-12：31.27s 的"图片先闪一下再入场"
+  // 就是这么来的。转场只许动离场屏。
+  function watchIncomingWrite(args){
+    var vars = varsOf(args);
+    if (!vars) { return; }
+    var touches = ('opacity' in vars) || ('clipPath' in vars) || ('scale' in vars) ||
+                  ('x' in vars) || ('y' in vars) || ('visibility' in vars);
+    if (!touches) { return; }
+    if (!(Number(vars.duration || 0) > 0.05)) { return; }
+    var scene = sceneOfTarget(args[0]);
+    if (!scene) { return; }
+    var sceneStart = Number(scene.getAttribute('data-start') || 0);
+    var position = null;
+    for (var i = args.length - 1; i >= 1; i -= 1) {
+      if (typeof args[i] === 'number') { position = args[i]; break; }
+    }
+    if (position === null) { position = sceneStart; }
+    if (Math.abs(position - sceneStart) > 0.12) { return; }
+    recordViolation({
+      kind: 'transition-on-incoming',
+      key: sceneLabelOf(args[0]) + '|' + Math.round(position * 1000),
+      scene: sceneLabelOf(args[0]),
+      at: Math.round(position * 1000) / 1000
+    });
+  }
   function targetElement(target){
     // 动效节点可能传字符串选择器，也可能直接传 DOM 元素或元素数组（模型常写
     // el('s04', '.gB-kicker') 这种查找助手）。只认字符串会让后两种拿不到场景起点，
@@ -1317,7 +1369,10 @@ SCENE_OFFSET_SCRIPT = """
         // 转场脚本写的是绝对秒：在 builder 里设 timeline.__absolutePositions = true，
         // 这里就不再叠加场景起点，也不把位置夹到场景尾。旧转场用 cue 相对秒直接
         // 当绝对秒传进来，被这里加了场景起点，结果淡入落到场景尾部，图片消失 0.3 秒。
-        if (timeline.__absolutePositions) { return original.apply(timeline, args); }
+        if (timeline.__absolutePositions) {
+          watchIncomingWrite(args);
+          return original.apply(timeline, args);
+        }
         var start = sceneStartOf(args[0]);
         if (start !== null && start > 0) {
           var position = null;
@@ -1329,10 +1384,21 @@ SCENE_OFFSET_SCRIPT = """
             if (args[position] < start) { args[position] = args[position] + start; }
             // 动作不得越过本屏结束：模型常把时间写到 5–8 秒，而每屏只有 3–4 秒，
             // 越界的动作会跑到后面几屏，表现为"标题在别的页上闪"或"这页没放完就跳"。
+            // 夹到屏尾会变成"最后几毫秒才出现"，所以同时记一条违规给门禁硬拦。
             var win = sceneWindowOf(args[0]);
             if (win) {
               var limit = win.start + win.dur - 0.06;
-              if (args[position] > limit) { args[position] = Math.max(win.start, limit); }
+              if (args[position] > limit) {
+                var clamped = Math.max(win.start, limit);
+                recordViolation({
+                  kind: 'position-clamped',
+                  key: sceneLabelOf(args[0]) + '|' + Math.round(args[position] * 1000),
+                  scene: sceneLabelOf(args[0]),
+                  requested: Math.round(args[position] * 1000) / 1000,
+                  clamped: Math.round(clamped * 1000) / 1000
+                });
+                args[position] = clamped;
+              }
             }
           }
         }
@@ -1402,13 +1468,59 @@ def install_scene_offset_runtime(document: str) -> str:
 
 
 def ensure_runtime_scripts(document: str) -> str:
-    """Make sure GSAP is actually loaded; without it every scene builder is a no-op."""
-    if "gsap.min.js" in document:
+    """Make sure GSAP and motion-kit are loaded; without them every scene builder is a no-op."""
+    tags = []
+    if "gsap.min.js" not in document:
+        tags.append('<script src="素材/vendor/gsap.min.js"></script>')
+    if "motion-kit.js" not in document:
+        tags.append('<script src="素材/vendor/motion-kit.js"></script>')
+    if "bg-kit.js" not in document:
+        tags.append('<script src="素材/vendor/bg-kit.js"></script>')
+    if "components.css" not in document:
+        tags.append('<link rel="stylesheet" href="素材/vendor/components.css">')
+    if "backgrounds.css" not in document:
+        tags.append('<link rel="stylesheet" href="素材/vendor/backgrounds.css">')
+    if not tags:
         return document
-    tag = '<script src="素材/vendor/gsap.min.js"></script>'
+    block = "\n".join(tags)
     if "</head>" in document:
-        return document.replace("</head>", tag + "\n</head>", 1)
-    return document.replace("<body>", "<body>\n" + tag, 1)
+        return document.replace("</head>", block + "\n</head>", 1)
+    return document.replace("<body>", "<body>\n" + block, 1)
+
+
+def ensure_stage_background(document: str) -> str:
+    """#stage 必须有底色：否则媒体淡出时会露出 html 的纯黑，成片出现闪黑帧。"""
+    import re as _re
+    if _re.search(r'#stage\s*\{[^}]*background', document):
+        return document
+    css = '<style id="stage-bg-fallback">#stage{background:var(--bg,#0b0f18);}</style>'
+    if "</head>" in document:
+        return document.replace("</head>", css + "\n</head>", 1)
+    return document
+
+
+def ensure_background_fallback(document: str) -> str:
+    """背景层为空时补一层确定性底色，避免整片只有纯黑（2026-11-11）。"""
+    import re as _re
+    match = _re.search(r'<div id="background-layer"([^>]*)>([\s\S]*?)</div>', document)
+    if not match:
+        return document
+    # #background-layer 自己带 background（H01G 选的背景）时，空容器是正常的，不能再补深色底
+    if _re.search(r'#background-layer\s*\{[^}]*background', document):
+        return document
+    if match.group(2).strip():
+        return document
+    css = (
+        '<style id="background-fallback">'
+        '#background-layer{background:'
+        'radial-gradient(120% 90% at 22% 8%,var(--brand-soft,rgba(56,214,255,.16)),transparent 60%),'
+        'radial-gradient(110% 90% at 82% 92%,var(--brand2-soft,rgba(79,125,255,.14)),transparent 62%),'
+        'var(--bg,#070b16)}'
+        '</style>'
+    )
+    if "</head>" in document:
+        document = document.replace("</head>", css + "\n</head>", 1)
+    return document
 
 
 def ensure_media_placeholders(document: str) -> str:
@@ -1593,6 +1705,8 @@ def rewrite_html(path: Path, cues: list[dict], target_duration: float, transcrip
     if unhidden:
         print(f"已修复 {unhidden} 条隐藏 .scene 的样式规则（场景显隐交给时间轴）")
     document = ensure_runtime_scripts(document)
+    document = ensure_background_fallback(document)
+    document = ensure_stage_background(document)
     document = install_scene_offset_runtime(document)
     document = ensure_media_placeholders(document)
     document = activate_media_placeholders(document, black_frame=not avatar_required)

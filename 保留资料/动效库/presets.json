@@ -1,0 +1,539 @@
+{
+ "version": 1,
+ "updated": "2026-11-11",
+ "note": "每行 = 一个可复用动作预设。status: ready=可直接用 / needs-work=先改成确定性 / skip=不入管线",
+ "presets": [
+  {
+   "id": "T01",
+   "name": "逐字上浮",
+   "family": "入场",
+   "status": "ready",
+   "cap": "split+stagger",
+   "src": "#6 SplitText",
+   "params": {
+    "unit": "char",
+    "y": "0.5em",
+    "duration": 0.55,
+    "stagger": 0.05,
+    "ease": "power3.out"
+   },
+   "use": "标题、一句话强调；字数 ≤ 14",
+   "avoid": "长段落（超过 20 字会拖尾）",
+   "code": "var _c = kit.split('{{sel}}', 'chars');\ntimeline.fromTo(_c, {opacity:0, y:'0.5em'},\n  {opacity:1, y:0, duration:{{dur}}, ease:'power3.out', stagger:{{stagger}}}, {{at}});"
+  },
+  {
+   "id": "T02",
+   "name": "模糊聚焦",
+   "family": "入场",
+   "status": "ready",
+   "cap": "split+filter",
+   "src": "#7 BlurText",
+   "params": {
+    "unit": "word",
+    "blur": "10px",
+    "y": "50px",
+    "duration": 0.35,
+    "stagger": 0.05
+   },
+   "use": "副标题、解释性文字；有照片底时更明显",
+   "avoid": "全片连用；低端机渲染成本高",
+   "code": "var _w = kit.split('{{sel}}', 'words');\ntimeline.fromTo(_w, {opacity:0, filter:'blur(10px)', y:50},\n  {opacity:1, filter:'blur(0px)', y:0, duration:{{dur}}, ease:'power2.out', stagger:{{stagger}}}, {{at}});"
+  },
+  {
+   "id": "T03",
+   "name": "折页落字",
+   "family": "入场",
+   "status": "ready",
+   "cap": "split+3d",
+   "src": "#4 FoldText",
+   "params": {
+    "unit": "char",
+    "angle": 92,
+    "perspective": 700,
+    "duration": 0.65,
+    "stagger": 0.045
+   },
+   "use": "标题、引句；垂直节奏强的版面",
+   "avoid": "小字号（< 40px 看不出折叠）",
+   "code": "var _c = kit.split('{{sel}}', 'chars');\ntimeline.fromTo(_c, {opacity:0, rotationX:92, transformOrigin:'50% 0%', transformPerspective:700},\n  {opacity:1, rotationX:0, duration:{{dur}}, ease:'power3.out', stagger:{{stagger}}}, {{at}});"
+  },
+  {
+   "id": "T04",
+   "name": "描边写字",
+   "family": "绘制",
+   "status": "ready",
+   "cap": "stroke",
+   "src": "#3 StrokeText",
+   "params": {
+    "strokeWidth": 1.4,
+    "drawDuration": 1.6,
+    "fillDelay": 0.2
+   },
+   "use": "关键词强调；一句里只做一个词",
+   "avoid": "整段描边；细字重描边会糊",
+   "code": "var _t = document.querySelector('{{sel}}');\n_t.style.webkitTextStroke = '1.4px currentColor';\n_t.style.color = 'transparent';\ntimeline.to(_t, {color:'{{color}}', duration:0.4, ease:'power1.out'}, {{at}}+{{dur}});"
+  },
+  {
+   "id": "T05",
+   "name": "打字机",
+   "family": "入场",
+   "status": "ready",
+   "cap": "sequence",
+   "src": "#8 TextType",
+   "params": {
+    "speed": 0.05,
+    "hold": 0.8,
+    "cursor": true
+   },
+   "use": "代码、命令行、对话式文案",
+   "avoid": "超过 30 字；同屏再叠加入场",
+   "code": "var _t = document.querySelector('{{sel}}');\nvar _txt = _t.textContent; _t.textContent = '';\nfor (var i = 1; i <= _txt.length; i++) {\n  timeline.set(_t, {textContent: _txt.slice(0, i)}, {{at}} + i*0.05);\n}"
+  },
+  {
+   "id": "T06",
+   "name": "数字递增",
+   "family": "状态",
+   "status": "ready",
+   "cap": "counter",
+   "src": "#10 CountUp",
+   "params": {
+    "from": 0,
+    "to": "{{n}}",
+    "duration": 1.2,
+    "ease": "power2.out"
+   },
+   "use": "数据、金额、百分比；必须有语义",
+   "avoid": "无意义装饰数字；同一屏两个以上",
+   "code": "var _n = document.querySelector('{{sel}}');\nvar _o = {v:0};\ntimeline.to(_o, {v:{{n}}, duration:{{dur}}, ease:'power2.out',\n  onUpdate: function(){ _n.textContent = Math.round(_o.v); }}, {{at}});"
+  },
+  {
+   "id": "T07",
+   "name": "字符乱码收敛",
+   "family": "入场",
+   "status": "ready",
+   "cap": "seeded-scramble",
+   "src": "#37 ScrambledText",
+   "params": {
+    "duration": 1.2,
+    "chars": ":.",
+    "stagger": 0.03,
+    "seed": 7
+   },
+   "use": "科技感标题；与代码/数据主题匹配",
+   "avoid": "中文大标题；正式商务口播",
+   "code": "/* 固定种子，渲染可复现 */\nvar _r = kit.seeded(7), _t = document.querySelector('{{sel}}');\nvar _final = _t.textContent, _sp = ':.'; _t.textContent = '';\nfor (var i = 0; i < _final.length; i++) {\n  (function (idx) {\n    timeline.set(_t, {textContent: _final.slice(0, idx) + _sp[(idx + 1) % _sp.length]}, {{at}} + idx * 0.03);\n    timeline.set(_t, {textContent: _final.slice(0, idx + 1)}, {{at}} + idx * 0.03 + 0.09);\n  })(i);\n}\ntimeline.set(_t, {textContent: _final}, {{at}} + _final.length * 0.03);"
+  },
+  {
+   "id": "T08",
+   "name": "解密揭示",
+   "family": "入场",
+   "status": "ready",
+   "cap": "seeded-scramble",
+   "src": "#9 DecryptedText",
+   "params": {
+    "duration": 0.9,
+    "chars": "ABCDEF0123",
+    "seed": 11
+   },
+   "use": "关键词、代号、版本号",
+   "avoid": "正文；中文",
+   "code": "var _r = kit.seeded(11), _t = document.querySelector('{{sel}}');\nvar _final = _t.textContent, _c = 'ABCDEF0123';\nfor (var i = 0; i < _final.length; i++) {\n  (function (idx) {\n    timeline.set(_t, {textContent: _final.slice(0, idx) + _c[Math.floor(_r() * _c.length)]}, {{at}} + idx * 0.04);\n    timeline.set(_t, {textContent: _final.slice(0, idx + 1)}, {{at}} + idx * 0.04 + 0.08);\n  })(i);\n}"
+  },
+  {
+   "id": "T09",
+   "name": "翻牌落字",
+   "family": "入场",
+   "status": "ready",
+   "cap": "split+3d-tiles",
+   "src": "#2 SplitFlapText",
+   "params": {
+    "flipDuration": 0.12,
+    "stagger": 0.06,
+    "cycles": 3
+   },
+   "use": "短词、价格、倒计时类信息",
+   "avoid": "长句；每字 8 次翻转很吃帧",
+   "code": "/* 每字上下两片，rotationX 由 -90 收敛到 0，翻 3 次落定 */\nvar _c = kit.split('{{sel}}', 'chars');\n_c.forEach(function (el, i) {\n  el.style.transformStyle = 'preserve-3d';\n  timeline.fromTo(el, {rotationX: -90, opacity: 0},\n    {rotationX: 0, opacity: 1, duration: {{dur}}, ease: 'back.out(1.4)'}, {{at}} + i * 0.06);\n});"
+  },
+  {
+   "id": "T10",
+   "name": "环形文字流",
+   "family": "空间",
+   "status": "ready",
+   "cap": "path",
+   "src": "#1 TextLoop",
+   "params": {
+    "arc": 120,
+    "radius": 420,
+    "speed": 0.9
+   },
+   "use": "片头 2-3 秒；品牌名重复",
+   "avoid": "正文；片中（抢注意力）",
+   "code": "/* 单次沿弧线摆位，不循环 */\nvar _c = kit.split('{{sel}}', 'chars');\nvar _n = _c.length;\n_c.forEach(function (el, i) {\n  var a = (-60 + (120 / Math.max(1, _n - 1)) * i) * Math.PI / 180;\n  timeline.fromTo(el,\n    {x: 0, y: 0, rotation: a * 57.3, opacity: 0},\n    {x: Math.sin(a) * 420, y: (1 - Math.cos(a)) * 420, opacity: 1,\n     duration: {{dur}}, ease: 'power2.out'}, {{at}} + i * 0.05);\n});"
+  },
+  {
+   "id": "T11",
+   "name": "回声拖影",
+   "family": "入场",
+   "status": "ready",
+   "cap": "echo",
+   "src": "#5 EchoText",
+   "params": {
+    "echoes": 8,
+    "lag": 0.12,
+    "offset": 36,
+    "fade": 0.72
+   },
+   "use": "速度感标题；配合推镜",
+   "avoid": "小字；低对比背景",
+   "code": "var _c = kit.split('{{sel}}', 'chars');\nfor (var i = 0; i < 8; i++) {\n  timeline.fromTo(_c, {opacity:0, x:i*36, filter:'blur(3px)'},\n    {opacity:0.35*(1-i/8), x:0, filter:'blur(0px)', duration:0.5, ease:'power2.out', stagger:0.03},\n    {{at}} + i*0.04);\n}"
+  },
+  {
+   "id": "P01",
+   "name": "聚光跟随",
+   "family": "空间",
+   "status": "ready",
+   "cap": "virtual-pointer",
+   "src": "#19 SpotlightCard",
+   "params": {
+    "size": "340px",
+    "alpha": 0.42,
+    "path": "曲线"
+   },
+   "use": "照片包裹；人物/产品特写",
+   "avoid": "无照片的纯文字屏",
+   "code": "var _p = kit.pointer(inner);\ntimeline.to(_p.pos, {x:0.62, y:0.34, duration:1.0, ease:'power2.inOut'}, {{at}});\ntimeline.eventCallback('onUpdate', _p.apply);"
+  },
+  {
+   "id": "P02",
+   "name": "边缘受光",
+   "family": "空间",
+   "status": "ready",
+   "cap": "virtual-pointer",
+   "src": "#20 BorderGlow",
+   "params": {
+    "width": 3,
+    "radius": 900,
+    "alpha": 0.95
+   },
+   "use": "照片/文字块包边；暗底",
+   "avoid": "亮底；粗边框",
+   "code": "/* 与 P01 共用 --mx/--my；径向半径须 ≥ 对角线一半，否则边缘永远不亮 */"
+  },
+  {
+   "id": "P03",
+   "name": "跟随倾斜",
+   "family": "空间",
+   "status": "ready",
+   "cap": "virtual-pointer",
+   "src": "#15 TiltedCard",
+   "params": {
+    "rx": 5,
+    "ry": 7,
+    "perspective": 1200
+   },
+   "use": "照片块、卡片；幅度必须小",
+   "avoid": "大角度（> 10° 会晕）；含字幕区域",
+   "code": "timeline.eventCallback('onUpdate', function(){\n  inner.style.setProperty('--ry', ((_p.pos.x-0.5)*7)+'deg');\n  inner.style.setProperty('--rx', ((0.5-_p.pos.y)*5)+'deg');\n});"
+  },
+  {
+   "id": "W01",
+   "name": "照片包裹",
+   "family": "结构",
+   "status": "ready",
+   "cap": "frame",
+   "src": "自建（样张二）",
+   "params": {
+    "radius": 26,
+    "ring": "P02",
+    "spot": "P01",
+    "tilt": "P03"
+   },
+   "use": "单张照片成为视觉主体时",
+   "avoid": "每屏都包；照片本身已满幅时",
+   "code": "<div class=\"photo\" data-anim=\"photo\"><img src=\"{{img}}\"><div class=\"spot\"></div><div class=\"ring\"></div></div>\n/* css: border-radius:26px; overflow:hidden; spot/ring 读 --mx/--my */"
+  },
+  {
+   "id": "X01",
+   "name": "擦除切换",
+   "family": "结构",
+   "status": "ready",
+   "cap": "clip",
+   "src": "#11 AnimatedContent",
+   "params": {
+    "direction": "up",
+    "duration": 0.8
+   },
+   "use": "同屏内容替换：一版换成另一版",
+   "avoid": "跨场景（那是转场节点的事）",
+   "code": "timeline.fromTo('{{sel}}', {clipPath:'inset(100% 0% 0% 0%)'},\n  {clipPath:'inset(0% 0% 0% 0%)', duration:{{dur}}, ease:'power3.inOut'}, {{at}});"
+  },
+  {
+   "id": "X02",
+   "name": "淡入替换",
+   "family": "结构",
+   "status": "ready",
+   "cap": "opacity",
+   "src": "#12 FadeContent",
+   "params": {
+    "duration": 0.6,
+    "y": 24
+   },
+   "use": "A 退 B 进、同位置换文案",
+   "avoid": "单独作为主运动",
+   "code": "timeline.to('{{old}}', {opacity:0, y:-16, duration:0.4, ease:'power2.in'}, {{at}});\ntimeline.fromTo('{{new}}', {opacity:0, y:24}, {opacity:1, y:0, duration:{{dur}}, ease:'power2.out'}, {{at}}+0.15);"
+  },
+  {
+   "id": "N14",
+   "name": "MagicBento",
+   "family": "UI",
+   "status": "needs-style",
+   "cap": "-",
+   "src": "#14",
+   "params": {},
+   "use": "产品界面演示、数据面板；由组件样式库提供类名",
+   "avoid": "要先做成「HTML 片段 + 组件样式」，不能直接搬 React 代码",
+   "code": ""
+  },
+  {
+   "id": "N16",
+   "name": "Masonry",
+   "family": "UI",
+   "status": "needs-style",
+   "cap": "-",
+   "src": "#16",
+   "params": {},
+   "use": "产品界面演示、数据面板；由组件样式库提供类名",
+   "avoid": "要先做成「HTML 片段 + 组件样式」，不能直接搬 React 代码",
+   "code": ""
+  },
+  {
+   "id": "N17",
+   "name": "ChromaGrid",
+   "family": "UI",
+   "status": "needs-style",
+   "cap": "-",
+   "src": "#17",
+   "params": {},
+   "use": "产品界面演示、数据面板；由组件样式库提供类名",
+   "avoid": "要先做成「HTML 片段 + 组件样式」，不能直接搬 React 代码",
+   "code": ""
+  },
+  {
+   "id": "N18",
+   "name": "ProfileCard",
+   "family": "UI",
+   "status": "needs-style",
+   "cap": "-",
+   "src": "#18",
+   "params": {},
+   "use": "产品界面演示、数据面板；由组件样式库提供类名",
+   "avoid": "要先做成「HTML 片段 + 组件样式」，不能直接搬 React 代码",
+   "code": ""
+  },
+  {
+   "id": "N21",
+   "name": "Stepper",
+   "family": "UI",
+   "status": "needs-style",
+   "cap": "-",
+   "src": "#21",
+   "params": {},
+   "use": "产品界面演示、数据面板；由组件样式库提供类名",
+   "avoid": "要先做成「HTML 片段 + 组件样式」，不能直接搬 React 代码",
+   "code": ""
+  },
+  {
+   "id": "N22",
+   "name": "SwipeRow",
+   "family": "UI",
+   "status": "needs-style",
+   "cap": "-",
+   "src": "#22",
+   "params": {},
+   "use": "产品界面演示、数据面板；由组件样式库提供类名",
+   "avoid": "要先做成「HTML 片段 + 组件样式」，不能直接搬 React 代码",
+   "code": ""
+  },
+  {
+   "id": "N13",
+   "name": "ElectricBorder",
+   "family": "UI",
+   "status": "needs-style",
+   "cap": "-",
+   "src": "#13",
+   "params": {},
+   "use": "产品界面演示、数据面板；由组件样式库提供类名",
+   "avoid": "要先做成「HTML 片段 + 组件样式」，不能直接搬 React 代码",
+   "code": ""
+  },
+  {
+   "id": "B23",
+   "name": "GradientASCII",
+   "family": "背景",
+   "status": "needs-seek",
+   "cap": "canvas-seek",
+   "src": "#23",
+   "params": {},
+   "use": "片头 3 秒内或场景之间；低对比",
+   "avoid": "正文铺满；无限循环；与字幕区重叠",
+   "code": "/* WebGL/canvas：改成 seek(t) 纯函数 + 固定种子 + 透明度上限；只跑一遍 */"
+  },
+  {
+   "id": "B24",
+   "name": "GhostFibers",
+   "family": "背景",
+   "status": "needs-seek",
+   "cap": "canvas-seek",
+   "src": "#24",
+   "params": {},
+   "use": "片头 3 秒内或场景之间；低对比",
+   "avoid": "正文铺满；无限循环；与字幕区重叠",
+   "code": "/* WebGL/canvas：改成 seek(t) 纯函数 + 固定种子 + 透明度上限；只跑一遍 */"
+  },
+  {
+   "id": "B25",
+   "name": "MoltenMetal",
+   "family": "背景",
+   "status": "needs-seek",
+   "cap": "canvas-seek",
+   "src": "#25",
+   "params": {},
+   "use": "片头 3 秒内或场景之间；低对比",
+   "avoid": "正文铺满；无限循环；与字幕区重叠",
+   "code": "/* WebGL/canvas：改成 seek(t) 纯函数 + 固定种子 + 透明度上限；只跑一遍 */"
+  },
+  {
+   "id": "B26",
+   "name": "AcidSquares",
+   "family": "背景",
+   "status": "needs-seek",
+   "cap": "canvas-seek",
+   "src": "#26",
+   "params": {},
+   "use": "片头 3 秒内或场景之间；低对比",
+   "avoid": "正文铺满；无限循环；与字幕区重叠",
+   "code": "/* WebGL/canvas：改成 seek(t) 纯函数 + 固定种子 + 透明度上限；只跑一遍 */"
+  },
+  {
+   "id": "B27",
+   "name": "Scanner",
+   "family": "背景",
+   "status": "needs-seek",
+   "cap": "canvas-seek",
+   "src": "#27",
+   "params": {},
+   "use": "片头 3 秒内或场景之间；低对比",
+   "avoid": "正文铺满；无限循环；与字幕区重叠",
+   "code": "/* WebGL/canvas：改成 seek(t) 纯函数 + 固定种子 + 透明度上限；只跑一遍 */"
+  },
+  {
+   "id": "B28",
+   "name": "Silk",
+   "family": "背景",
+   "status": "needs-seek",
+   "cap": "canvas-seek",
+   "src": "#28",
+   "params": {},
+   "use": "片头 3 秒内或场景之间；低对比",
+   "avoid": "正文铺满；无限循环；与字幕区重叠",
+   "code": "/* WebGL/canvas：改成 seek(t) 纯函数 + 固定种子 + 透明度上限；只跑一遍 */"
+  },
+  {
+   "id": "B29",
+   "name": "SideRays",
+   "family": "背景",
+   "status": "needs-seek",
+   "cap": "canvas-seek",
+   "src": "#29",
+   "params": {},
+   "use": "片头 3 秒内或场景之间；低对比",
+   "avoid": "正文铺满；无限循环；与字幕区重叠",
+   "code": "/* WebGL/canvas：改成 seek(t) 纯函数 + 固定种子 + 透明度上限；只跑一遍 */"
+  },
+  {
+   "id": "B30",
+   "name": "LightRays",
+   "family": "背景",
+   "status": "needs-seek",
+   "cap": "canvas-seek",
+   "src": "#30",
+   "params": {},
+   "use": "片头 3 秒内或场景之间；低对比",
+   "avoid": "正文铺满；无限循环；与字幕区重叠",
+   "code": "/* WebGL/canvas：改成 seek(t) 纯函数 + 固定种子 + 透明度上限；只跑一遍 */"
+  },
+  {
+   "id": "B31",
+   "name": "PixelBlast",
+   "family": "背景",
+   "status": "needs-seek",
+   "cap": "canvas-seek",
+   "src": "#31",
+   "params": {},
+   "use": "片头 3 秒内或场景之间；低对比",
+   "avoid": "正文铺满；无限循环；与字幕区重叠",
+   "code": "/* WebGL/canvas：改成 seek(t) 纯函数 + 固定种子 + 透明度上限；只跑一遍 */"
+  },
+  {
+   "id": "B32",
+   "name": "Particles",
+   "family": "背景",
+   "status": "needs-seek",
+   "cap": "canvas-seek",
+   "src": "#32",
+   "params": {},
+   "use": "片头 3 秒内或场景之间；低对比",
+   "avoid": "正文铺满；无限循环；与字幕区重叠",
+   "code": "/* WebGL/canvas：改成 seek(t) 纯函数 + 固定种子 + 透明度上限；只跑一遍 */"
+  },
+  {
+   "id": "B33",
+   "name": "GridScan",
+   "family": "背景",
+   "status": "needs-seek",
+   "cap": "canvas-seek",
+   "src": "#33",
+   "params": {},
+   "use": "片头 3 秒内或场景之间；低对比",
+   "avoid": "正文铺满；无限循环；与字幕区重叠",
+   "code": "/* WebGL/canvas：改成 seek(t) 纯函数 + 固定种子 + 透明度上限；只跑一遍 */"
+  },
+  {
+   "id": "B34",
+   "name": "DotGrid",
+   "family": "背景",
+   "status": "needs-seek",
+   "cap": "canvas-seek",
+   "src": "#34",
+   "params": {},
+   "use": "片头 3 秒内或场景之间；低对比",
+   "avoid": "正文铺满；无限循环；与字幕区重叠",
+   "code": "/* WebGL/canvas：改成 seek(t) 纯函数 + 固定种子 + 透明度上限；只跑一遍 */"
+  },
+  {
+   "id": "B35",
+   "name": "LetterGlitch",
+   "family": "背景",
+   "status": "needs-seek",
+   "cap": "canvas-seek",
+   "src": "#35",
+   "params": {},
+   "use": "片头 3 秒内或场景之间；低对比",
+   "avoid": "正文铺满；无限循环；与字幕区重叠",
+   "code": "/* WebGL/canvas：改成 seek(t) 纯函数 + 固定种子 + 透明度上限；只跑一遍 */"
+  },
+  {
+   "id": "B36",
+   "name": "ShapeGrid",
+   "family": "背景",
+   "status": "needs-seek",
+   "cap": "canvas-seek",
+   "src": "#36",
+   "params": {},
+   "use": "片头 3 秒内或场景之间；低对比",
+   "avoid": "正文铺满；无限循环；与字幕区重叠",
+   "code": "/* WebGL/canvas：改成 seek(t) 纯函数 + 固定种子 + 透明度上限；只跑一遍 */"
+  }
+ ]
+}

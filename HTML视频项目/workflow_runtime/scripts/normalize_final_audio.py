@@ -51,6 +51,9 @@ def main() -> None:
         )
     else:
         audio_filter = "loudnorm=I=-14.0:TP=-1.5:LRA=11"
+    # linear 只做整体增益，压不住本来就高的峰；再串一级 -1.5 dBFS 限幅。
+    # AAC 编码后仍可能有 0.1 dB 量级的真峰回弹（实测 -1.47），仍在 -1.2 容差内。
+    audio_filter += ",alimiter=limit=0.841:attack=5:release=50:level=false"
     temporary = source.with_name(source.stem + ".loudness-normalized.mp4")
     temporary.unlink(missing_ok=True)
     subprocess.run([

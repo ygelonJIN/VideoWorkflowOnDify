@@ -27,6 +27,7 @@ PROMPT_DIR = WORKSPACE / "保留资料" / "工作流提示词"
 # node_id -> 提示词镜像文件
 MAPPING = {
     "a08": "分镜导演提示词.md",
+    "a10": "动效计划提示词.md",
     "h01d": "视觉定调提示词.md",
     "h01p": "图像计划提示词.md",
     "h01c": "组件语法提示词.md",
@@ -36,12 +37,14 @@ MAPPING = {
     # 2026-11-10 起 04 改成迭代节点逐屏生成：h02a–d 由 h02s 取代。
     # 旧的四组提示词保留给 归档/04_黑帧口播_分组生成_分组版备份.yml。
     "h02s": "场景单屏提示词.md",
-    "h02m": "动效脚本提示词.md",
+    "h02sm": "屏内动效提示词.md",
     "h02t": "转场脚本提示词.md",
 }
 
 # node_id -> Code 节点镜像文件（只覆盖与视觉链路相关的节点）
 CODE_MAPPING = {
+    "h02sx": "expand_motion_plan.py",
+    "h02sk": "merge_screen_motion.py",
     "h00": "split_scene_groups_black_frame.py",
     "h01v": "normalize_transition_plan.py",
     "h01pv": "normalize_image_plan.py",

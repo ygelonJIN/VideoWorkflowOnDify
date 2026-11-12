@@ -153,6 +153,14 @@ if ! HYPERFRAMES_CLI="$HF_CLI" HYPERFRAMES_BROWSER_PATH="$CHROME_BIN" "$NODE_BIN
   echo "时间线检查不通过：有整屏不可见、图片闪回或动作越界，先修 HTML 再渲染。"
   exit 1
 fi
+STAGE="检查动效编号"
+echo "检查动效编号与 kit 调用（只报告）..."
+if [ -f 脚本/check_presets.py ]; then
+  python3 脚本/check_presets.py --html index.html || true
+elif [ -f "$PROJECT_DIR/../workflow_runtime/tools/check_presets.py" ]; then
+  python3 "$PROJECT_DIR/../workflow_runtime/tools/check_presets.py" --html index.html || true
+fi
+
 STAGE="检查动效差异"
 echo "检查动效差异（只报告）..."
 HYPERFRAMES_CLI="$HF_CLI" HYPERFRAMES_BROWSER_PATH="$CHROME_BIN" "$NODE_BIN" 脚本/check_motion_variation.mjs index.html || true
@@ -185,12 +193,12 @@ render_once() {
 echo "渲染最终 MP4..."
 render_once
 STAGE="检查单帧黑闪"
-if ! python3 脚本/detect_blank_frames.py ./成片/最终视频.mp4; then
+if ! python3 脚本/detect_blank_frames.py ./成片/最终视频.mp4 --html index.html; then
   echo "检测到孤立空帧，先用前一帧修复..."
   STAGE="修复孤立空帧"
-  python3 脚本/repair_blank_frames.py ./成片/最终视频.mp4
+  python3 脚本/repair_blank_frames.py ./成片/最终视频.mp4 --html index.html
   STAGE="复查单帧黑闪"
-  python3 脚本/detect_blank_frames.py ./成片/最终视频.mp4
+  python3 脚本/detect_blank_frames.py ./成片/最终视频.mp4 --html index.html
 fi
 
 STAGE="检查动效密度"

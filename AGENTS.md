@@ -19,7 +19,7 @@ Dify工作流/                         # 可导入的 Dify Workflow
 HTML视频项目/333/                   # 当前唯一正式项目
 HTML视频项目/Dify输出/               # Dify 原始 TXT、JSON、HTML 和 HeyGen 响应
 HTML视频项目/workflow_runtime/       # 可复用模板、脚本、运行资产、渲染器 vendor 和工具
-保留资料/                           # 提示词、代码节点、用户输入事实和生产标准
+保留资料/                           # 提示词、代码节点、动效库、用户输入事实和生产标准
 经验文档/                           # 操作经验，一个领域一篇
 ```
 
@@ -36,6 +36,7 @@ bash /Volumes/TUF ESD-T1A Media/视频工作流/HTML视频项目/workflow_runtim
 - `保留资料/工作流代码节点/`：YAML 内 Code 节点的可读镜像。
 - `HTML视频项目/workflow_runtime/`：可复用模板、GSAP、渲染脚本、工具，以及钉死的 HyperFrames CLI（`vendor/`，`node_modules` 不进仓库）。
 - `HTML视频项目/333/`：当前项目成品和项目内运行脚本，不作为新项目模板直接修改。
+- `保留资料/动效库/`：动效能力编号（`能力卡.md`）与可展开预设（`presets.json`）；运行时实现在 `workflow_runtime/assets/vendor/motion-kit.js`。
 - `保留资料/项目文档/`：任意主题通用的用户输入事实、内容规则、视频需求与质量标准；不保存固定产品故事。
 - `经验文档/`：怎么做、怎么维护、踩过的坑。新增经验并入已有文件，不轻易新建。
 

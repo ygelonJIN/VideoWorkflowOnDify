@@ -1,7 +1,8 @@
 #!/usr/bin/env node
-// 页面时间线体检：把 HTML 里的 GSAP 时间线逐时刻 seek 一遍，检查
-// 1) 每屏在自己窗口内是否真的可见；2) 图片层是否在屏内消失后又回来（闪一下）；
-// 3) 动作有没有落在所属场景窗口之外；4) 场景窗口有没有重叠或空洞。
+// 页面时间线体检：把 HTML 里的 GSAP 时间线逐帧（1/30）seek 一遍，检查
+// 1) 每屏在自己窗口内是否真的可见；2) 每个内容层是否都有且只有一次入场
+//    （不许第一帧即最终态，不许 1→0→1 闪回）；3) 背景层是否第 1 帧就在；
+// 4) 动作有没有越界被夹到屏尾；5) 场景窗口有没有重叠或空洞。
 // 用法：node check_html_timing.mjs index.html
 import fs from 'node:fs';
 import path from 'node:path';
@@ -88,51 +89,105 @@ const report = await page.evaluate(async () => {
     return count;
   };
 
+  // 2026-11-12：改逐帧（1/30）扫描。原来 0.2s 抽样，抓不到"图片先以最终态
+  // 出现 7 帧、再被自己的入场从 0 重演"这种 1 帧级的闪回。
+  const step = 1 / 30;
+  const BACKGROUND_ANIMS = ['bg', 'scrim'];
+
   for (const scene of scenes) {
     if (!Number.isFinite(scene.start) || !Number.isFinite(scene.dur) || scene.dur <= 0) continue;
-    const step = 0.2;
+    const allAnim = [...scene.el.querySelectorAll('[data-anim]')];
+    const contentEls = allAnim.filter(el => !BACKGROUND_ANIMS.includes(el.getAttribute('data-anim') || ''));
+    const bgEls = allAnim.filter(el => BACKGROUND_ANIMS.includes(el.getAttribute('data-anim') || ''));
+    const samples = Math.max(2, Math.ceil(scene.dur / step));
+    const history = new Map(contentEls.map(el => [el, []]));
+    const bgHistory = [];
     let hiddenFor = 0;
     let maxHidden = 0;
     let emptyFor = 0;
     let maxEmpty = 0;
-    let mediaMax = 0;
-    let mediaMinAfterPeak = 1;
-    let recovered = false;
-    let peakAt = -1;
-    const media = scene.el.querySelector('[data-anim="media"],[data-anim="bg"]');
-    const samples = Math.max(1, Math.ceil(scene.dur / step));
+
     for (let i = 0; i < samples; i += 1) {
       const t = scene.start + Math.min(scene.dur - 0.02, i * step);
       await seek(t);
       const style = getComputedStyle(scene.el);
       const sceneVisible = style.visibility !== 'hidden' && Number(style.opacity) > 0.08;
       if (!sceneVisible) { hiddenFor += step; maxHidden = Math.max(maxHidden, hiddenFor); } else { hiddenFor = 0; }
-      const boxes = sceneVisible ? visibleBoxes(scene.el) : 0;
-      if (boxes === 0) { emptyFor += step; maxEmpty = Math.max(maxEmpty, emptyFor); } else { emptyFor = 0; }
-      if (media) {
-        const opacity = Number(getComputedStyle(media).opacity);
-        if (opacity > mediaMax) { mediaMax = opacity; peakAt = t; mediaMinAfterPeak = 1; recovered = false; }
-        if (mediaMax > 0.7 && t > peakAt + 0.2) {
-          mediaMinAfterPeak = Math.min(mediaMinAfterPeak, opacity);
-          if (mediaMinAfterPeak < 0.18 && opacity > 0.65 && t - peakAt < 1.4) recovered = true;
+      // 空页判定用 0.1s 粒度：getBoundingClientRect 每帧调用会强制回流
+      if (i % 3 === 0) {
+        const boxes = sceneVisible ? visibleBoxes(scene.el) : 0;
+        if (boxes === 0) { emptyFor += step * 3; maxEmpty = Math.max(maxEmpty, emptyFor); } else { emptyFor = 0; }
+      }
+      contentEls.forEach(el => { history.get(el).push(Number(getComputedStyle(el).opacity)); });
+      bgHistory.push(bgEls.length ? Math.max(...bgEls.map(el => Number(getComputedStyle(el).opacity))) : 1);
+    }
+
+    // 背景层：只允许第 1 帧就在（"背景直接存在"）
+    if (bgEls.length && bgHistory.length && bgHistory[0] < 0.85) {
+      errors.push(`${scene.id}: 背景层没在屏起点出现（首帧透明度 ${bgHistory[0].toFixed(2)}）`);
+    }
+
+    // 内容层：必须有且只有一次入场；不许第一帧即最终态；不许 1→0→1
+    contentEls.forEach(el => {
+      const ops = history.get(el);
+      const name = el.getAttribute('data-anim') || '?';
+      const label = `${scene.id} [data-anim="${name}"]`;
+      const peak = Math.max(...ops);
+      if (peak < 0.85) {
+        errors.push(`${label}: 整屏都没出现过（最高透明度 ${peak.toFixed(2)}），被入场代码漏掉了`);
+        return;
+      }
+      if (ops[0] >= 0.85) {
+        errors.push(`${label}: 屏第一帧就是最终态，没有入场（直接存在）`);
+        return;
+      }
+      let sawHidden = false;
+      let entered = false;
+      for (let i = 0; i < ops.length; i += 1) {
+        if (ops[i] <= 0.15) { sawHidden = true; }
+        if (sawHidden && ops[i] >= 0.85) { entered = true; break; }
+      }
+      if (!entered) {
+        errors.push(`${label}: 没有完成一次入场（从未从不可见走到可见）`);
+      }
+      let reached = false;
+      let dropped = false;
+      for (let i = 0; i < ops.length; i += 1) {
+        if (ops[i] >= 0.85) {
+          if (reached && dropped) {
+            errors.push(`${label}: 出现 1→0→1 闪回（先满、后归零、再回满）`);
+            break;
+          }
+          reached = true;
+        } else if (ops[i] <= 0.15 && reached) {
+          dropped = true;
         }
       }
-    }
-    if (maxHidden > 0.34) errors.push(`${scene.id}: 屏内有 ${maxHidden.toFixed(1)}s 整屏不可见（空页）`);
+    });
+
+    // 2026-11-11 起首帧就是纯背景：前 1.4 秒的“不可见”是入场窗口，不算空页
+    if (maxHidden > 1.4) errors.push(`${scene.id}: 屏内有 ${maxHidden.toFixed(1)}s 整屏不可见（空页）`);
     if (maxEmpty > 0.6) warnings.push(`${scene.id}: 屏内有 ${maxEmpty.toFixed(1)}s 没有可见的 data-anim 元素`);
-    if (recovered) {
-      flashes.push({scene: scene.id, peakAt: Number(peakAt.toFixed(2))});
-      errors.push(`${scene.id}: 图片/背景在 ${peakAt.toFixed(2)}s 后消失又回来（闪一下）`);
-    }
     sceneReports.push({
       scene: scene.id,
       start: Number(scene.start.toFixed(2)),
       dur: Number(scene.dur.toFixed(2)),
       maxHidden: Number(maxHidden.toFixed(2)),
       maxEmpty: Number(maxEmpty.toFixed(2)),
-      mediaMax: Number(mediaMax.toFixed(2)),
+      content: contentEls.length,
     });
   }
+
+  // 运行时记下的动效违规
+  (Array.isArray(window.__motionViolations) ? window.__motionViolations : []).forEach(item => {
+    if (!item) return;
+    if (item.kind === 'position-clamped') {
+      errors.push(`${item.scene}: 动作位置 ${item.requested}s 越界，被夹到 ${item.clamped}s（屏尾最后一帧）`);
+    }
+    if (item.kind === 'transition-on-incoming') {
+      errors.push(`${item.scene}: 转场脚本在 ${item.at}s 给进入屏写透明度/缩放/遮罩——转场只许动离场屏`);
+    }
+  });
 
   const placement = [];
   (timeline.getChildren ? timeline.getChildren(true, true, false) : []).forEach(child => {

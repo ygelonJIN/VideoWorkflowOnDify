@@ -103,6 +103,49 @@ def main() -> None:
     root_duration = float(root_duration_match.group(1)) if root_duration_match else 0.0
     scene_tags = re.findall(r'<section\b(?=[^>]*class=["\'][^"\']*\bscene\b)[^>]*>', doc, flags=re.I)
     structure_blocking = []
+    # 逐屏动效契约（2026-11-11）：动效由 H02SM 逐屏写，每屏至少 push 一个 builder。
+    # 少了就说明动效节点没产出（成片会是一条只有转场的静帧片），必须拦。
+    if "data-anim=" in doc and "__sceneBuilders" in doc:
+        _scene_total = len(re.findall(r'<section\b[^>]*data-scene="[^"]+"', doc))
+        _builders = len(re.findall(r'__sceneBuilders\.push\s*\(', doc))
+        _markers = re.findall(r'preset:\s*(T\d+|X\d+|P\d+|W\d+|U\d+)', doc)
+        if _scene_total and len(_markers) < _scene_total * 2:
+            structure_blocking.append(
+                "动效密度不足：%d 个场景只有 %d 条 preset（每屏要求 2 条：1 入场 + 1 状态变化）。"
+                "先查 H02SM 是否每屏都给了 T/X/U 两条" % (_scene_total, len(_markers)))
+        _chunks = re.split(r'(?=<section[^>]*data-scene=")', doc)
+        _seq = []
+        for _ch in _chunks:
+            _m = re.search(r'data-scene="([^"]+)"', _ch)
+            if _m:
+                _seq.append((_m.group(1), re.findall(r'preset:\s*([A-Z]\d+)', _ch)))
+        if len(_seq) >= 2:
+            for (_a, _ma), (_b, _mb) in zip(_seq, _seq[1:]):
+                _same = set(_ma) & set(_mb)
+                if _same:
+                    structure_blocking.append(
+                        "相邻两屏用了同一个动效编号：%s 与 %s 都是 %s" % (_a, _b, "/".join(sorted(_same))))
+            _count = {}
+            for _sid, _ms in _seq:
+                for _x in set(_ms):
+                    _count[_x] = _count.get(_x, 0) + 1
+            _limit = max(2, int(len(_seq) * 0.6))
+            _hot = [k for k, v in _count.items() if v > _limit]
+            if _hot:
+                structure_blocking.append(
+                    "动效重复度过高：%s 在全片反复出现（%s，上限 %d 屏）" % (
+                        "/".join(sorted(_hot)),
+                        "、".join("%s×%d" % (k, _count[k]) for k in sorted(_hot)), _limit))
+        _state_markers = re.findall(r'preset:\s*(T06|X01|X02|U01|U02|U04|U05)', doc)
+        if _scene_total and len(_state_markers) < _scene_total:
+            structure_blocking.append(
+                "缺状态变化：%d 个场景只有 %d 条状态类 preset（T06/X01/X02/U01/U02）。"
+                "只有入场没有状态变化，这一屏算没做动效" % (_scene_total, len(_state_markers)))
+        if _scene_total and _builders < _scene_total:
+            structure_blocking.append(
+                "逐屏动效缺失：%d 个场景只有 %d 个 scene builder（每屏应各有一个）；"
+                "先查 H02SM 是否产出、H02SK 是否合并" % (_scene_total, _builders))
+
     # 场景显隐已交还给页面自己驱动（本地不再注入 scene-window-runtime），
     # 页面没写驱动的话所有 scene 会同时叠在画布上，必须拦。
     if len(scene_tags) >= 2:

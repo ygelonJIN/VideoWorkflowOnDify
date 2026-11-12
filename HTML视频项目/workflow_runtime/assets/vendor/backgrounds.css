@@ -1,0 +1,27 @@
+/* backgrounds.css — 背景编号（B 系列），确定性 CSS，无动画循环 */
+.bg-aurora{background:
+  radial-gradient(60% 42% at 18% 12%,rgba(56,214,255,.28),transparent 62%),
+  radial-gradient(70% 46% at 84% 88%,rgba(79,125,255,.26),transparent 64%),
+  #06080f;}
+.bg-violet{background:
+  radial-gradient(58% 40% at 72% 14%,rgba(139,123,255,.30),transparent 64%),
+  radial-gradient(64% 44% at 14% 82%,rgba(255,93,108,.16),transparent 62%),
+  #08060f;}
+.bg-beam{background:
+  conic-gradient(from 210deg at 50% 120%,rgba(56,214,255,.22),transparent 38%,rgba(79,125,255,.18) 62%,transparent 78%),
+  #05070d;}
+.bg-scan{background:
+  repeating-linear-gradient(180deg,rgba(255,255,255,.045) 0 1px,transparent 1px 5px),
+  radial-gradient(70% 50% at 50% 0%,rgba(56,214,255,.16),transparent 70%),
+  #05070d;}
+.bg-grid{background:
+  linear-gradient(rgba(255,255,255,.05) 1px,transparent 1px) 0 0/64px 64px,
+  linear-gradient(90deg,rgba(255,255,255,.05) 1px,transparent 1px) 0 0/64px 64px,
+  radial-gradient(80% 60% at 50% 40%,rgba(79,125,255,.14),transparent 72%),
+  #05070d;}
+.bg-noir{background:
+  radial-gradient(120% 90% at 50% 30%,rgba(38,44,58,.9),#05070b 68%);}
+.bg-dots{background:
+  radial-gradient(rgba(255,255,255,.12) 1px,transparent 1px) 0 0/26px 26px,
+  radial-gradient(70% 50% at 30% 10%,rgba(56,214,255,.14),transparent 70%),
+  #05070d;}
