@@ -149,11 +149,76 @@
     };
   }
 
+
+  /* ---------- 通用底层能力：任何卡、任何手写场景都能直接调 ---------- */
+
+  /* 给定文案和可用宽度，算出能填满的字号（Remotion fitText 的等价实现） */
+  function fitText(opts) {
+    var o = opts || {};
+    var text = String(o.text == null ? '字' : o.text);
+    var width = Number(o.withinWidth) || 900;
+    var base = 100;
+    var cv = document.createElement('canvas').getContext('2d');
+    cv.font = (o.fontWeight || 500) + ' ' + base + 'px ' + (o.fontFamily || 'sans-serif');
+    var w = cv.measureText(text).width + (Number(o.letterSpacing) || 0) * text.length;
+    if (!w) return base;
+    return Math.max(8, (width / w) * base);
+  }
+
+  /* 量一个元素要放大多少倍才能填满父级宽度（不依赖字体加载） */
+  function fitScale(target, ratio) {
+    var el = typeof target === 'string' ? document.querySelector(target) : target;
+    if (!el) return 1;
+    var parent = el.parentElement;
+    var pw = parent ? parent.getBoundingClientRect().width : 900;
+    var ew = el.getBoundingClientRect().width || 1;
+    return (pw / ew) * (ratio == null ? 1 : ratio);
+  }
+
+  /* 确定性 value noise：seed 固定，同一个 t 永远一样 */
+  function noise2(x, y, seed) {
+    var s = seed == null ? 7 : seed;
+    function h(i, j) {
+      var n = i * 374761393 + j * 668265263 + s * 144665;
+      n = (n ^ (n >> 13)) * 1274126177;
+      return ((n ^ (n >> 16)) >>> 0) / 4294967295;
+    }
+    var xi = Math.floor(x), yi = Math.floor(y);
+    var xf = x - xi, yf = y - yi;
+    var u = xf * xf * (3 - 2 * xf), v = yf * yf * (3 - 2 * yf);
+    var a = h(xi, yi), b = h(xi + 1, yi), c = h(xi, yi + 1), d = h(xi + 1, yi + 1);
+    return (a * (1 - u) + b * u) * (1 - v) + (c * (1 - u) + d * u) * v;
+  }
+
+  /* SVG 路径：按进度画到 p（0–1）；兼容 <path> 和任意带 getTotalLength 的节点 */
+  function pathAt(el, p) {
+    if (!el || !el.getTotalLength) return;
+    var len = el.getTotalLength() || 0;
+    el.style.strokeDasharray = len + ' ' + len;
+    el.style.strokeDashoffset = len * (1 - Math.max(0, Math.min(1, p)));
+  }
+
+  /* 一条线从 0 画到 1，用时间线驱动 */
+  function drawPath(timeline, target, at, dur, opts) {
+    var el = typeof target === 'string' ? document.querySelector(target) : target;
+    if (!el || !timeline) return;
+    var len = el.getTotalLength ? (el.getTotalLength() || 0) : 0;
+    el.style.strokeDasharray = len + ' ' + len;
+    var o = opts || {};
+    timeline.fromTo(el, { strokeDashoffset: len },
+      { strokeDashoffset: 0, duration: dur || 0.8, ease: o.ease || 'power2.inOut' }, at);
+  }
+
   global.kit = {
     split: split,
     pointer: pointer,
     spring: spring,
     cubicBezier: cubicBezier,
-    seeded: seeded
+    seeded: seeded,
+    fitText: fitText,
+    fitScale: fitScale,
+    noise2: noise2,
+    pathAt: pathAt,
+    drawPath: drawPath
   };
 })(window);

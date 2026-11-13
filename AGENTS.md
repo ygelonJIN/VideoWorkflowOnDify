@@ -61,7 +61,7 @@ bash /Volumes/TUF ESD-T1A Media/视频工作流/HTML视频项目/workflow_runtim
 ### 视频制作
 
 - 不调用 HeyGen API，不读取或输出 API Key，除非用户明确要求生成数字人视频。`黑帧口播` 工作流即使保留口播，也不得调用 HeyGen。
-- **每一屏的主视觉由真实照片或纯文字排版承担**（照片由 GPT Image API 生成，`{{IMG:图片id}}` 占位，本地替换）。图像计划逐屏决定 `role`：full / inset / portrait / texture / html；`role=html` 不生成照片，写 `data-visual="html"`，留空的 `data-anim="bg"` 槽位，由文字排版承担。整片至少保留一张真实照片。**HTML 只做文字和动效，不画任何图形**（图标、插画、示意图、数据图表、线条、网格、刻度、进度条、色块、卡片都不行）；无图屏是纯文字屏，靠字号/断行/留白撑画面，背景只给底色和光。
+- **每一屏的主视觉由真实照片或纯文字排版承担**（照片由 GPT Image API 生成，`{{IMG:图片id}}` 占位，本地替换）。图像计划逐屏决定 `role`：full / inset / portrait / texture / html；`role=html` 不生成照片，写 `data-visual="html"`，留空的 `data-anim="bg"` 槽位，由文字排版承担。整片至少保留一张真实照片。**HTML 只做文字和动效**；界面元素（卡片、表格、图表、标签、时间轴）只能取 `保留资料/动效库/` 里的编号组件（U11–U24 等），模型不得自创图形、不得手写组件样式；编号之外的图标、插画、线条、色块一律不许画。无图屏优先靠字号/断行/留白撑画面。
 - **构图逐屏不同**：分镜阶段给每屏写 `composition`（`family` / `text_zone` / `align` / `scale`），相邻两屏不得同族，首尾两屏不得三项全同；全片只统一颜色/字体栈/圆角/描边/缓动，字号、间距、对齐由每屏自己定。渲染前跑 `check_composition_variation.mjs`，要拦截加 `STRICT_COMPOSITION=1`。
 - 静态 PNG 不能直接当作完整动效镜头。每个中段镜头必须包含语义相关元素级动画（照片推拉/遮罩揭示也算）。
 - 动画必须由语音内容或明确时间线驱动，不能只做整图缩放、循环呼吸或无意义漂移。
@@ -88,6 +88,11 @@ bash /Volumes/TUF ESD-T1A Media/视频工作流/HTML视频项目/workflow_runtim
 - 删除历史资料、备份或外部分发包前，先确认已合并有效内容并明确告知不可恢复。
 
 ## 经验索引
+
+### 经验文档/动效与能力卡.md
+- 什么时候读：加/删/改动效卡、组件卡、背景卡之前；改 presets.json、motion-kit.js、bg-kit.js、components.css、auto-fit.js 之后；成片动效不对、卡片没生效、渲染是黑屏或静止的时候
+- 包含：加卡三步流程与校验命令、运行时层契约、六个踩过的坑（空 tween、hf-seek、blend、workers、选择器作用域、组件逐条）、样张验证方法
+- 不用读：只改文案、只调颜色
 
 ### 经验文档/使用说明.md
 - 什么时候读：跑一次完整流程、导 Dify、重渲染、改配置、加新项目之前

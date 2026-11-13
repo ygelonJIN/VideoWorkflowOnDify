@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>能力卡预览 · 112 张</title>
+<link rel="stylesheet" href="../../../HTML视频项目/workflow_runtime/assets/vendor/components.css">
+<style>
+  :root{
+    --bg:#0b0c0b; --panel:#121413; --line:rgba(255,255,255,.08);
+    --ink:#f2efe6; --muted:#9aa39d; --accent:#7BE8BE; --warn:#e2543a;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:"PingFang SC","Helvetica Neue",sans-serif;-webkit-font-smoothing:antialiased;}
+  header{position:sticky;top:0;z-index:10;background:rgba(11,12,11,.94);
+    backdrop-filter:blur(8px);border-bottom:1px solid var(--line);padding:14px 22px;}
+  .bar{display:flex;align-items:center;gap:14px;flex-wrap:wrap;}
+  .bar h1{font-size:16px;font-weight:600;letter-spacing:.04em;margin:0 10px 0 0;}
+  .bar .stat{font-family:"SF Mono",Menlo,monospace;font-size:12px;color:var(--muted);letter-spacing:.08em;}
+  input[type=search]{background:#1a1d1b;border:1px solid var(--line);color:var(--ink);
+    border-radius:8px;padding:8px 12px;font-size:13px;width:220px;outline:none;}
+  input[type=search]:focus{border-color:rgba(123,232,190,.5);}
+  .chips{display:flex;gap:6px;flex-wrap:wrap;}
+  .chip{border:1px solid var(--line);background:transparent;color:var(--muted);
+    border-radius:999px;padding:5px 12px;font-size:12px;cursor:pointer;letter-spacing:.04em;}
+  .chip.on{border-color:rgba(123,232,190,.55);color:var(--accent);background:rgba(123,232,190,.08);}
+  .btn{border:1px solid var(--line);background:#1a1d1b;color:var(--ink);border-radius:8px;
+    padding:7px 14px;font-size:12px;cursor:pointer;letter-spacing:.04em;}
+  .btn:hover{border-color:rgba(255,255,255,.22);}
+  .btn.warn{color:var(--warn);border-color:rgba(226,84,58,.4);}
+
+  main{padding:18px 22px 90px;display:grid;gap:14px;
+    grid-template-columns:repeat(auto-fill,minmax(300px,1fr));}
+
+  .tile{background:var(--panel);border:1px solid var(--line);border-radius:14px;overflow:hidden;
+    display:flex;flex-direction:column;}
+  .tile.del{outline:2px solid rgba(226,84,58,.6);}
+  .tile.del .meta b{text-decoration:line-through;color:#7a6a66;}
+  .pv{position:relative;height:300px;background:#000;cursor:pointer;overflow:hidden;}
+  .pv .hint{position:absolute;left:0;right:0;bottom:0;padding:6px 10px;font-size:11px;
+    color:rgba(255,255,255,.45);background:linear-gradient(transparent,rgba(0,0,0,.7));
+    font-family:"SF Mono",Menlo,monospace;letter-spacing:.08em;}
+  .stage{position:absolute;inset:0;overflow:hidden;background:#0a0b0a;transform-origin:0 0;}
+
+  /* 预览舞台内部元素 */
+  .stage .ph{position:absolute;inset:0;
+    background:
+      radial-gradient(600px 380px at 68% 30%,rgba(255,236,206,.28),transparent 62%),
+      radial-gradient(420px 420px at 22% 78%,rgba(80,150,200,.22),transparent 60%),
+      linear-gradient(160deg,#1b2429,#0d1113 60%,#0a0c0d);}
+  .stage .ph::after{content:"";position:absolute;inset:0;
+    background:linear-gradient(90deg,rgba(0,0,0,.55),transparent 55%);}
+  .stage .ph2{position:absolute;inset:0;
+    background:radial-gradient(500px 500px at 30% 40%,rgba(120,200,255,.18),transparent 65%);}
+  .stage .paper{position:absolute;inset:0;background:#f1ece1;}
+  .stage .h{position:absolute;left:14px;right:14px;top:96px;font-size:34px;line-height:1.15;
+    font-weight:700;letter-spacing:-.02em;color:#f2efe6;}
+  .stage .paper .h,.stage.paper .h{color:#141210;font-family:"Songti SC","STSong",serif;}
+  .stage .k{position:absolute;left:14px;top:56px;font-family:"SF Mono",Menlo,monospace;
+    font-size:10px;letter-spacing:.2em;color:#7BE8BE;}
+  .stage .paper .k{color:#e2543a;}
+  .stage .ui{position:absolute;left:16px;right:16px;top:120px;font-size:12px;}
+  .stage .ui-bars{height:120px;}
+  .stage .ui-table{font-size:11px;}
+  .stage .ui-table th,.stage .ui-table td{padding:6px 4px;}
+  .stage .ui-chat .b{font-size:12px;padding:8px 10px;border-radius:10px;}
+  .stage .ui-price .p{font-size:10px;padding:10px 8px;}
+  .stage .ui-price .p b{font-size:20px;}
+  .stage .ui-timeline .t{font-size:12px;padding:6px 0;}
+  .stage .ui-toast{font-size:12px;padding:10px 12px;}
+  .stage .ui-file{font-size:12px;padding:10px 12px;}
+  .stage .ui-file .ic{width:28px;height:34px;}
+  .stage .ui-tags .g{font-size:11px;padding:6px 10px;}
+  .stage .num{position:absolute;left:16px;top:110px;font-family:Georgia,serif;font-size:64px;color:#f2efe6;}
+  .stage canvas{position:absolute;inset:0;width:100%;height:100%;}
+  .pbar{position:absolute;left:0;right:0;bottom:0;height:2px;background:rgba(255,255,255,.10);z-index:6;}
+  .pbar i{display:block;height:100%;width:0;background:#7BE8BE;}
+
+  .meta{padding:12px 14px 14px;}
+  .meta .row1{display:flex;align-items:baseline;gap:8px;}
+  .meta b{font-size:14px;font-weight:600;}
+  .meta .id{font-family:"SF Mono",Menlo,monospace;font-size:11px;color:var(--accent);letter-spacing:.1em;}
+  .meta .fam{font-family:"SF Mono",Menlo,monospace;font-size:10px;color:var(--muted);letter-spacing:.1em;
+    margin-left:auto;}
+  .meta p{margin:8px 0 0;font-size:12px;line-height:1.6;color:var(--muted);min-height:38px;}
+  .meta .actions{display:flex;gap:8px;margin-top:10px;}
+  .meta .actions .btn{flex:1;padding:6px 0;text-align:center;}
+
+  footer{position:fixed;left:0;right:0;bottom:0;z-index:10;background:rgba(11,12,11,.96);
+    border-top:1px solid var(--line);padding:10px 22px;display:flex;align-items:center;gap:12px;}
+  footer .stat{font-family:"SF Mono",Menlo,monospace;font-size:12px;color:var(--muted);letter-spacing:.08em;}
+  footer .out{flex:1;font-family:"SF Mono",Menlo,monospace;font-size:12px;color:var(--warn);
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="bar">
+    <h1>能力卡预览</h1>
+    <span class="stat" id="count">—</span>
+    <input type="search" id="q" placeholder="搜编号或名字，如 K03 / 擦除">
+    <div class="chips" id="fams"></div>
+    <button class="btn" id="playAll">全部播一遍</button>
+    <button class="btn warn" id="clearAll">清空标记</button>
+  </div>
+</header>
+
+<main id="grid"></main>
+
+<footer>
+  <span class="stat" id="marked">已标记删除 0</span>
+  <button class="btn" id="copyDel">复制删除清单</button>
+  <button class="btn" id="copyKeep">复制保留清单</button>
+  <div class="out" id="out"></div>
+</footer>
+
+<script src="../../../HTML视频项目/workflow_runtime/assets/vendor/gsap.min.js"></script>
+<script src="../../../HTML视频项目/workflow_runtime/assets/vendor/motion-kit.js"></script>
+<script src="../../../HTML视频项目/workflow_runtime/assets/vendor/bg-kit.js"></script>
+<script src="cards.js"></script>
+<script>
+(function () {
+  "use strict";
+
+  var CARDS = window.CARDS;
+  var KEY = "dsh-card-catalog-deleted";
+  var deleted = {};
+  try { deleted = JSON.parse(localStorage.getItem(KEY) || "{}") || {}; } catch (e) { deleted = {}; }
+
+  /* ---------- 每个族怎么搭预览 ---------- */
+  var HEAD_TEXT = {
+    T01: "逐字上浮", T02: "模糊聚焦", T03: "折页落字", T04: "描边写字", T05: "还在手动导出",
+    T07: "乱码收敛", T08: "解密揭示", T09: "翻牌落字", T10: "环形文字", T11: "回声拖影",
+    K01: "落定", K03: "字自己落下", K04: "把字收紧", K05: "从一边揭开", K06: "一个词被扫过",
+    K07: "画一条下划线", K08: "百分之 32", K09: "还在手动导出", K10: "竖着走",
+    K12: "不靠加班", K13: "先有线", K20: "撑满这一行"
+  };
+
+  var UI_MAP = {
+    UA01: ['<div class="ui-card" style="position:relative"><h3 style="font-size:14px">本周线索</h3><p style="font-size:11px">128 条 · 转化 32%</p></div>', ".ui-card"],
+    UA02: ['<div><div class="ui-row" style="padding:6px 0;border-bottom:1px solid rgba(255,255,255,.1)">来源 · 展会</div><div class="ui-row" style="padding:6px 0;border-bottom:1px solid rgba(255,255,255,.1)">状态 · 已报价</div><div class="ui-row" style="padding:6px 0">周期 · 21 天</div></div>', ".ui-row"],
+    UA03: ['<div style="display:flex;gap:6px"><span class="ui-chip" style="font-size:10px;padding:5px 10px">待跟进</span><span class="ui-chip" style="font-size:10px;padding:5px 10px">已接通</span><span class="ui-chip" style="font-size:10px;padding:5px 10px">已报价</span></div>', ".ui-chip"],
+    UA04: ['<div class="ui-bars"><i style="height:38%"></i><i style="height:62%"></i><i style="height:48%"></i><i style="height:86%"></i></div>', ".ui-bars i"],
+    UA05: ['<div class="ui-line"><svg viewBox="0 0 900 240" preserveAspectRatio="none"><path d="M0,196 C120,188 180,150 280,140 S420,96 520,86 S700,44 900,30"/></svg></div>', ".ui-line path"],
+    UA06: ['<div class="ui-timeline"><div class="t">线索进入</div><div class="t">自动分配</div><div class="t">成交归档</div></div>', ".ui-timeline .t"],
+    UA07: ['<div class="ui-chat"><div class="b">客户说下周三看厂</div><div class="b right">时间已发</div><div class="b">报价单也发了</div></div>', ".ui-chat", { child: ".b" }],
+    S02: ['<div class="bar" style="position:relative;height:10px;margin-top:40px;background:rgba(255,255,255,.12);border-radius:3px"></div>', ".bar"],
+    S04: ['<div class="ui-row" style="padding:10px 0 10px 40px">来源 · 展会</div>', ".ui-row"],
+    S05: ['<div class="field" style="font-size:14px;color:#7BE8BE">搜索客户</div>', ".field"],
+    S06: ['<div class="ui-chip is-on" style="display:inline-block;font-size:12px;padding:10px 16px">已接通</div>', ".ui-chip"],
+    S07: ['<div class="ui-card" style="position:relative"><h3 style="font-size:14px">本周线索</h3><p style="font-size:11px">128 条</p></div>', ".ui-card"],
+    S08: ['<div class="ui-card" style="position:relative"><h3 style="font-size:14px">展开面板</h3><p style="font-size:11px">三行内容</p></div>', ".ui-card"],
+    S09: ['<div class="ui-chip is-on" style="display:inline-block;font-size:12px;padding:10px 16px">已选中</div>', ".ui-chip"],
+    S10: ['<div class="bar" style="height:4px;width:120px;background:#7BE8BE;margin-top:40px"></div>', ".bar"],
+    S11: ['<div class="ui-card" style="position:relative;width:60%"><h3 style="font-size:14px">拖动我</h3></div>', ".ui-card"],
+    DA01: ['<div class="num" style="position:relative">128</div>', ".num"],
+    DA02: ['<div class="ui-bars"><i style="height:38%"></i><i style="height:62%"></i><i style="height:48%"></i><i style="height:86%"></i></div>', ".ui-bars i"],
+    DA03: ['<div class="ui-timeline"><div class="t">线索进入</div><div class="t">分配</div><div class="t">已成交</div></div>', ".ui-timeline .t:last-child"],
+    DA04: ['<div class="ui-chip is-on" style="display:inline-block;font-size:12px;padding:10px 16px">跟进中</div>', ".ui-chip"]
+  };
+
+  function spec(card) {
+    var id = card.id;
+    var f = card.family || "";
+
+    if (f === "背景") return { kind: "bg" };
+    if (f === "材质") return { kind: "photo", sel: "#STAGE" };
+    if (HEAD_TEXT[id]) return { kind: "paper", sel: ".h", text: HEAD_TEXT[id] };
+    if (id === "T06") return { kind: "photo", sel: ".num", number: true };
+    if (UI_MAP[id]) return { kind: "ui", html: UI_MAP[id][0], sel: UI_MAP[id][1], params: UI_MAP[id][2] || {} };
+    if (id === "G01") return { kind: "photo", sel: ".stage" };
+    return { kind: "photo", sel: ".ph" };
+  }
+
+  /* ---------- 生成 tile ---------- */
+  var grid = document.getElementById("grid");
+  var ids = Object.keys(CARDS).sort(function (a, b) {
+    var fa = CARDS[a].family || "", fb = CARDS[b].family || "";
+    if (fa !== fb) return fa.localeCompare(fb, "zh");
+    return a.localeCompare(b);
+  });
+
+  var familyNames = [];
+  ids.forEach(function (id) {
+    var f = CARDS[id].family || "其他";
+    if (familyNames.indexOf(f) < 0) familyNames.push(f);
+  });
+
+  var famBox = document.getElementById("fams");
+  var activeFam = "";
+  var allChip = document.createElement("button");
+  allChip.className = "chip on"; allChip.textContent = "全部";
+  allChip.onclick = function () { setFam(""); };
+  famBox.appendChild(allChip);
+  var chips = { "": allChip };
+  familyNames.forEach(function (f) {
+    var b = document.createElement("button");
+    b.className = "chip"; b.textContent = f;
+    b.onclick = function () { setFam(f); };
+    famBox.appendChild(b); chips[f] = b;
+  });
+  function setFam(f) {
+    activeFam = f;
+    Object.keys(chips).forEach(function (k) { chips[k].classList.toggle("on", k === f); });
+    render();
+  }
+
+  ids.forEach(function (id) {
+    var card = CARDS[id];
+    var s = spec(card);
+    var tile = document.createElement("article");
+    tile.className = "tile";
+    tile.dataset.id = id;
+    tile.dataset.fam = card.family || "其他";
+    tile.dataset.text = (id + " " + card.name + " " + (card.use || "")).toLowerCase();
+    if (deleted[id]) tile.classList.add("del");
+
+    tile.innerHTML =
+      '<div class="pv" data-id="' + id + '">' +
+        '<div class="stage" id="pv-' + id + '"></div>' +
+        '<div class="pbar"><i></i></div>' +
+        '<div class="hint">悬停播放 · 循环</div>' +
+      '</div>' +
+      '<div class="meta">' +
+        '<div class="row1"><span class="id">' + id + '</span><b>' + card.name + '</b>' +
+        '<span class="fam">' + (card.family || "") + '</span></div>' +
+        '<p>' + (card.use || "") + '</p>' +
+        '<div class="actions">' +
+          '<button class="btn del-btn">' + (deleted[id] ? "取消删除" : "标记删除") + '</button>' +
+        '</div>' +
+      '</div>';
+
+    tile.querySelector(".del-btn").addEventListener("click", function (e) {
+      e.stopPropagation();
+      deleted[id] = !deleted[id];
+      tile.classList.toggle("del", !!deleted[id]);
+      this.textContent = deleted[id] ? "取消删除" : "标记删除";
+      try { localStorage.setItem(KEY, JSON.stringify(deleted)); } catch (err) {}
+      updateStats();
+    });
+
+    var pv = tile.querySelector(".pv");
+    pv.addEventListener("mouseenter", function () { play(id); });
+    pv.addEventListener("click", function () { play(id); });
+
+    grid.appendChild(tile);
+  });
+
+  /* ---------- 播放一张 ---------- */
+  var current = null;   // 同一时刻只让一张卡在跑，避免几十条时间线把页面拖死
+  var currentStage = null;
+  var progressBar = null;
+
+  function expand(code, vars) {
+    return code.replace(/\{\{(\w+)\}\}/g, function (m, k) {
+      return Object.prototype.hasOwnProperty.call(vars, k) ? String(vars[k]) : m;
+    });
+  }
+
+  function play(id) {
+    var card = CARDS[id];
+    var stage = document.getElementById("pv-" + id);
+    if (!card || !stage) return;
+    if (current) { current.kill(); current = null; }
+    if (currentStage && currentStage !== stage) {
+      var oldBar = currentStage.parentElement.querySelector(".pbar i");
+      if (oldBar) oldBar.style.width = "0%";
+      currentStage.innerHTML = "";
+    }
+    currentStage = stage;
+
+    var s = spec(card);
+    stage.innerHTML = "";
+    stage.className = "stage" + (s.kind === "paper" ? " paper" : "");
+
+    if (s.kind === "bg") {
+      var cv = document.createElement("canvas");
+      cv.width = 360; cv.height = 640;
+      stage.appendChild(cv);
+      var ctx = cv.getContext("2d");
+      var obj = { t: 0 };
+      var btl = gsap.timeline({ repeat: -1, repeatDelay: 0.4 });
+      btl.to(obj, {
+        t: 6, duration: 6, ease: "none",
+        onUpdate: function () {
+          window.bgkit.draw(ctx, id, 360, 640, obj.t);
+          setBar(obj.t / 6);
+        }
+      }, 0);
+      current = btl;
+      progressBar = stage.parentElement.querySelector(".pbar i");
+      return;
+    }
+
+    if (s.kind === "ui") {
+      stage.innerHTML = '<div class="ui" style="position:absolute;left:16px;right:16px;top:110px">' + s.html + '</div>';
+    } else if (s.number) {
+      stage.innerHTML = '<div class="ph"></div><div class="num">128</div><div class="k" style="z-index:4">01 ／ 预览</div>';
+    } else if (s.kind === "paper") {
+      stage.innerHTML = '<div class="paper"><div class="k">01 ／ 预览</div><div class="h">' + (s.text || "标题") + '</div></div>';
+    } else {
+      stage.innerHTML =
+        '<div class="ph"></div>' +
+        (id === "L01" ? '<div class="ph2"></div>' : '') +
+        '<div class="k" style="z-index:4">01 ／ 预览</div>' +
+        '<div class="h" style="z-index:4;top:auto;bottom:150px">能力卡</div>';
+    }
+
+    var selector = s.sel === ".stage" || s.sel === "#STAGE" ? "#pv-" + id : "#pv-" + id + " " + s.sel;
+    var vars = {};
+    var prm = Object.assign({ dur: 0.6, stagger: 0.05, from: 0, to: 100, seed: 7, color: "#38d6ff" },
+      card.params || {}, s.params || {});
+    Object.keys(prm).forEach(function (k) { vars[k] = prm[k]; });
+    vars.sel = selector;
+    vars.at = 0.25;
+    if (vars.dur != null) vars.dur = Math.min(Number(vars.dur) || 1, 2.2);
+    if (s.sel === "#STAGE") { vars.sel = "#pv-" + id; }
+    if (id === "L01") { vars.sel2 = "#pv-L01 .ph2"; }
+
+    var tl = gsap.timeline({ repeat: -1, repeatDelay: 0.8 });
+    progressBar = stage.parentElement.querySelector(".pbar i");
+    try {
+      (new Function("timeline", "kit", expand(card.code, vars)))(tl, window.kit);
+    } catch (e) {
+      stage.innerHTML = '<div style="padding:30px;color:#e2543a;font-size:12px">展开失败：' + e.message + '</div>';
+      return;
+    }
+    tl.eventCallback("onUpdate", function () { setBar(tl.progress()); });
+    current = tl;
+  }
+
+  function setBar(p) {
+    if (progressBar) progressBar.style.width = Math.max(0, Math.min(1, p)) * 100 + "%";
+  }
+
+  /* ---------- 过滤 / 统计 ---------- */
+  var q = document.getElementById("q");
+  q.addEventListener("input", render);
+
+  function render() {
+    var term = q.value.trim().toLowerCase();
+    var shown = 0;
+    Array.prototype.forEach.call(grid.children, function (tile) {
+      var okFam = !activeFam || tile.dataset.fam === activeFam;
+      var okText = !term || tile.dataset.text.indexOf(term) >= 0;
+      var show = okFam && okText;
+      tile.style.display = show ? "" : "none";
+      if (show) shown++;
+    });
+    document.getElementById("count").textContent = shown + " / " + ids.length + " 张";
+    updateStats();
+  }
+
+  function updateStats() {
+    var del = ids.filter(function (id) { return deleted[id]; });
+    document.getElementById("marked").textContent = "已标记删除 " + del.length;
+    document.getElementById("out").textContent = del.length ? del.join(" ") : "";
+  }
+
+  /* ---------- 批量播放 ---------- */
+  document.getElementById("playAll").addEventListener("click", function () {
+    var list = Array.prototype.slice.call(grid.children)
+      .filter(function (t) { return t.style.display !== "none"; });
+    var i = 0;
+    (function next() {
+      if (i >= list.length) return;
+      var id = list[i++].dataset.id;
+      play(id);
+      setTimeout(next, 1200);
+    })();
+  });
+
+  document.getElementById("clearAll").addEventListener("click", function () {
+    deleted = {};
+    Array.prototype.forEach.call(grid.children, function (t) {
+      t.classList.remove("del");
+      t.querySelector(".del-btn").textContent = "标记删除";
+    });
+    try { localStorage.setItem(KEY, "{}"); } catch (e) {}
+    updateStats();
+  });
+
+  function copy(text, label) {
+    var box = document.getElementById("out");
+    box.textContent = label + "：" + text;
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).catch(function () {});
+    }
+  }
+
+  document.getElementById("copyDel").addEventListener("click", function () {
+    var del = ids.filter(function (id) { return deleted[id]; });
+    copy(del.join(" ") || "（没有标记）", "删除清单 " + del.length + " 张");
+  });
+
+  document.getElementById("copyKeep").addEventListener("click", function () {
+    var keep = ids.filter(function (id) { return !deleted[id]; });
+    copy(keep.join(" ") || "（全部标记删除）", "保留清单 " + keep.length + " 张");
+  });
+
+  render();
+  play(ids[0]);
+})();
+</script>
+</body>
+</html>

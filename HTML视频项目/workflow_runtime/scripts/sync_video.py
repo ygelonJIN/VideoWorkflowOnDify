@@ -1476,6 +1476,8 @@ def ensure_runtime_scripts(document: str) -> str:
         tags.append('<script src="素材/vendor/motion-kit.js"></script>')
     if "bg-kit.js" not in document:
         tags.append('<script src="素材/vendor/bg-kit.js"></script>')
+    if "auto-fit.js" not in document:
+        tags.append('<script src="素材/vendor/auto-fit.js"></script>')
     if "components.css" not in document:
         tags.append('<link rel="stylesheet" href="素材/vendor/components.css">')
     if "backgrounds.css" not in document:

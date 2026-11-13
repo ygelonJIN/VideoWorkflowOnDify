@@ -30,20 +30,18 @@ def main(motion_json: str, scene_json: str = "") -> dict:
 
     # 全片编号由 H00 统一分配：这里只把编号套到模型选的目标/时机上。
     budget = scene_data.get("motion_budget") if isinstance(scene_data.get("motion_budget"), dict) else {}
-    if budget and isinstance(motions, list) and motions:
-        motions = [item for item in motions if isinstance(item, dict)][:2]
+    if isinstance(motions, list):
+        motions = [item for item in motions if isinstance(item, dict)]
+    # 每屏条数不设上限：模型选多少展开多少。预算只在模型一条都没选时兜底。
+    if budget and isinstance(motions, list) and not motions:
         entrance = str(budget.get("entrance") or "").strip().upper()
         state = str(budget.get("state") or "").strip().upper()
-        if motions and entrance:
-            motions[0]["preset"] = entrance
+        if entrance:
+            motions.append({"preset": entrance, "target": "title", "trigger": "sentence_start",
+                            "fallback": 0.2, "reason": "预算兜底：入场"})
         if state:
-            if len(motions) >= 2:
-                motions[1]["preset"] = state
-            elif motions:
-                clone = dict(motions[0])
-                clone["preset"] = state
-                clone["reason"] = "补状态变化"
-                motions.append(clone)
+            motions.append({"preset": state, "target": "stat", "trigger": "sentence_start",
+                            "fallback": 0.9, "reason": "预算兜底：状态变化"})
 
     # 每个编号 = 一段可复制的代码模板；%(x)s 由这里填。
     TPL = {

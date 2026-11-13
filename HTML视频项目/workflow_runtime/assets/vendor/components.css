@@ -99,3 +99,98 @@
 /* U10 色格阵 */
 .ui-chroma{display:grid;grid-template-columns:repeat(6,1fr);gap:8px;}
 .ui-chroma i{display:block;height:56px;border-radius:8px;background:var(--c,var(--ui-surface-2));}
+
+/* ---------- U11–U20：编号制组件（2026-11 新增） ---------- */
+
+/* U11 聊天气泡 */
+.ui-chat{display:flex;flex-direction:column;gap:14px;}
+.ui-chat .b{max-width:78%;padding:16px 20px;border-radius:18px;font-size:26px;line-height:1.5;
+  background:var(--ui-surface-2);border:1px solid var(--ui-border);}
+.ui-chat .b.right{align-self:flex-end;background:rgba(56,214,255,.14);border-color:rgba(56,214,255,.30);}
+
+/* U12 表格 */
+.ui-table{width:100%;border-collapse:collapse;font-size:24px;}
+.ui-table th,.ui-table td{padding:16px 8px;text-align:left;border-bottom:1px solid var(--ui-border);}
+.ui-table th{color:var(--ui-muted);font-weight:500;font-size:20px;letter-spacing:.08em;}
+
+/* U13 柱状图 */
+.ui-bars{display:flex;align-items:flex-end;gap:18px;height:260px;}
+.ui-bars i{display:block;flex:1;border-radius:4px 4px 0 0;transform-origin:50% 100%;
+  background:linear-gradient(180deg,rgba(56,214,255,.85),rgba(56,214,255,.22));}
+.ui-bars i.on{background:linear-gradient(180deg,rgba(123,232,190,.9),rgba(123,232,190,.25));}
+
+/* U14 折线 */
+.ui-line{position:relative;height:240px;}
+.ui-line svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible;}
+.ui-line path{fill:none;stroke:var(--ui-accent);stroke-width:3;stroke-linecap:round;stroke-linejoin:round;}
+
+/* U15 价格表 */
+.ui-price{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;}
+.ui-price .p{padding:24px 20px;border:1px solid var(--ui-border);border-radius:var(--ui-radius);
+  background:var(--ui-surface);font-size:20px;color:var(--ui-muted);}
+.ui-price .p b{display:block;font-size:42px;line-height:1.1;margin:10px 0;color:var(--ui-ink);}
+.ui-price .p.hot{border-color:rgba(56,214,255,.45);background:rgba(56,214,255,.10);}
+
+/* U16 通知条 */
+.ui-toast{display:flex;align-items:center;gap:14px;padding:18px 22px;border-radius:14px;
+  background:rgba(255,255,255,.06);border:1px solid var(--ui-border);font-size:24px;}
+.ui-toast .dot{width:10px;height:10px;border-radius:50%;background:#7BE8BE;flex:none;}
+
+/* U17 头像组 */
+.ui-avatars{display:flex;align-items:center;}
+.ui-avatars i{width:64px;height:64px;border-radius:50%;margin-left:-14px;
+  background:linear-gradient(135deg,#2b3a4a,#46586b);border:2px solid #0b0c0b;}
+.ui-avatars i:first-child{margin-left:0;}
+
+/* U20 时间轴 */
+.ui-timeline{position:relative;padding-left:34px;}
+.ui-timeline .t{position:relative;padding:12px 0;font-size:24px;}
+.ui-timeline .t::before{content:"";position:absolute;left:-22px;top:50%;width:10px;height:10px;
+  margin-top:-5px;border-radius:50%;background:var(--ui-accent);opacity:.5;}
+.ui-timeline .t.on::before{opacity:1;box-shadow:0 0 0 5px rgba(56,214,255,.16);}
+
+/* U18 播放卡 */
+.ui-player{position:relative;border-radius:var(--ui-radius);overflow:hidden;
+  border:1px solid var(--ui-border);aspect-ratio:16/10;
+  background:linear-gradient(135deg,#20303c,#3a4d5e);}
+.ui-player .badge{position:absolute;right:14px;bottom:14px;padding:6px 12px;border-radius:8px;
+  background:rgba(0,0,0,.6);font-size:20px;color:#fff;}
+.ui-player .play{position:absolute;left:50%;top:50%;width:74px;height:74px;margin:-37px 0 0 -37px;
+  border-radius:50%;border:2px solid rgba(255,255,255,.75);}
+
+/* U19 文件卡 */
+.ui-file{display:flex;align-items:center;gap:16px;padding:18px 20px;border-radius:14px;
+  border:1px solid var(--ui-border);background:var(--ui-surface);font-size:24px;}
+.ui-file .ic{width:52px;height:64px;border-radius:6px;background:rgba(56,214,255,.16);
+  border:1px solid rgba(56,214,255,.35);flex:none;}
+.ui-file .meta{font-size:19px;color:var(--ui-muted);margin-top:4px;}
+
+/* U21 地图卡 */
+.ui-map{position:relative;height:320px;border-radius:var(--ui-radius);overflow:hidden;
+  border:1px solid var(--ui-border);background:
+    linear-gradient(0deg,rgba(56,214,255,.06),rgba(56,214,255,.02)),
+    repeating-linear-gradient(0deg,rgba(255,255,255,.05) 0 1px,transparent 1px 44px),
+    repeating-linear-gradient(90deg,rgba(255,255,255,.05) 0 1px,transparent 1px 44px);}
+.ui-map .pin{position:absolute;width:12px;height:12px;border-radius:50%;background:#7BE8BE;
+  box-shadow:0 0 0 6px rgba(123,232,190,.18);}
+.ui-map .cap{position:absolute;left:16px;bottom:14px;font-size:20px;color:var(--ui-muted);}
+
+/* U22 目录 */
+.ui-toc{display:flex;flex-direction:column;gap:2px;}
+.ui-toc .i{display:flex;justify-content:space-between;padding:14px 0;border-bottom:1px solid var(--ui-border);
+  font-size:24px;}
+.ui-toc .i span:last-child{color:var(--ui-muted);font-family:"SF Mono",Menlo,monospace;font-size:19px;}
+
+/* U23 表单 */
+.ui-form{display:flex;flex-direction:column;gap:16px;}
+.ui-form .f{padding:18px 20px;border-radius:12px;border:1px solid var(--ui-border);
+  background:rgba(255,255,255,.03);font-size:24px;color:var(--ui-muted);}
+.ui-form .f.on{border-color:rgba(123,232,190,.5);color:var(--ui-ink);}
+.ui-form .btn{align-self:flex-start;padding:16px 28px;border-radius:12px;font-size:24px;
+  background:rgba(56,214,255,.16);border:1px solid rgba(56,214,255,.4);}
+
+/* U24 标签云 */
+.ui-tags{display:flex;flex-wrap:wrap;gap:12px;}
+.ui-tags .g{padding:10px 18px;border-radius:999px;font-size:21px;
+  border:1px solid var(--ui-border);background:var(--ui-surface);}
+.ui-tags .g.big{font-size:28px;padding:12px 22px;}
