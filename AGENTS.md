@@ -1,11 +1,12 @@
 # 视频工作流
 
 ## 读取规则
-- 动 Workflow、提示词、Code 节点之前，先读 `经验文档/使用说明.md` 和 `保留资料/README.md`。
-- 动视频质量、字幕、布局、渲染规则之前，读 `保留资料/项目文档/视频需求与质量标准.md`。
-- 选题、去重、对外内容合规有疑问时，读 `保留资料/项目文档/内容选题与去重规则.md` 和 `用户输入事实与合规规则.md`。
+- 分不清“编号/能力卡/预览/样片/源码”在哪时，先读根目录 `动效能力总览.md`。
+- 动 Workflow、提示词、Code 节点之前，先读 `经验文档/使用说明.md` 和 `能力库/README.md`。
+- 动视频质量、字幕、布局、渲染规则之前，读 `能力库/项目文档/视频需求与质量标准.md`。
+- 选题、去重、对外内容合规有疑问时，读 `能力库/项目文档/内容选题与去重规则.md` 和 `用户输入事实与合规规则.md`。
 - 导入 Dify、节点报错、变量对不上时，读 `Dify工作流/使用说明.md`。
-- 处理具体项目（333 等）之前，读 `HTML视频项目/<项目>/项目说明.md`。
+- 处理具体项目（333 等）之前，读 `成品/<项目>/项目说明.md`。
 - 索引里"什么时候读"有一条沾边，就读；判断不了就把 `经验文档/` 全读。
 
 ## 是什么
@@ -15,29 +16,32 @@
 ## 目录
 
 ```text
+动效能力总览.md                     # 先看这页：编号/代码/预览/样片各在哪
 Dify工作流/                         # 可导入的 Dify Workflow
-HTML视频项目/333/                   # 当前唯一正式项目
-HTML视频项目/Dify输出/               # Dify 原始 TXT、JSON、HTML 和 HeyGen 响应
-HTML视频项目/workflow_runtime/       # 可复用模板、脚本、运行资产、渲染器 vendor 和工具
-保留资料/                           # 提示词、代码节点、动效库、用户输入事实和生产标准
+成品/333/                   # 当前唯一正式项目
+成品/Dify输出/               # Dify 原始 TXT、JSON、HTML 和 HeyGen 响应
+成品/workflow_runtime/       # 可复用模板、脚本、运行资产、渲染器 vendor 和工具
+能力库/                           # 能力定义与说明书（卡源、提示词镜像、项目标准）
+能力库/动效库/样片/                # 所有样片：全卡审阅（一卡一片）、镜头/三维/重排示范
 经验文档/                           # 操作经验，一个领域一篇
 ```
 
 统一处理入口：
 
 ```bash
-bash /Volumes/TUF ESD-T1A Media/视频工作流/HTML视频项目/workflow_runtime/tools/run_dify_output.sh 项目名
+bash /Volumes/TUF ESD-T1A Media/视频工作流/成品/workflow_runtime/tools/run_dify_output.sh 项目名
 ```
 
 ### 文件职责
 
 - `Dify工作流/*.yml`：实际导入 Dify 的唯一运行版本。
-- `保留资料/工作流提示词/`：YAML 内提示词的可读镜像。
-- `保留资料/工作流代码节点/`：YAML 内 Code 节点的可读镜像。
-- `HTML视频项目/workflow_runtime/`：可复用模板、GSAP、渲染脚本、工具，以及钉死的 HyperFrames CLI（`vendor/`，`node_modules` 不进仓库）。
-- `HTML视频项目/333/`：当前项目成品和项目内运行脚本，不作为新项目模板直接修改。
-- `保留资料/动效库/`：动效能力编号（`能力卡.md`）与可展开预设（`presets.json`）；运行时实现在 `workflow_runtime/assets/vendor/motion-kit.js`。
-- `保留资料/项目文档/`：任意主题通用的用户输入事实、内容规则、视频需求与质量标准；不保存固定产品故事。
+- `能力库/工作流提示词/`：YAML 内提示词的可读镜像。
+- `能力库/工作流代码节点/`：YAML 内 Code 节点的可读镜像。
+- `成品/workflow_runtime/`：可复用模板、GSAP、渲染脚本、工具，以及钉死的 HyperFrames CLI（`vendor/`，`node_modules` 不进仓库）。
+- `成品/333/`：当前项目成品和项目内运行脚本，不作为新项目模板直接修改。
+- `能力库/动效库/`：动效能力编号（`能力卡.md`）与可展开预设（`presets.json`）；运行时实现在 `workflow_runtime/assets/vendor/motion-kit.js`。
+- `能力库/动效库/样片/`：全卡审阅（一卡一片）+ 镜头/三维/重排示范；命名与保留策略见其中 `README.md`。
+- `能力库/项目文档/`：任意主题通用的用户输入事实、内容规则、视频需求与质量标准；不保存固定产品故事。
 - `经验文档/`：怎么做、怎么维护、踩过的坑。新增经验并入已有文件，不轻易新建。
 
 ## 铁律
@@ -48,27 +52,42 @@ bash /Volumes/TUF ESD-T1A Media/视频工作流/HTML视频项目/workflow_runtim
 
 | 修改内容 | 必须同步检查 |
 |---|---|
-| `Dify工作流/*.yml` 中的提示词 | 对应 `保留资料/工作流提示词/*.md` |
-| `Dify工作流/*.yml` 中的 Code 节点 | 对应 `保留资料/工作流代码节点/*.py` |
+| `Dify工作流/*.yml` 中的提示词 | 对应 `能力库/工作流提示词/*.md` |
+| `Dify工作流/*.yml` 中的 Code 节点 | 对应 `能力库/工作流代码节点/*.py` |
 | 输出变量、字段或 JSON 结构 | `Dify工作流/使用说明.md`、`经验文档/使用说明.md`、`workflow_runtime/tools/` |
-| 媒体、字幕、布局或渲染规则 | `workflow_runtime/`、`保留资料/项目文档/视频需求与质量标准.md` |
-| 图像计划、生图 prompt 规则、图片契约 | `workflow_runtime/scripts/generate_images.py`、`workflow_runtime/tools/build_black_frame_project.py`、`保留资料/项目文档/视频需求与质量标准.md` |
-| 新增或重命名节点 | `保留资料/README.md` 和相关说明 |
+| 媒体、字幕、布局或渲染规则 | `workflow_runtime/`、`能力库/项目文档/视频需求与质量标准.md` |
+| 图像计划、生图 prompt 规则、图片契约 | `workflow_runtime/scripts/generate_images.py`、`workflow_runtime/tools/build_black_frame_project.py`、`能力库/项目文档/视频需求与质量标准.md` |
+| 新增或重命名节点 | `能力库/README.md` 和相关说明 |
 | 本地命令或目录职责 | 根目录 `AGENTS.md`、`经验文档/使用说明.md` |
 
 禁止只修改 YAML、不更新提示词/代码节点镜像；也禁止只改说明文档而不改实际 Workflow。
 
-### 视频制作
+### 视频制作（v2，2026-11-13 生效）
 
-- 不调用 HeyGen API，不读取或输出 API Key，除非用户明确要求生成数字人视频。`黑帧口播` 工作流即使保留口播，也不得调用 HeyGen。
-- **每一屏的主视觉由真实照片或纯文字排版承担**（照片由 GPT Image API 生成，`{{IMG:图片id}}` 占位，本地替换）。图像计划逐屏决定 `role`：full / inset / portrait / texture / html；`role=html` 不生成照片，写 `data-visual="html"`，留空的 `data-anim="bg"` 槽位，由文字排版承担。整片至少保留一张真实照片。**HTML 只做文字和动效**；界面元素（卡片、表格、图表、标签、时间轴）只能取 `保留资料/动效库/` 里的编号组件（U11–U24 等），模型不得自创图形、不得手写组件样式；编号之外的图标、插画、线条、色块一律不许画。无图屏优先靠字号/断行/留白撑画面。
-- **构图逐屏不同**：分镜阶段给每屏写 `composition`（`family` / `text_zone` / `align` / `scale`），相邻两屏不得同族，首尾两屏不得三项全同；全片只统一颜色/字体栈/圆角/描边/缓动，字号、间距、对齐由每屏自己定。渲染前跑 `check_composition_variation.mjs`，要拦截加 `STRICT_COMPOSITION=1`。
-- 静态 PNG 不能直接当作完整动效镜头。每个中段镜头必须包含语义相关元素级动画（照片推拉/遮罩揭示也算）。
-- 动画必须由语音内容或明确时间线驱动，不能只做整图缩放、循环呼吸或无意义漂移。
-- 产品 UI 使用可复用高保真模板组件，通过变量改变行业、数据和流程；示例数据标记为"场景演示"，不得冒充真实产品截图。
-- 信息逐项入场、数字递增、路径推进、局部焦点和数据状态变化优先于装饰性动画。
-- 使用平滑长尾缓动、stagger 和语音 cue；禁止无限循环、随机时间和与内容无关的漂移。
-- 交付前检查时长、音画同步、响度、字幕对齐和运动量；若提供 `npm run quality:video`，必须执行并通过。
+**内容层**
+
+- 整片至少一张真实照片；无照片的屏靠排版撑住（`role=html` + `data-visual="html"`）。图像计划逐屏决定 `role`：full / inset / portrait / texture / html。
+- **每屏一个主运动**，其余是次级；相邻两屏的主运动不能是同一张卡。
+- **字由 HTML 承载**：canvas / 三维里不放文字。
+- **动效由时间线驱动**，任意一帧可 seek 复现；禁 `requestAnimationFrame`、`performance.now`、`Math.random`、`yoyo`/`repeat` 无限循环（按 `t` 的周期函数不算循环）。
+- 构图逐屏不同（`family` / `text_zone` / `align` / `scale`），相邻两屏不得同族；渲染前跑 `check_composition_variation.mjs`，要拦截加 `STRICT_COMPOSITION=1`。
+- 静态图不能当动效镜头，每屏必须有语义相关的元素级动画。
+- 产品 UI 用编号模板组件，示例数据标"场景演示"，不得冒充真实产品截图。
+
+**技术层**
+
+- canvas 固定 `width="1080" height="1920"`，按 `t` 重绘；不得按 `getBoundingClientRect` 改尺寸。
+- **三维统一由 GSAP 时间线的 `onUpdate` 驱动**（`hf-seek` 只作兜底），场景必须引 `three.global.js`。
+- **canvas 与照片默认不同屏**；要"照片进三维"必须在根节点显式声明 `data-visual="3d-photo"`，否则契约检查会拦。
+- 每屏切点前 0.3–0.5 秒要有收束动作（离场或自带回位），**不强制用 X 卡**。
+
+**授权层**
+
+- **模型写数据不写实现**：只给编号 + 目标 `data-anim` 名 + 时序；坐标、目标框、路径一律由场景 HTML 给。
+- 卡不测量布局；唯一例外是指针类卡（先临时显示隐藏场景量一次再还原）。
+- 编号只增不改，删掉的永久留空。
+
+**交付前**：检查时长、音画同步、响度、字幕对齐和运动量；若提供 `npm run quality:video`，必须执行并通过。
 
 ### 修改后的最低验证
 

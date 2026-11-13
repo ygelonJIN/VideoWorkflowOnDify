@@ -192,8 +192,8 @@ function createWindow() {
         const artifacts = await run(`({ browser: !!document.querySelector(".browser"), canvas: !!document.querySelector(".canvas-wrap"), inspector: !!document.querySelector(".inspector"), rows: document.querySelectorAll(".file-row").length, titles: [...document.querySelectorAll(".col-title")].map((item) => item.textContent.trim()), firstRows: [...document.querySelectorAll(".file-row")].slice(0, 5).map((item) => item.textContent.trim()) })`);
 
         // 媒体协议自检：wfs-file:// 能否真的加载 PNG / MP4
-        const pngPath = path.join(desktopDir, "..", "HTML视频项目", "20261109-1355", "媒体", "图片", "jimeng-2026-11-09-3725-素面陶瓷盘放在同一蓝灰桌面的左下方，两根粗细相同的灰线从盘边松散分向不同方向，都....png");
-        const mp4Path = path.join(desktopDir, "..", "HTML视频项目", "20261109-1355", "成片", "最终视频.mp4");
+        const pngPath = path.join(desktopDir, "..", "成品", "20261109-1355", "媒体", "图片", "jimeng-2026-11-09-3725-素面陶瓷盘放在同一蓝灰桌面的左下方，两根粗细相同的灰线从盘边松散分向不同方向，都....png");
+        const mp4Path = path.join(desktopDir, "..", "成品", "20261109-1355", "成片", "最终视频.mp4");
         const mediaProbe = await run(`(async () => {
           const pngUrl = await window.wfs.fileUrl(${JSON.stringify(pngPath)});
           const mp4Url = await window.wfs.fileUrl(${JSON.stringify(mp4Path)});
@@ -344,7 +344,7 @@ function createWindow() {
         const tabsText = await run(`[...document.querySelectorAll(".tabs .tab")].map((item) => item.textContent.trim())`);
 
         // 图片页签：选中 20261111-1813，拖入一张 1x1 PNG → 落到 媒体/图片/
-        const mediaProject = path.join(desktopDir, "..", "HTML视频项目", "20261111-1813");
+        const mediaProject = path.join(desktopDir, "..", "成品", "20261111-1813");
         await run(clickText("图片"));
         await sleep(300);
         const pickProject = async (paneIndex) => {

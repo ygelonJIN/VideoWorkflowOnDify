@@ -11,7 +11,7 @@ export const desktopDir = path.resolve(here, "..");
 export const workspaceDir = path.resolve(desktopDir, "..");
 const engineDir = path.join(desktopDir, "dist", "src", "engine");
 const workflowDir = path.join(workspaceDir, "Dify工作流");
-const projectsDir = path.join(workspaceDir, "HTML视频项目");
+const projectsDir = path.join(workspaceDir, "成品");
 
 let engineCache = null;
 export async function engine() {
@@ -218,7 +218,7 @@ export async function runWorkflow({ path: workflowPath, inputs = {}, until, prec
   }
 }
 
-const BUILD_SCRIPT = path.join(workspaceDir, "HTML视频项目", "workflow_runtime", "tools", "build_black_frame_project.py");
+const BUILD_SCRIPT = path.join(workspaceDir, "成品", "workflow_runtime", "tools", "build_black_frame_project.py");
 let mimoKeyCache;
 
 /** TTS 的 MIMO_API_KEY：优先进程环境，其次从登录 zsh（~/.zshrc）里读，不落盘、不回传渲染层。 */
@@ -299,7 +299,7 @@ export async function startBuild({ kind, action, projectName, outputs, tts = {},
       },
     },
   };
-  const inputDir = path.join(workspaceDir, "HTML视频项目", "Dify输出");
+  const inputDir = path.join(workspaceDir, "成品", "Dify输出");
   await mkdir(inputDir, { recursive: true });
   const inputPath = path.join(inputDir, `${name}-blackframe-input.json`);
   await writeFile(inputPath, JSON.stringify(payload, null, 2), "utf8");
@@ -320,12 +320,12 @@ export async function startBuild({ kind, action, projectName, outputs, tts = {},
   const mimoKey = await resolveMimoKey();
   if (mimoKey) env.MIMO_API_KEY = mimoKey;
 
-  const projectDir = path.join(workspaceDir, "HTML视频项目", name);
+  const projectDir = path.join(workspaceDir, "成品", name);
   const expectedIds = imageIdsFromOutputs(outputs);
   const runId = `build-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
   const started = Date.now();
   const child = spawn("python3", args, {
-    cwd: path.join(workspaceDir, "HTML视频项目", "workflow_runtime"),
+    cwd: path.join(workspaceDir, "成品", "workflow_runtime"),
     env,
     stdio: ["ignore", "pipe", "pipe"],
   });
@@ -360,9 +360,9 @@ export async function inputDefaults() {
   return defaults;
 }
 
-const MIRROR_TOOL = path.join(workspaceDir, "HTML视频项目", "workflow_runtime", "tools", "sync_prompts_to_yaml.py");
+const MIRROR_TOOL = path.join(workspaceDir, "成品", "workflow_runtime", "tools", "sync_prompts_to_yaml.py");
 
-/** 改 YAML 里的提示词/代码/标题；04 的提示词和代码节点同步写回 保留资料/ 镜像。 */
+/** 改 YAML 里的提示词/代码/标题；04 的提示词和代码节点同步写回 能力库/ 镜像。 */
 export async function updateNode({ path: yamlPath, nodeId, field, value, messageIndex }) {
   const safe = safePath(yamlPath);
   const { yamlEdit, mirrors } = await engine();
@@ -378,14 +378,14 @@ export async function updateNode({ path: yamlPath, nodeId, field, value, message
     if (maps.warning) mirrorWarning = maps.warning;
     const name = field === "prompt" ? maps.prompts[nodeId] : maps.codes[nodeId];
     if (name) {
-      const dir = field === "prompt" ? "保留资料/工作流提示词" : "保留资料/工作流代码节点";
+      const dir = field === "prompt" ? "能力库/工作流提示词" : "能力库/工作流代码节点";
       const target = path.join(workspaceDir, dir, name);
       if (existsSync(target)) {
         const mirrorText = field === "prompt" ? yamlEdit.promptTextOf(next, nodeId) : String(value ?? "");
         await writeFile(target, mirrorText, "utf8");
         mirror = path.relative(workspaceDir, target);
       } else {
-        mirrorWarning = `映射表里有 ${nodeId} → ${name}，但镜像文件不存在，保留资料/ 未同步`;
+        mirrorWarning = `映射表里有 ${nodeId} → ${name}，但镜像文件不存在，能力库/ 未同步`;
       }
     }
   }

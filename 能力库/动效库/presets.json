@@ -1,0 +1,1090 @@
+{
+ "version": 2,
+ "updated": "2026-11-13",
+ "note": "每行 = 一个可复用动作预设。status: ready=可直接用 / needs-work=先改成确定性 / skip=不入管线。layer: camera|media|layer|element|overlay",
+ "presets": [
+  {
+   "id": "T01",
+   "name": "逐字上浮",
+   "family": "入场",
+   "status": "ready",
+   "cap": "split+stagger",
+   "src": "#6 SplitText",
+   "params": {
+    "unit": "char",
+    "y": "0.5em",
+    "stagger": 0.05,
+    "ease": "power3.out",
+    "dur": 0.55
+   },
+   "use": "标题、一句话强调；字数 ≤ 14",
+   "avoid": "长段落（超过 20 字会拖尾）",
+   "code": "var _c = kit.split('{{sel}}', 'chars');\ntimeline.fromTo(_c, {opacity:0, y:'0.5em'},\n  {opacity:1, y:0, duration:{{dur}}, ease:'power3.out', stagger:{{stagger}}}, {{at}});"
+  },
+  {
+   "id": "T02",
+   "name": "模糊聚焦",
+   "family": "入场",
+   "status": "ready",
+   "cap": "split+filter",
+   "src": "#7 BlurText",
+   "params": {
+    "unit": "word",
+    "blur": "10px",
+    "y": "50px",
+    "stagger": 0.05,
+    "dur": 0.35
+   },
+   "use": "副标题、解释性文字；有照片底时更明显",
+   "avoid": "全片连用；低端机渲染成本高",
+   "code": "var _w = kit.split('{{sel}}', 'words');\ntimeline.fromTo(_w, {opacity:0, filter:'blur(10px)', y:50},\n  {opacity:1, filter:'blur(0px)', y:0, duration:{{dur}}, ease:'power2.out', stagger:{{stagger}}}, {{at}});"
+  },
+  {
+   "id": "T03",
+   "name": "折页落字",
+   "family": "入场",
+   "status": "ready",
+   "cap": "split+3d",
+   "src": "#4 FoldText",
+   "params": {
+    "unit": "char",
+    "angle": 92,
+    "perspective": 700,
+    "stagger": 0.045,
+    "dur": 0.65
+   },
+   "use": "标题、引句；垂直节奏强的版面",
+   "avoid": "小字号（< 40px 看不出折叠）",
+   "code": "var _c = kit.split('{{sel}}', 'chars');\ntimeline.fromTo(_c, {opacity:0, rotationX:92, transformOrigin:'50% 0%', transformPerspective:700},\n  {opacity:1, rotationX:0, duration:{{dur}}, ease:'power3.out', stagger:{{stagger}}}, {{at}});"
+  },
+  {
+   "id": "T04",
+   "name": "描边写字",
+   "family": "绘制",
+   "status": "ready",
+   "cap": "stroke",
+   "src": "#3 StrokeText",
+   "params": {
+    "strokeWidth": 1.4,
+    "drawDuration": 1.6,
+    "fillDelay": 0.2,
+    "dur": 0.4,
+    "color": "#38d6ff"
+   },
+   "use": "关键词强调；一句里只做一个词",
+   "avoid": "整段描边；细字重描边会糊",
+   "code": "var _t = document.querySelector('{{sel}}');\n_t.style.webkitTextStroke = '1.4px currentColor';\n_t.style.color = 'transparent';\ntimeline.to(_t, {color:'{{color}}', duration:0.4, ease:'power1.out'}, {{at}}+{{dur}});"
+  },
+  {
+   "id": "T05",
+   "name": "打字机",
+   "family": "入场",
+   "status": "ready",
+   "cap": "sequence",
+   "src": "#8 TextType",
+   "params": {
+    "speed": 0.05,
+    "hold": 0.8,
+    "cursor": true
+   },
+   "use": "代码、命令行、对话式文案",
+   "avoid": "超过 30 字；同屏再叠加入场",
+   "code": "var _t = document.querySelector('{{sel}}');\nvar _txt = _t.textContent; _t.textContent = '';\nfor (var i = 1; i <= _txt.length; i++) {\n  timeline.set(_t, {textContent: _txt.slice(0, i)}, {{at}} + i*0.05);\n}"
+  },
+  {
+   "id": "T06",
+   "name": "数字递增",
+   "family": "状态",
+   "status": "ready",
+   "cap": "counter",
+   "src": "#10 CountUp",
+   "params": {
+    "from": 0,
+    "to": 100,
+    "dur": 1.2
+   },
+   "use": "数据、金额、百分比；必须有语义",
+   "avoid": "无意义装饰数字；同一屏两个以上",
+   "code": "var _n = document.querySelector('{{sel}}');\nvar _o = {'v':{{from}}};\ntimeline.to(_o, {'v':{{to}}, 'duration':{{dur}}, 'ease':'power2.out',\n  'onUpdate':function(){ _n.textContent = Math.round(_o.v); }}, {{at}});"
+  },
+  {
+   "id": "T09",
+   "name": "翻牌落字",
+   "family": "入场",
+   "status": "ready",
+   "cap": "split+3d-tiles",
+   "src": "#2 SplitFlapText",
+   "params": {
+    "flipDuration": 0.12,
+    "stagger": 0.06,
+    "cycles": 3,
+    "dur": 0.5
+   },
+   "use": "短词、价格、倒计时类信息",
+   "avoid": "长句；每字 8 次翻转很吃帧",
+   "code": "/* 每字上下两片，rotationX 由 -90 收敛到 0，翻 3 次落定 */\nvar _c = kit.split('{{sel}}', 'chars');\n_c.forEach(function (el, i) {\n  el.style.transformStyle = 'preserve-3d';\n  timeline.fromTo(el, {rotationX: -90, opacity: 0},\n    {rotationX: 0, opacity: 1, duration: {{dur}}, ease: 'back.out(1.4)'}, {{at}} + i * 0.06);\n});"
+  },
+  {
+   "id": "W01",
+   "name": "照片包裹",
+   "family": "结构",
+   "status": "ready",
+   "cap": "frame",
+   "src": "自建（样张二）",
+   "params": {
+    "r": 26,
+    "dur": 0.6
+   },
+   "use": "给照片块加圆角 + 轻微落定；不新增图形",
+   "avoid": "每屏都包；照片本身已满幅时",
+   "code": "timeline.fromTo('{{sel}}', {'borderRadius':'0px', 'scale':1.03, 'overflow':'hidden'},\n  {'borderRadius':'{{r}}px', 'scale':1, 'duration':{{dur}}, 'ease':'power2.out'}, {{at}});"
+  },
+  {
+   "id": "X01",
+   "name": "擦除切换",
+   "family": "结构",
+   "status": "ready",
+   "cap": "clip",
+   "src": "#11 AnimatedContent",
+   "params": {
+    "direction": "up",
+    "dur": 0.8
+   },
+   "use": "同屏内容替换：一版换成另一版",
+   "avoid": "跨场景（那是转场节点的事）",
+   "code": "timeline.fromTo('{{sel}}', {clipPath:'inset(100% 0% 0% 0%)'},\n  {clipPath:'inset(0% 0% 0% 0%)', duration:{{dur}}, ease:'power3.inOut'}, {{at}});"
+  },
+  {
+   "id": "B23",
+   "name": "半调网点",
+   "family": "背景",
+   "status": "ready",
+   "cap": "canvas-t",
+   "src": "remotion:b23",
+   "params": {},
+   "use": "网点密度随位置变化；canvas 背景，由 bgkit 按 t 重绘",
+   "avoid": "和照片满屏同时用（会互相抢）",
+   "code": "/* canvas 背景：由 H02SX 调 bgkit.bind/ draw，不展开 GSAP */",
+   "layer": "overlay"
+  },
+  {
+   "id": "B24",
+   "name": "扫描线",
+   "family": "背景",
+   "status": "ready",
+   "cap": "canvas-t",
+   "src": "remotion:b24",
+   "params": {},
+   "use": "细线 + 扫描带；canvas 背景，由 bgkit 按 t 重绘",
+   "avoid": "和照片满屏同时用（会互相抢）",
+   "code": "/* canvas 背景：由 H02SX 调 bgkit.bind/ draw，不展开 GSAP */",
+   "layer": "overlay"
+  },
+  {
+   "id": "B25",
+   "name": "点阵辉光",
+   "family": "背景",
+   "status": "ready",
+   "cap": "canvas-t",
+   "src": "remotion:b25",
+   "params": {},
+   "use": "密集点阵，中心亮；canvas 背景，由 bgkit 按 t 重绘",
+   "avoid": "和照片满屏同时用（会互相抢）",
+   "code": "/* canvas 背景：由 H02SX 调 bgkit.bind/ draw，不展开 GSAP */",
+   "layer": "overlay"
+  },
+  {
+   "id": "B26",
+   "name": "同心环",
+   "family": "背景",
+   "status": "ready",
+   "cap": "canvas-t",
+   "src": "remotion:b26",
+   "params": {},
+   "use": "单次扩散的圆环；canvas 背景，由 bgkit 按 t 重绘",
+   "avoid": "和照片满屏同时用（会互相抢）",
+   "code": "/* canvas 背景：由 H02SX 调 bgkit.bind/ draw，不展开 GSAP */",
+   "layer": "overlay"
+  },
+  {
+   "id": "B27",
+   "name": "等高线",
+   "family": "背景",
+   "status": "ready",
+   "cap": "canvas-t",
+   "src": "remotion:b27",
+   "params": {},
+   "use": "波纹线场；canvas 背景，由 bgkit 按 t 重绘",
+   "avoid": "和照片满屏同时用（会互相抢）",
+   "code": "/* canvas 背景：由 H02SX 调 bgkit.bind/ draw，不展开 GSAP */",
+   "layer": "overlay"
+  },
+  {
+   "id": "B28",
+   "name": "横向拉丝",
+   "family": "背景",
+   "status": "ready",
+   "cap": "canvas-t",
+   "src": "remotion:b28",
+   "params": {},
+   "use": "细横线掠过；canvas 背景，由 bgkit 按 t 重绘",
+   "avoid": "和照片满屏同时用（会互相抢）",
+   "code": "/* canvas 背景：由 H02SX 调 bgkit.bind/ draw，不展开 GSAP */",
+   "layer": "overlay"
+  },
+  {
+   "id": "B29",
+   "name": "雪点",
+   "family": "背景",
+   "status": "ready",
+   "cap": "canvas-t",
+   "src": "remotion:b29",
+   "params": {},
+   "use": "漂浮小点；canvas 背景，由 bgkit 按 t 重绘",
+   "avoid": "和照片满屏同时用（会互相抢）",
+   "code": "/* canvas 背景：由 H02SX 调 bgkit.bind/ draw，不展开 GSAP */",
+   "layer": "overlay"
+  },
+  {
+   "id": "B30",
+   "name": "雨丝",
+   "family": "背景",
+   "status": "ready",
+   "cap": "canvas-t",
+   "src": "remotion:b30",
+   "params": {},
+   "use": "斜向雨丝；canvas 背景，由 bgkit 按 t 重绘",
+   "avoid": "和照片满屏同时用（会互相抢）",
+   "code": "/* canvas 背景：由 H02SX 调 bgkit.bind/ draw，不展开 GSAP */",
+   "layer": "overlay"
+  },
+  {
+   "id": "B31",
+   "name": "像素溶解",
+   "family": "背景",
+   "status": "ready",
+   "cap": "canvas-t",
+   "src": "remotion:b31",
+   "params": {},
+   "use": "像素块聚散；canvas 背景，由 bgkit 按 t 重绘",
+   "avoid": "和照片满屏同时用（会互相抢）",
+   "code": "/* canvas 背景：由 H02SX 调 bgkit.bind/ draw，不展开 GSAP */",
+   "layer": "overlay"
+  },
+  {
+   "id": "B32",
+   "name": "棋盘",
+   "family": "背景",
+   "status": "ready",
+   "cap": "canvas-t",
+   "src": "remotion:b32",
+   "params": {},
+   "use": "明暗方格；canvas 背景，由 bgkit 按 t 重绘",
+   "avoid": "和照片满屏同时用（会互相抢）",
+   "code": "/* canvas 背景：由 H02SX 调 bgkit.bind/ draw，不展开 GSAP */",
+   "layer": "overlay"
+  },
+  {
+   "id": "B34",
+   "name": "光束",
+   "family": "背景",
+   "status": "ready",
+   "cap": "canvas-t",
+   "src": "remotion:b34",
+   "params": {},
+   "use": "锥形光；canvas 背景，由 bgkit 按 t 重绘",
+   "avoid": "和照片满屏同时用（会互相抢）",
+   "code": "/* canvas 背景：由 H02SX 调 bgkit.bind/ draw，不展开 GSAP */",
+   "layer": "overlay"
+  },
+  {
+   "id": "B35",
+   "name": "浮尘",
+   "family": "背景",
+   "status": "ready",
+   "cap": "canvas-t",
+   "src": "remotion:b35",
+   "params": {},
+   "use": "漂浮颗粒；canvas 背景，由 bgkit 按 t 重绘",
+   "avoid": "和照片满屏同时用（会互相抢）",
+   "code": "/* canvas 背景：由 H02SX 调 bgkit.bind/ draw，不展开 GSAP */",
+   "layer": "overlay"
+  },
+  {
+   "id": "B36",
+   "name": "渐变网格",
+   "family": "背景",
+   "status": "ready",
+   "cap": "canvas-t",
+   "src": "remotion:b36",
+   "params": {},
+   "use": "四色光斑游走；canvas 背景，由 bgkit 按 t 重绘",
+   "avoid": "和照片满屏同时用（会互相抢）",
+   "code": "/* canvas 背景：由 H02SX 调 bgkit.bind/ draw，不展开 GSAP */",
+   "layer": "overlay"
+  },
+  {
+   "id": "C01",
+   "name": "缓推",
+   "family": "镜头",
+   "layer": "media",
+   "status": "ready",
+   "cap": "camera",
+   "src": "camera-push",
+   "params": {
+    "to": 1.06,
+    "dur": 4.0
+   },
+   "use": "整屏缓推；照片、满屏图层、图块都行",
+   "avoid": "纯色屏；单次推近超过 20% 会露边",
+   "code": "timeline.fromTo('{{sel}}', {'scale':1}, {'scale':{{to}}, 'duration':{{dur}}, 'ease':'none'}, {{at}});"
+  },
+  {
+   "id": "C02",
+   "name": "缓拉",
+   "family": "镜头",
+   "layer": "media",
+   "status": "ready",
+   "cap": "camera",
+   "src": "camera-pull",
+   "params": {
+    "from": 1.08,
+    "dur": 4.0
+   },
+   "use": "开场收束、结尾释放",
+   "avoid": "满屏照片拉太小会露出底色",
+   "code": "timeline.fromTo('{{sel}}', {'scale':{{from}}}, {'scale':1, 'duration':{{dur}}, 'ease':'none'}, {{at}});"
+  },
+  {
+   "id": "C03",
+   "name": "横移",
+   "family": "镜头",
+   "layer": "media",
+   "status": "ready",
+   "cap": "camera",
+   "src": "camera-pan",
+   "params": {
+    "from": -3,
+    "to": 3,
+    "dur": 4.0
+   },
+   "use": "左右取景，配合文字固定",
+   "avoid": "移动幅度超过 6% 会露边",
+   "code": "timeline.fromTo('{{sel}}', {'xPercent':{{from}}}, {'xPercent':{{to}}, 'duration':{{dur}}, 'ease':'sine.inOut'}, {{at}});"
+  },
+  {
+   "id": "K03",
+   "name": "逐字错位",
+   "family": "字形",
+   "layer": "element",
+   "status": "ready",
+   "cap": "split+seeded",
+   "src": "type-offset",
+   "params": {
+    "rot": 4,
+    "dur": 0.62,
+    "stagger": 0.035,
+    "seed": 13
+   },
+   "use": "大标题、短句；一眼看出是排出来的",
+   "avoid": "小字号（<40px）看不出错位",
+   "code": "var _c = kit.split('{{sel}}', 'chars'), _r = kit.seeded({{seed}});\n_c.forEach(function (el, i) {\n  var _dy = 12 + _r() * 26, _rt = (_r() * 2 - 1) * {{rot}};\n  timeline.fromTo(el, {'yPercent':_dy, 'rotation':_rt, 'opacity':0},\n    {'yPercent':0, 'rotation':0, 'opacity':1, 'duration':{{dur}}, 'ease':'power3.out'}, {{at}} + i * {{stagger}});\n});"
+  },
+  {
+   "id": "G02",
+   "name": "网格重排",
+   "family": "版面",
+   "layer": "element",
+   "status": "ready",
+   "cap": "flip",
+   "src": "ported:filter-gallery",
+   "params": {
+    "dur": 0.85,
+    "ease": "power3.inOut",
+    "stagger": 0.03,
+    "outOp": 0.12
+   },
+   "use": "同一屏里换格：每张卡按 data-flip-from / data-flip-to 的两个坐标平移；同容器里标 data-flip-out 的元素同时淡到 outOp。起点由 HTML 摆好，卡不测量",
+   "avoid": "元素尺寸不一致（只会平移，不会变形）；超过 8 个元素；和 C01 镜头推拉同屏抢焦点",
+   "code": "(function () {\n  var _els = [].slice.call(document.querySelectorAll('{{sel}}'));\n  var _boxes = [];\n  _els.forEach(function (n, i) {\n    var _f = (n.getAttribute('data-flip-from') || '').split(',');\n    var _t = (n.getAttribute('data-flip-to') || '').split(',');\n    if (_f.length < 2 || _t.length < 2) return;\n    var _dx = parseFloat(_t[0]) - parseFloat(_f[0]);\n    var _dy = parseFloat(_t[1]) - parseFloat(_f[1]);\n    timeline.fromTo(n, {'x':0, 'y':0},\n      {'x':_dx, 'y':_dy, 'duration':{{dur}}, 'ease':'{{ease}}'}, {{at}} + i * {{stagger}});\n    var _b = n.parentElement;\n    while (_b && !_b.hasAttribute('data-flip-container')) _b = _b.parentElement;\n    if (_b && _boxes.indexOf(_b) < 0) _boxes.push(_b);\n  });\n  _boxes.forEach(function (_b) {\n    var _o = _b.querySelectorAll('[data-flip-out]');\n    if (!_o.length) return;\n    timeline.to(_o, {'opacity':{{outOp}}, 'duration':{{dur}} * 0.7, 'ease':'power2.out'}, {{at}});\n  });\n})();"
+  },
+  {
+   "id": "X03",
+   "name": "逐项离场",
+   "family": "离场",
+   "layer": "element",
+   "status": "ready",
+   "cap": "stagger-out",
+   "src": "out-up",
+   "params": {
+    "dist": 40,
+    "dur": 0.42,
+    "stagger": 0.05
+   },
+   "use": "一切屏的收尾；切点前 0.35–0.5s 走完",
+   "avoid": "和进入同一时刻（会互相打断）",
+   "code": "timeline.to('{{sel}}', {'opacity':0, 'y':-{{dist}}, 'duration':{{dur}}, 'ease':'power2.in', 'stagger':{{stagger}}}, {{at}});"
+  },
+  {
+   "id": "X05",
+   "name": "反向飞出",
+   "family": "离场",
+   "layer": "element",
+   "status": "ready",
+   "cap": "stagger-out",
+   "src": "out-side",
+   "params": {
+    "dist": 90,
+    "dur": 0.4,
+    "stagger": 0.04
+   },
+   "use": "横向切镜前的收尾",
+   "avoid": "竖向版面里横向飞出会撞边",
+   "code": "timeline.to('{{sel}}', {'opacity':0, 'x':{{dist}}, 'duration':{{dur}}, 'ease':'power2.in', 'stagger':{{stagger}}}, {{at}});"
+  },
+  {
+   "id": "K01",
+   "name": "超大字落版",
+   "family": "字形",
+   "layer": "element",
+   "status": "ready",
+   "cap": "scale-settle",
+   "src": "type-settle",
+   "params": {
+    "from": 1.22,
+    "y": 12,
+    "dur": 0.8
+   },
+   "use": "标题字号 ≥ 140px 时用；落定的那一下就是重量",
+   "avoid": "小字号、多行正文",
+   "code": "timeline.fromTo('{{sel}}', {'scale':{{from}}, 'yPercent':{{y}}, 'opacity':0, 'transformOrigin':'0% 100%'},\n  {'scale':1, 'yPercent':0, 'opacity':1, 'duration':{{dur}}, 'ease':'power3.out'}, {{at}});"
+  },
+  {
+   "id": "K04",
+   "name": "字距收紧",
+   "family": "字形",
+   "layer": "element",
+   "status": "ready",
+   "cap": "tracking",
+   "src": "type-tracking",
+   "params": {
+    "from": "0.14em",
+    "to": "-0.02em",
+    "dur": 0.75
+   },
+   "use": "一行字的收束；配合超大字最明显",
+   "avoid": "正文；em 单位不要换成 px",
+   "code": "timeline.fromTo('{{sel}}', {'letterSpacing':'{{from}}', 'opacity':0},\n  {'letterSpacing':'{{to}}', 'opacity':1, 'duration':{{dur}}, 'ease':'power3.out'}, {{at}});"
+  },
+  {
+   "id": "K07",
+   "name": "手绘下划线",
+   "family": "字形",
+   "layer": "element",
+   "status": "ready",
+   "cap": "inject+draw",
+   "src": "type-underline",
+   "params": {
+    "h": 6,
+    "color": "#D8452C",
+    "dur": 0.6
+   },
+   "use": "一个词被划上重点；比加粗自然",
+   "avoid": "已经用了荧光笔的词；深底不换色会脏",
+   "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t) return;\n  _t.style.position = _t.style.position || 'relative';\n  var _l = document.createElement('i');\n  _l.style.cssText = 'position:absolute;left:0;right:0;bottom:-.08em;height:{{h}}px;background:{{color}};transform:scaleX(0);transform-origin:0 50%;border-radius:2px;z-index:0;';\n  _t.appendChild(_l);\n  timeline.to(_l, {'scaleX':1, 'duration':{{dur}}, 'ease':'power2.inOut'}, {{at}});\n})();"
+  },
+  {
+   "id": "K08",
+   "name": "手绘圈",
+   "family": "字形",
+   "layer": "element",
+   "status": "ready",
+   "cap": "inject+draw",
+   "src": "type-circle",
+   "params": {
+    "w": 3,
+    "color": "#D8452C",
+    "dur": 0.55
+   },
+   "use": "圈住一个数字或短词",
+   "avoid": "整句；圆比字大太多",
+   "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t) return;\n  _t.style.position = _t.style.position || 'relative';\n  var _c = document.createElement('i');\n  _c.style.cssText = 'position:absolute;left:-.16em;right:-.16em;top:-.12em;bottom:-.16em;border:{{w}}px solid {{color}};border-radius:50%;transform:scale(.6);opacity:0;z-index:0;';\n  _t.appendChild(_c);\n  timeline.to(_c, {'scale':1, 'opacity':1, 'duration':{{dur}}, 'ease':'back.out(1.6)'}, {{at}});\n})();"
+  },
+  {
+   "id": "K10",
+   "name": "竖排",
+   "family": "字形",
+   "layer": "element",
+   "status": "ready",
+   "cap": "vertical+mask",
+   "src": "type-vertical",
+   "params": {
+    "dur": 0.8
+   },
+   "use": "四到八个字的标题；竖屏天生适合",
+   "avoid": "长句；标点会和字挤在一起",
+   "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t) return;\n  _t.style.writingMode = 'vertical-rl';\n  _t.style.display = 'inline-block';\n  _t.style.letterSpacing = '.1em';\n  timeline.fromTo(_t, {'clipPath':'inset(0% 0% 100% 0%)'},\n    {'clipPath':'inset(0% 0% 0% 0%)', 'duration':{{dur}}, 'ease':'power3.inOut'}, {{at}});\n})();"
+  },
+  {
+   "id": "K12",
+   "name": "删除线",
+   "family": "字形",
+   "layer": "element",
+   "status": "ready",
+   "cap": "inject+draw",
+   "src": "type-strike",
+   "params": {
+    "h": 5,
+    "color": "#D8452C",
+    "dur": 0.45
+   },
+   "use": "否定一个旧说法，再给新的",
+   "avoid": "和 K07 同时用在同一行",
+   "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t) return;\n  _t.style.position = _t.style.position || 'relative';\n  var _l = document.createElement('i');\n  _l.style.cssText = 'position:absolute;left:-.02em;right:-.02em;top:.54em;height:{{h}}px;background:{{color}};transform:scaleX(0);transform-origin:0 50%;z-index:0;';\n  _t.appendChild(_l);\n  timeline.to(_l, {'scaleX':1, 'duration':{{dur}}, 'ease':'power2.inOut'}, {{at}});\n})();"
+  },
+  {
+   "id": "S02",
+   "name": "进度填充",
+   "family": "状态",
+   "layer": "element",
+   "status": "ready",
+   "cap": "inject+width",
+   "src": "state-progress",
+   "params": {
+    "to": 72,
+    "h": 6,
+    "color": "#7BE8BE",
+    "dur": 1.0
+   },
+   "use": "比例、完成度、加载",
+   "avoid": "没有真实数值时（会变装饰）",
+   "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t) return;\n  _t.style.position = _t.style.position || 'relative';\n  var _b = document.createElement('i');\n  _b.style.cssText = 'position:absolute;left:0;bottom:0;height:{{h}}px;width:0%;background:{{color}};border-radius:2px;';\n  _t.appendChild(_b);\n  timeline.to(_b, {'width':'{{to}}%', 'duration':{{dur}}, 'ease':'power2.inOut'}, {{at}});\n})();"
+  },
+  {
+   "id": "S04",
+   "name": "勾选",
+   "family": "状态",
+   "layer": "element",
+   "status": "ready",
+   "cap": "inject+spring",
+   "src": "state-check",
+   "params": {
+    "size": 22,
+    "color": "#7BE8BE"
+   },
+   "use": "清单项被确认",
+   "avoid": "同一屏勾五个以上（会变成装饰）",
+   "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t) return;\n  _t.style.position = _t.style.position || 'relative';\n  var _c = document.createElement('i');\n  _c.style.cssText = 'position:absolute;left:0;top:50%;width:{{size}}px;height:{{size}}px;margin-top:-11px;border:2px solid {{color}};border-radius:50%;transform:scale(0);';\n  var _k = document.createElement('i');\n  _k.style.cssText = 'position:absolute;left:0;top:50%;width:{{size}}px;height:{{size}}px;margin-top:-11px;border-radius:50%;background:{{color}};transform:scale(0);';\n  _t.appendChild(_c); _t.appendChild(_k);\n  timeline.to(_c, {'scale':1, 'duration':.3, 'ease':'back.out(2)'}, {{at}});\n  timeline.to(_k, {'scale':.55, 'duration':.3, 'ease':'power2.out'}, {{at}} + .12);\n})();"
+  },
+  {
+   "id": "S05",
+   "name": "输入",
+   "family": "状态",
+   "layer": "element",
+   "status": "ready",
+   "cap": "sequence",
+   "src": "state-type",
+   "params": {
+    "speed": 0.045,
+    "cursor": "#7BE8BE"
+   },
+   "use": "搜索框、表单、命令",
+   "avoid": "长文本；和 K09 同屏",
+   "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t) return;\n  var _txt = _t.textContent; _t.textContent = '';\n  var _cur = document.createElement('i');\n  _cur.style.cssText = 'display:inline-block;width:.06em;height:1.1em;background:{{cursor}};vertical-align:-.18em;margin-left:.04em;';\n  _t.appendChild(_cur);\n  for (var i = 1; i <= _txt.length; i++) {\n    timeline.set(_t, {'textContent': _txt.slice(0, i)}, {{at}} + i * {{speed}});\n    _t.appendChild(_cur);\n  }\n})();"
+  },
+  {
+   "id": "S06",
+   "name": "点击",
+   "family": "状态",
+   "layer": "element",
+   "status": "ready",
+   "cap": "inject+ripple",
+   "src": "state-click",
+   "params": {
+    "size": 18,
+    "color": "#7BE8BE",
+    "dur": 0.7
+   },
+   "use": "按钮、卡片被按下；证明界面在运行",
+   "avoid": "一屏点三次以上",
+   "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t) return;\n  _t.style.position = _t.style.position || 'relative';\n  var _p = document.createElement('i');\n  _p.style.cssText = 'position:absolute;left:50%;top:50%;width:{{size}}px;height:{{size}}px;border-radius:50%;border:2px solid {{color}};transform:translate(-50%,-50%) scale(.2);opacity:0;';\n  _t.appendChild(_p);\n  timeline.fromTo(_p, {'opacity':.9, 'scale':.2},\n    {'opacity':0, 'scale':2.6, 'duration':{{dur}}, 'ease':'power2.out'}, {{at}});\n})();"
+  },
+  {
+   "id": "S07",
+   "name": "悬停高亮",
+   "family": "状态",
+   "layer": "element",
+   "status": "ready",
+   "cap": "hover",
+   "src": "state-hover",
+   "params": {
+    "to": 1.03,
+    "dur": 0.5
+   },
+   "use": "指针停在某个选项上",
+   "avoid": "整屏图（滤镜会拍黑）",
+   "code": "timeline.fromTo('{{sel}}', {'scale':1, 'opacity':.72},\n  {'scale':{{to}}, 'opacity':1, 'duration':{{dur}}, 'ease':'power2.out'}, {{at}});"
+  },
+  {
+   "id": "UA01",
+   "name": "卡片入场",
+   "family": "UI",
+   "layer": "element",
+   "status": "ready",
+   "cap": "card+stagger",
+   "src": "ui-card-enter",
+   "params": {
+    "y": 26,
+    "dur": 0.55,
+    "stagger": 0.07
+   },
+   "use": "ui-card / ui-bento 这类块",
+   "avoid": "纯文字屏",
+   "code": "timeline.fromTo('{{sel}}', {'y':{{y}}, 'opacity':0},\n  {'y':0, 'opacity':1, 'duration':{{dur}}, 'ease':'power3.out'}, {{at}});\ntimeline.fromTo('{{sel}} > *', {'y':14, 'opacity':0},\n  {'y':0, 'opacity':1, 'duration':{{dur}}, 'ease':'power2.out', 'stagger':{{stagger}}}, {{at}} + .16);"
+  },
+  {
+   "id": "UA02",
+   "name": "数据行逐条",
+   "family": "UI",
+   "layer": "element",
+   "status": "ready",
+   "cap": "row-stagger",
+   "src": "ui-rows",
+   "params": {
+    "x": -18,
+    "dur": 0.5,
+    "stagger": 0.08
+   },
+   "use": "ui-row / ui-masonry-item 这类列表",
+   "avoid": "超过 8 行（会拖）",
+   "code": "timeline.fromTo('{{sel}}', {'x':{{x}}, 'opacity':0},\n  {'x':0, 'opacity':1, 'duration':{{dur}}, 'ease':'power2.out', 'stagger':{{stagger}}}, {{at}});"
+  },
+  {
+   "id": "UA03",
+   "name": "标签点亮",
+   "family": "UI",
+   "layer": "element",
+   "status": "ready",
+   "cap": "chip-stagger",
+   "src": "ui-chips",
+   "params": {
+    "dur": 0.45,
+    "stagger": 0.1,
+    "to": 1
+   },
+   "use": "ui-chip / ui-step 这类状态标签",
+   "avoid": "和 S02 同时抢焦点",
+   "code": "timeline.fromTo('{{sel}}', {'opacity':.28, 'scale':.94},\n  {'opacity':{{to}}, 'scale':1, 'duration':{{dur}}, 'ease':'power2.out', 'stagger':{{stagger}}}, {{at}});"
+  },
+  {
+   "id": "M04",
+   "name": "暗角",
+   "family": "材质",
+   "layer": "overlay",
+   "status": "ready",
+   "cap": "gradient-overlay",
+   "src": "remotion:vignette",
+   "params": {
+    "op": 1,
+    "dur": 1.2,
+    "z": 25
+   },
+   "use": "每一屏都能加；把注意力压回中心",
+   "avoid": "和 M05 同时全开会闷",
+   "code": "(function () {\n  var _b = document.querySelector('{{sel}}');\n  if (!_b) return;\n  var _d = document.createElement('i');\n  _d.style.cssText = 'position:absolute;inset:0;pointer-events:none;z-index:{{z}};opacity:0;background:radial-gradient(120% 92% at 50% 45%,transparent 38%,rgba(0,0,0,.62) 100%);';\n  _b.appendChild(_d);\n  timeline.to(_d, {'opacity':{{op}}, 'duration':{{dur}}, 'ease':'none'}, {{at}});\n})();"
+  },
+  {
+   "id": "M05",
+   "name": "辉光",
+   "family": "材质",
+   "layer": "overlay",
+   "status": "ready",
+   "cap": "gradient-overlay",
+   "src": "remotion:glow",
+   "params": {
+    "op": 1,
+    "dur": 1.2,
+    "z": 25
+   },
+   "use": "片头、片尾、关键结论",
+   "avoid": "和暗角叠满",
+   "code": "(function () {\n  var _b = document.querySelector('{{sel}}');\n  if (!_b) return;\n  var _d = document.createElement('i');\n  _d.style.cssText = 'position:absolute;inset:0;pointer-events:none;z-index:{{z}};opacity:0;background:radial-gradient(680px 680px at 50% 30%,rgba(255,240,210,.20),transparent 68%);';\n  _b.appendChild(_d);\n  timeline.to(_d, {'opacity':{{op}}, 'duration':{{dur}}, 'ease':'none'}, {{at}});\n})();"
+  },
+  {
+   "id": "X11",
+   "name": "左擦除",
+   "family": "离场",
+   "layer": "element",
+   "status": "ready",
+   "cap": "clip",
+   "src": "remotion:wipe",
+   "params": {
+    "dur": 0.55,
+    "ease": "power3.inOut"
+   },
+   "use": "从左边揭开这一屏",
+   "avoid": "同屏再叠一个方向擦",
+   "code": "timeline.fromTo('{{sel}}', {'clipPath':'inset(0% 100% 0% 0%)'},\n  {'clipPath':'inset(0% 0% 0% 0%)', 'duration':{{dur}}, 'ease':'{{ease}}'}, {{at}});"
+  },
+  {
+   "id": "X14",
+   "name": "下擦除",
+   "family": "离场",
+   "layer": "element",
+   "status": "ready",
+   "cap": "clip",
+   "src": "remotion:wipe",
+   "params": {
+    "dur": 0.55,
+    "ease": "power3.inOut"
+   },
+   "use": "从下往上揭开",
+   "avoid": "字幕区会被切",
+   "code": "timeline.fromTo('{{sel}}', {'clipPath':'inset(100% 0% 0% 0%)'},\n  {'clipPath':'inset(0% 0% 0% 0%)', 'duration':{{dur}}, 'ease':'{{ease}}'}, {{at}});"
+  },
+  {
+   "id": "X21",
+   "name": "甩镜",
+   "family": "离场",
+   "layer": "element",
+   "status": "ready",
+   "cap": "skew+move",
+   "src": "remotion:whip-pan",
+   "params": {
+    "dur": 0.5,
+    "ease": "power3.out",
+    "dist": 14
+   },
+   "use": "加速切镜；配合运动模糊最像",
+   "avoid": "一屏甩两次",
+   "code": "timeline.fromTo('{{sel}}', {'xPercent':{{dist}}, 'skewX':6, 'opacity':0},\n  {'xPercent':0, 'skewX':0, 'opacity':1, 'duration':{{dur}}, 'ease':'{{ease}}'}, {{at}});"
+  },
+  {
+   "id": "UA04",
+   "name": "柱状增长",
+   "family": "UI",
+   "layer": "element",
+   "status": "ready",
+   "cap": "bars",
+   "src": "ui-bars",
+   "params": {
+    "dur": 0.7,
+    "stagger": 0.06
+   },
+   "use": "U13 柱状图：柱子从基线长上来",
+   "avoid": "柱子超过 10 根",
+   "code": "timeline.fromTo('{{sel}}', {'scaleY':0, 'opacity':.4},\n  {'scaleY':1, 'opacity':1, 'duration':{{dur}}, 'ease':'power3.out', 'stagger':{{stagger}}}, {{at}});"
+  },
+  {
+   "id": "UA06",
+   "name": "时间轴点亮",
+   "family": "UI",
+   "layer": "element",
+   "status": "ready",
+   "cap": "sequence",
+   "src": "ui-timeline",
+   "params": {
+    "dur": 0.45,
+    "stagger": 0.16
+   },
+   "use": "U20 时间轴、步骤条：节点依次亮",
+   "avoid": "超过 6 个节点",
+   "code": "timeline.fromTo('{{sel}}', {'opacity':.35, 'x':-10},\n  {'opacity':1, 'x':0, 'duration':{{dur}}, 'ease':'power2.out', 'stagger':{{stagger}}}, {{at}});"
+  },
+  {
+   "id": "S08",
+   "name": "展开",
+   "family": "状态",
+   "layer": "element",
+   "status": "ready",
+   "cap": "scale-y",
+   "src": "state-expand",
+   "params": {
+    "dur": 0.5,
+    "ease": "power3.out"
+   },
+   "use": "面板、列表、卡片展开；transform-origin 在顶边",
+   "avoid": "高度依赖内容的块（会压扁字）",
+   "code": "timeline.fromTo('{{sel}}', {'scaleY':0, 'transformOrigin':'50% 0%', 'opacity':.55},\n  {'scaleY':1, 'opacity':1, 'duration':{{dur}}, 'ease':'{{ease}}'}, {{at}});"
+  },
+  {
+   "id": "S10",
+   "name": "切换",
+   "family": "状态",
+   "layer": "element",
+   "status": "ready",
+   "cap": "indicator",
+   "src": "state-tab",
+   "params": {
+    "dur": 0.45,
+    "ease": "power2.inOut"
+   },
+   "use": "标签页下的指示条滑到新位置",
+   "avoid": "没有同级标签时",
+   "code": "timeline.fromTo('{{sel}}', {'scaleX':0, 'transformOrigin':'0% 50%'},\n  {'scaleX':1, 'duration':{{dur}}, 'ease':'{{ease}}'}, {{at}});"
+  },
+  {
+   "id": "S11",
+   "name": "拖拽",
+   "family": "状态",
+   "layer": "element",
+   "status": "ready",
+   "cap": "drag",
+   "src": "state-drag",
+   "params": {
+    "from": -46,
+    "rot": -3,
+    "dur": 0.6
+   },
+   "use": "卡片被拖动后归位；表现“可操作”",
+   "avoid": "一屏拖两次",
+   "code": "timeline.fromTo('{{sel}}', {'x':{{from}}, 'rotation':{{rot}}},\n  {'x':0, 'rotation':0, 'duration':{{dur}}, 'ease':'power2.out'}, {{at}});"
+  },
+  {
+   "id": "M12",
+   "name": "光扫",
+   "family": "材质",
+   "layer": "overlay",
+   "status": "ready",
+   "cap": "sweep",
+   "src": "remotion:shine",
+   "params": {
+    "op": 1,
+    "dur": 1.4,
+    "z": 26
+   },
+   "use": "一道高光横着扫过画面；片头片尾",
+   "avoid": "一屏两次",
+   "code": "(function () {\n  var _b = document.querySelector('{{sel}}');\n  if (!_b) return;\n  var _d = document.createElement('i');\n  _d.style.cssText = 'position:absolute;inset:0;pointer-events:none;z-index:{{z}};opacity:0;background:linear-gradient(100deg,transparent 42%,rgba(255,255,255,.16) 50%,transparent 58%);background-size:220% 220%;background-position:0% 50%;';\n  _b.appendChild(_d);\n  timeline.to(_d, {'opacity':{{op}}, 'duration':.3, 'ease':'none'}, {{at}});\n  timeline.to(_d, {'backgroundPosition':'100% 50%', 'duration':{{dur}}, 'ease':'none'}, {{at}});\n})();"
+  },
+  {
+   "id": "M16",
+   "name": "网点重",
+   "family": "材质",
+   "layer": "overlay",
+   "status": "ready",
+   "cap": "pattern-overlay",
+   "src": "remotion:halftone",
+   "params": {
+    "op": 0.55,
+    "dur": 1.0,
+    "z": 25
+   },
+   "use": "粗网点，报章印刷感",
+   "avoid": "小字区域",
+   "code": "(function () {\n  var _b = document.querySelector('{{sel}}');\n  if (!_b) return;\n  var _d = document.createElement('i');\n  _d.style.cssText = 'position:absolute;inset:0;pointer-events:none;z-index:{{z}};opacity:0;background-image:radial-gradient(circle at 50% 50%,rgba(10,12,12,.68) 1.6px,transparent 2.2px);background-size:14px 14px;';\n  _b.appendChild(_d);\n  timeline.to(_d, {'opacity':{{op}}, 'duration':{{dur}}, 'ease':'none'}, {{at}});\n})();"
+  },
+  {
+   "id": "M20",
+   "name": "光晕",
+   "family": "材质",
+   "layer": "overlay",
+   "status": "ready",
+   "cap": "glow",
+   "src": "remotion:glow",
+   "params": {
+    "op": 1,
+    "dur": 1.2,
+    "z": 26
+   },
+   "use": "暖光晕，片头片尾",
+   "avoid": "压在正文上",
+   "code": "(function () {\n  var _b = document.querySelector('{{sel}}');\n  if (!_b) return;\n  var _d = document.createElement('i');\n  _d.style.cssText = 'position:absolute;inset:0;pointer-events:none;z-index:{{z}};opacity:0;background:radial-gradient(520px 520px at 50% 26%,rgba(255,226,180,.40),transparent 70%);';\n  _b.appendChild(_d);\n  timeline.to(_d, {'opacity':{{op}}, 'duration':{{dur}}, 'ease':'none'}, {{at}});\n})();"
+  },
+  {
+   "id": "M21",
+   "name": "色带",
+   "family": "材质",
+   "layer": "overlay",
+   "status": "ready",
+   "cap": "bands",
+   "src": "remotion:bands",
+   "params": {
+    "op": 0.45,
+    "dur": 1.0,
+    "z": 25
+   },
+   "use": "横向色阶带，做复古/印刷",
+   "avoid": "浅底",
+   "code": "(function () {\n  var _b = document.querySelector('{{sel}}');\n  if (!_b) return;\n  var _d = document.createElement('i');\n  _d.style.cssText = 'position:absolute;inset:0;pointer-events:none;z-index:{{z}};opacity:0;background:repeating-linear-gradient(180deg,rgba(255,255,255,.10) 0 40px,rgba(0,0,0,.16) 40px 80px);';\n  _b.appendChild(_d);\n  timeline.to(_d, {'opacity':{{op}}, 'duration':{{dur}}, 'ease':'none'}, {{at}});\n})();"
+  },
+  {
+   "id": "DA02",
+   "name": "条形换值",
+   "family": "状态",
+   "layer": "element",
+   "status": "ready",
+   "cap": "data-bars",
+   "src": "data-bars",
+   "params": {
+    "heights": "24,86,52,100",
+    "dur": 0.55,
+    "stagger": 0.08
+   },
+   "use": "柱状图数据刷新：柱子长到新高度",
+   "avoid": "超过 8 根",
+   "code": "(function () {\n  var _els = document.querySelectorAll('{{sel}}');\n  var _hs = '{{heights}}'.split(',');\n  for (var i = 0; i < _els.length; i++) {\n    var _h = (_hs[i % _hs.length] || '50').replace('%','') + '%';\n    timeline.to(_els[i], {'height':_h, 'duration':{{dur}}, 'ease':'power2.inOut'}, {{at}} + i * {{stagger}});\n  }\n})();"
+  },
+  {
+   "id": "DA03",
+   "name": "行新增",
+   "family": "状态",
+   "layer": "element",
+   "status": "ready",
+   "cap": "row-add",
+   "src": "data-rows",
+   "params": {
+    "dur": 0.45,
+    "ease": "power3.out"
+   },
+   "use": "列表里多出一行；配 S04 勾选",
+   "avoid": "一次加三行以上",
+   "code": "timeline.fromTo('{{sel}}', {'scaleY':0, 'opacity':0, 'transformOrigin':'50% 0%'},\n  {'scaleY':1, 'opacity':1, 'duration':{{dur}}, 'ease':'{{ease}}'}, {{at}});"
+  },
+  {
+   "id": "DA04",
+   "name": "状态翻转",
+   "family": "状态",
+   "layer": "element",
+   "status": "ready",
+   "cap": "swap",
+   "src": "data-swap",
+   "params": {
+    "text": "已成交",
+    "dur": 0.5
+   },
+   "use": "标签从“跟进中”变成“已成交”",
+   "avoid": "翻成超过 6 个字",
+   "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t) return;\n  timeline.to(_t, {'opacity':0, 'scale':.92, 'duration':{{dur}} * .45, 'ease':'power2.in'}, {{at}});\n  timeline.set(_t, {'textContent':'{{text}}'}, {{at}} + {{dur}} * .45);\n  timeline.to(_t, {'opacity':1, 'scale':1, 'duration':{{dur}} * .55, 'ease':'power2.out'}, {{at}} + {{dur}} * .45);\n})();"
+  },
+  {
+   "id": "I01",
+   "name": "指针点击",
+   "family": "交互",
+   "layer": "overlay",
+   "status": "ready",
+   "cap": "pointer",
+   "src": "ported:now-playing/modal-open",
+   "params": {
+    "move": 0.8,
+    "hold": 0.3,
+    "press": 0.42,
+    "hit": "rgba(134,240,192,.42)"
+   },
+   "use": "指针移到目标元素中心（按真实位置量，不写坐标）、切手型、悬停高亮、按下回弹；目标元素加 data-anim 即可",
+   "avoid": "一屏点三次以上；指针压住正文；目标元素被 display:none 挡住（卡会临时显示出来量一次）",
+   "code": "(function () {\n  var _p = document.querySelector('{{sel}}'), _t = document.querySelector('{{sel2}}');\n  if (!_p || !_t) return;\n  var _sc = _p.closest('.scene');\n  var _st = _sc ? _sc.getAttribute('style') : null;\n  if (_sc && getComputedStyle(_sc).display === 'none') {\n    _sc.style.display = 'block';\n    _sc.style.visibility = 'hidden';\n  }\n  var _pr = _p.getBoundingClientRect(), _tr = _t.getBoundingClientRect();\n  if (_st !== null) _sc.setAttribute('style', _st || '');\n  var _dx = (_tr.left + _tr.width / 2) - (_pr.left + 6);\n  var _dy = (_tr.top + _tr.height / 2) - (_pr.top + 4);\n  timeline.to(_p, {'x':_dx, 'y':_dy, 'duration':{{move}}, 'ease':'power2.inOut'}, {{at}});\n  timeline.call(function () { _p.classList.add('is-hand'); }, null, {{at}} + {{move}});\n  timeline.to(_t, {'borderColor':'{{hit}}', 'backgroundColor':'rgba(134,240,192,.10)', 'duration':{{hold}}, 'ease':'power2.out'}, {{at}} + {{move}});\n  timeline.fromTo(_p, {'scale':1}, {'scale':0.86, 'duration':0.1, 'ease':'power2.in'}, {{at}} + {{move}} + {{hold}});\n  timeline.to(_p, {'scale':1, 'duration':{{press}}, 'ease':'back.out(2)'}, {{at}} + {{move}} + {{hold}} + 0.12);\n})();"
+  },
+  {
+   "id": "Z01",
+   "name": "三维面板墙",
+   "family": "三维",
+   "layer": "camera",
+   "status": "ready",
+   "cap": "three-scene",
+   "src": "ported:three-animate",
+   "params": {
+    "dur": 4.2,
+    "camZ": 8.6,
+    "fogNear": 12,
+    "fogFar": 30
+   },
+   "use": "场景里放一块 1080×1920 的 canvas，卡进去建 three 场景、按时间线 t 重绘；整组转向 + 相机推进",
+   "avoid": "和照片同屏（canvas 与照片二选一）；没有引入 three.global.js 的场景",
+   "code": "(function () {\n  var _cv = document.querySelector('{{sel}}');\n  if (!_cv || !window.THREE) return;\n  var _w = _cv.width || 1080, _h = _cv.height || 1920;\n  var _r = new THREE.WebGLRenderer({canvas:_cv, antialias:true});\n  _r.setSize(_w, _h, false);\n  _r.setPixelRatio(1);\n  var _s = new THREE.Scene();\n  _s.background = new THREE.Color(0x0a0b0b);\n  _s.fog = new THREE.Fog(0x0a0b0b, {{fogNear}}, {{fogFar}});\n  var _c = new THREE.PerspectiveCamera(38, _w / _h, 0.1, 120);\n  _c.position.set(0, 0, {{camZ}});\n  var _g = new THREE.Group();\n  _s.add(_g);\n  var _geo = new THREE.PlaneGeometry(1.2, 0.76);\n  var _pal = [0x2f4a44,0x33425a,0x1f6f5c,0x46586b,0x1b5d52,0x3c4a6b,0x2b3a44,0x2a5548,0x35405a];\n  var _ps = [];\n  for (var i = 0; i < 9; i++) {\n    var m = new THREE.Mesh(_geo, new THREE.MeshBasicMaterial({color:_pal[i], transparent:true, opacity:0.92, side:THREE.DoubleSide}));\n    m.position.set(((i % 3) - 1) * 1.35, (Math.floor(i / 3) - 1) * 1.02, 0);\n    _g.add(m);\n    _ps.push(m);\n  }\n  var _o = {'p': 0};\n  timeline.to(_o, {'p': 1, 'duration':{{dur}}, 'ease':'none', 'onUpdate': function () {\n    var p = _o.p;\n    _g.rotation.y = -0.3 + p * 0.6;\n    _g.rotation.x = 0.18 - p * 0.32;\n    _c.position.z = {{camZ}} - p * 1.6;\n    for (var k = 0; k < _ps.length; k++) {\n      _ps[k].position.z = Math.sin(p * Math.PI * 2 + k * 0.5) * 0.34;\n      _ps[k].rotation.z = Math.sin(p * 3 + k) * 0.05;\n    }\n    _r.render(_s, _c);\n  }}, {{at}});\n})();"
+  },
+  {
+   "id": "G03",
+   "name": "共享元素放大",
+   "family": "版面",
+   "layer": "element",
+   "status": "ready",
+   "cap": "morph",
+   "src": "ported:lightbox",
+   "params": {
+    "dur": 0.95,
+    "ease": "power3.inOut",
+    "stagger": 0.04,
+    "fade": 0.5
+   },
+   "use": "元素从当前位置长到 data-morph-to 给的框（left,top,w,h[,radius]）；内部标 data-morph-detail 的层在放大到 55% 时淡入。尺寸由 HTML 给，卡不猜",
+   "avoid": "元素尺寸不一致时不要用；和 G02 同屏会抢焦点",
+   "code": "(function () {\n  var _els = [].slice.call(document.querySelectorAll('{{sel}}'));\n  _els.forEach(function (n, i) {\n    var _to = (n.getAttribute('data-morph-to') || '').split(',');\n    if (_to.length < 4) return;\n    timeline.to(n, {\n      'left': parseFloat(_to[0]), 'top': parseFloat(_to[1]),\n      'width': parseFloat(_to[2]), 'height': parseFloat(_to[3]),\n      'borderRadius': _to[4] ? parseFloat(_to[4]) : 22,\n      'duration': {{dur}}, 'ease': '{{ease}}'\n    }, {{at}} + i * {{stagger}});\n    var _d = n.querySelector('[data-morph-detail]');\n    if (_d) timeline.to(_d, {'opacity': 1, 'duration': {{fade}}, 'ease': 'power2.out'}, {{at}} + {{dur}} * 0.55);\n  });\n})();"
+  },
+  {
+   "id": "I02",
+   "name": "指针多步",
+   "family": "交互",
+   "layer": "overlay",
+   "status": "ready",
+   "cap": "pointer-steps",
+   "src": "ported:now-playing/modal-open",
+   "params": {
+    "move": 0.55,
+    "hold": 0.28,
+    "press": 0.4,
+    "gap": 0.28,
+    "hit": "rgba(134,240,192,.42)"
+   },
+   "use": "指针按 data-pointer-path 里列的 data-anim 名依次走位、悬停高亮、点击回弹；落点在建表时按元素中心量，不写坐标",
+   "avoid": "一屏点三次以上；目标元素不存在；指针压住正文",
+   "code": "(function () {\n  var _p = document.querySelector('{{sel}}');\n  if (!_p) return;\n  var _sc = _p.closest('.scene');\n  var _st = _sc ? _sc.getAttribute('style') : null;\n  if (_sc && getComputedStyle(_sc).display === 'none') {\n    _sc.style.display = 'block';\n    _sc.style.visibility = 'hidden';\n  }\n  var _pr = _p.getBoundingClientRect();\n  var _path = (_p.getAttribute('data-pointer-path') || '').split(',');\n  var _t = {{at}};\n  _path.forEach(function (name) {\n    name = (name || '').trim();\n    if (!name) return;\n    var _el = document.querySelector('[data-anim=\"' + name + '\"]') || document.querySelector(name);\n    if (!_el) return;\n    var _r = _el.getBoundingClientRect();\n    timeline.to(_p, {'x': (_r.left + _r.width / 2) - (_pr.left + 6),\n                     'y': (_r.top + _r.height / 2) - (_pr.top + 4),\n                     'duration': {{move}}, 'ease': 'power2.inOut'}, _t);\n    timeline.to(_el, {'borderColor': '{{hit}}', 'backgroundColor': 'rgba(134,240,192,.10)',\n                      'duration': {{hold}}, 'ease': 'power2.out'}, _t + {{move}});\n    timeline.fromTo(_p, {'scale': 1}, {'scale': 0.86, 'duration': 0.1, 'ease': 'power2.in'}, _t + {{move}} + {{hold}});\n    timeline.to(_p, {'scale': 1, 'duration': {{press}}, 'ease': 'back.out(2)'}, _t + {{move}} + {{hold}} + 0.12);\n    _t = _t + {{move}} + {{hold}} + {{gap}};\n  });\n  if (_st !== null) _sc.setAttribute('style', _st || '');\n})();"
+  },
+  {
+   "id": "Z02",
+   "name": "三维点阵波",
+   "family": "三维",
+   "layer": "camera",
+   "status": "ready",
+   "cap": "three-scene",
+   "src": "ported:three-effects",
+   "params": {
+    "dur": 3.4,
+    "grid": 38,
+    "size": 0.06,
+    "camY": 3.4,
+    "camZ": 11.5,
+    "fogNear": 14,
+    "fogFar": 34
+   },
+   "use": "canvas 里铺一层点阵，按时间线 t 用双正弦起伏；场景里放 1080×1920 的 canvas，页面引 three.global.js",
+   "avoid": "和照片同屏；正文压在点阵上（先加遮罩）",
+   "code": "(function () {\n  var _cv = document.querySelector('{{sel}}');\n  if (!_cv || !window.THREE) return;\n  var _w = _cv.width || 1080, _h = _cv.height || 1920;\n  var _r = new THREE.WebGLRenderer({canvas: _cv, antialias: true});\n  _r.setSize(_w, _h, false);\n  _r.setPixelRatio(1);\n  var _s = new THREE.Scene();\n  _s.background = new THREE.Color(0x0a0b0b);\n  _s.fog = new THREE.Fog(0x0a0b0b, {{fogNear}}, {{fogFar}});\n  var _c = new THREE.PerspectiveCamera(46, _w / _h, 0.1, 120);\n  _c.position.set(0, {{camY}}, {{camZ}});\n  _c.lookAt(0, 0, 0);\n  var N = {{grid}};\n  var _g = new THREE.BufferGeometry();\n  var _pos = new Float32Array(N * N * 3);\n  var _base = [];\n  for (var i = 0; i < N; i++) {\n    for (var j = 0; j < N; j++) {\n      var k = (i * N + j) * 3;\n      var bx = (i / (N - 1) - 0.5) * 13;\n      var bz = (j / (N - 1) - 0.5) * 13;\n      _pos[k] = bx; _pos[k + 1] = 0; _pos[k + 2] = bz;\n      _base.push([bx, bz]);\n    }\n  }\n  _g.setAttribute('position', new THREE.BufferAttribute(_pos, 3));\n  var _m = new THREE.PointsMaterial({color: 0x86f0c0, size: {{size}}, transparent: true, opacity: 0.8});\n  var _pts = new THREE.Points(_g, _m);\n  _pts.position.y = -1.4;\n  _s.add(_pts);\n  var _o = {'p': 0};\n  timeline.to(_o, {'p': 1, 'duration': {{dur}}, 'ease': 'none', 'onUpdate': function () {\n    var p = _o.p, arr = _g.attributes.position.array;\n    for (var idx = 0; idx < _base.length; idx++) {\n      var bx = _base[idx][0], bz = _base[idx][1];\n      arr[idx * 3 + 1] = Math.sin(bx * 0.5 + p * 5.4) * 0.55 + Math.cos(bz * 0.44 - p * 3.6) * 0.45;\n    }\n    _g.attributes.position.needsUpdate = true;\n    _pts.rotation.y = -0.18 + p * 0.3;\n    _r.render(_s, _c);\n  }}, {{at}});\n})();"
+  },
+  {
+   "id": "S12",
+   "name": "页面滚动",
+   "family": "状态",
+   "layer": "element",
+   "status": "ready",
+   "cap": "scroll",
+   "src": "ported:scroll",
+   "params": {
+    "dist": -780,
+    "dur": 2.2,
+    "ease": "power2.inOut",
+    "hold": 0.3
+   },
+   "use": "长页面按 dist 滚过一段；页面里标 data-scroll-hl 的块在滚动过程中依次点亮",
+   "avoid": "内容本身没有长度（滚了等于空转）；和镜头推拉同屏抢注意力",
+   "code": "(function () {\n  var _page = document.querySelector('{{sel}}');\n  if (!_page) return;\n  timeline.to(_page, {'y': {{dist}}, 'duration': {{dur}}, 'ease': '{{ease}}'}, {{at}});\n  var _hl = [].slice.call(document.querySelectorAll('[data-scroll-hl]'));\n  _hl.forEach(function (el, i) {\n    timeline.to(el, {'backgroundColor': 'rgba(134,240,192,.10)', 'duration': {{hold}},\n                     'ease': 'power2.out'}, {{at}} + {{dur}} * (0.15 + i * 0.25));\n  });\n})();"
+  },
+  {
+   "id": "W02",
+   "name": "画框变形",
+   "family": "照片",
+   "layer": "media",
+   "status": "ready",
+   "cap": "frame",
+   "src": "ported:crop-compare",
+   "params": {
+    "dur": 0.9,
+    "ease": "power3.inOut",
+    "stagger": 0.05
+   },
+   "use": "照片框从当前比例长到 data-frame-to 给的框（left,top,w,h），图片用 cover 裁切，主体不变形",
+   "avoid": "照片本身已满幅；框变形后压住正文",
+   "code": "(function () {\n  var _els = [].slice.call(document.querySelectorAll('{{sel}}'));\n  _els.forEach(function (n, i) {\n    var _to = (n.getAttribute('data-frame-to') || '').split(',');\n    if (_to.length < 4) return;\n    timeline.to(n, {\n      'left': parseFloat(_to[0]), 'top': parseFloat(_to[1]),\n      'width': parseFloat(_to[2]), 'height': parseFloat(_to[3]),\n      'duration': {{dur}}, 'ease': '{{ease}}'\n    }, {{at}} + i * {{stagger}});\n  });\n})();"
+  }
+ ]
+}

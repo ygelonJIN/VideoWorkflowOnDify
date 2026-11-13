@@ -12,12 +12,12 @@
   同一份渲染代码也能跑在浏览器调试壳里。
 - ✅ **M2 终端**：底部「终端」页签，自由输入，`bash -lc` 流式输出；工作目录固定为工作区根，
   输出与退出码通过 SSE / IPC 实时回传。
-- ✅ **M3 产物区**：列出 `HTML视频项目/` 下的项目与文件；文本/JSON/字幕就地预览，HTML 用内嵌 iframe、
+- ✅ **M3 产物区**：列出 `成品/` 下的项目与文件；文本/JSON/字幕就地预览，HTML 用内嵌 iframe、
   视频/图片内嵌播放，也可以交给系统默认应用。运行结束后还能直接看 `outputs`。
 - ✅ **容器节点**：iteration（逐项执行并收集为数组）、loop（loop_count / break_conditions）、assigner
   （写回循环变量）、iteration-start / loop-start 入口。
 - ✅ **提示词/代码编辑**：检视器里直接改，保存写回原 YAML（注释、缩进、长单行都不动），04 的提示词和
-  代码节点同时同步 `保留资料/` 镜像。
+  代码节点同时同步 `能力库/` 镜像。
 - ✅ **画布结构编辑**：加节点（Code / LLM / if-else / 模板 / HTTP / End，自动从选中节点连一条边）、
   删节点（连带删边，一进一出自动接上）、连线模式（点起点再点终点）、点连线删除。
 - ✅ **并行迭代**：`is_parallel: true` 时按 `parallel_nums` 分批并发，每项独立变量池，结果顺序不变。
@@ -34,7 +34,7 @@
 - ✅ **节点输出值**：检视器「输出值」逐项显示本次运行该节点的真实输出（字符串原样、对象格式化，
   超 4000 字符截断并注明总长度），不用再翻 trace。
 - ✅ **镜像映射单一真源**：提示词/代码镜像的 node→文件映射直接读
-  `HTML视频项目/workflow_runtime/tools/sync_prompts_to_yaml.py` 的 `MAPPING` / `CODE_MAPPING`；
+  `成品/workflow_runtime/tools/sync_prompts_to_yaml.py` 的 `MAPPING` / `CODE_MAPPING`；
   映射读不到或目标文件不存在时会明确提示，不再静默跳过同步。
 - ✅ **结构编辑逐字还原**：加/删节点、连线/断线后文件末尾换行保留，一加一删逐字回到原文件。
 - ✅ **多消息提示词**：LLM 节点有 system+user 等多条 message 时，检视器按条列出，每条单独「编辑这条」，
@@ -229,7 +229,7 @@ CLI 和自动化测试（`fixtures/stub/`）。
 | `WFS_PROBE=1` | 选中、缩放、收起、产物切换正常；探针用本地 responses 假端点跑一次；A00 显示输出值、A01 显示 6 条输入值；输入抽屉 10 个字段（只剩 start 变量），没有 stub / 跑到哪；图片页签拖图落盘；图像提示词每卡 1 个复制按钮；切到 01 选中 D01 显示 2 条 message；搜索 D01 命中并定位；外部改文件后 focus 自动重载并提示 |
 | `/api/run` + `/api/cancel` | 起一个 10 秒 Code 节点，1.3 秒后取消：`status=stopped`，该节点 `stopped(已停止)`，子进程被杀 |
 | `/api/update-node`（临时副本） | 改 h02sm 提示词：节点/边数量不变、文件头注释原样、只动目标行 |
-| 镜像同步（h02sm / h02sk） | 返回 `mirror: 保留资料/工作流提示词/屏内动效提示词.md` 与 `…/merge_screen_motion.py`，内容与 YAML 逐字一致 |
+| 镜像同步（h02sm / h02sk） | 返回 `mirror: 能力库/工作流提示词/屏内动效提示词.md` 与 `…/merge_screen_motion.py`，内容与 YAML 逐字一致 |
 | 结构编辑（临时副本） | 加节点 +1、删节点后文件与原始逐字相等（含末尾换行） |
 | `/api/file-url` + Range | 视频请求 206 Partial Content |
 | 终端 `/api/exec` | `echo hello` 流式返回 stdout/stderr 与 `term-done`，退出码正确 |

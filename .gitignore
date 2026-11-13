@@ -10,15 +10,17 @@ node_modules/
 **/__pycache__/
 
 # Failure/replacement artifacts created only during --replace
-HTML视频项目/项目备份/
-HTML视频项目/失败项目/
+成品/项目备份/
+成品/失败项目/
 
 # Do not upload local video projects or their generated outputs.
-# Keep only the reusable runtime under HTML视频项目/.
-HTML视频项目/*
-!HTML视频项目/Dify输出/
-!HTML视频项目/workflow_runtime/
-HTML视频项目/Dify输出/*
+# Keep only the reusable runtime under 成品/.
+成品/*
+成品/Dify输出/
+!成品/workflow_runtime/
 
 # 本地私密材料，永不提交
 不推送/
+
+# 样片（本地审阅用，不进仓库）
+能力库/动效库/样片/
