@@ -78,6 +78,10 @@
       });
       el.replaceChild(frag, node);
     });
+    /* 拆字后的父元素必须允许自动换行：inline-block 的逐字 span 之间没有空格，
+       某些字体会把整行判成不可断，14 个字 124px 就会单行冲出容器。 */
+    el.style.whiteSpace = 'normal';
+    el.style.wordBreak = 'break-all';
     return out;
   }
 
@@ -171,7 +175,14 @@
 
   /* ---------- 固定的伪随机（替代 Math.random，渲染可复现） ---------- */
   function seeded(seed) {
-    var s = seed || 7;
+    var s = seed, i;
+    /* 2026-11-13：支持字符串种子（手绘标注按名字取种子），数字种子行为不变 */
+    if (typeof s === 'string') {
+      var h = 2166136261;
+      for (i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
+      s = Math.abs(h) % 233280;
+    }
+    s = s || 7;
     return function () {
       s = (s * 9301 + 49297) % 233280;
       return s / 233280;
@@ -238,6 +249,240 @@
       { strokeDashoffset: 0, duration: dur || 0.8, ease: o.ease || 'power2.inOut' }, at);
   }
 
+
+  /* ================= 2026-11-13 新增：从 Remotion 候选移植 ================= */
+
+  /* ---------- macOS 指针（替换旧手绘多边形；热点在 (6,4) 像素，与 I01/I02 的偏移一致） ---------- */
+  function cursorSVG() {
+    return '<svg class="ptr" viewBox="0 0 32 40" width="72" height="90" aria-hidden="true"'
+      + ' style="position:absolute;left:-6px;top:-4px;width:72px;height:90px;pointer-events:none;z-index:60;overflow:visible">'
+      + '<defs><filter id="kit-ptr-sh" x="-50%" y="-50%" width="200%" height="200%">'
+      + '<feDropShadow dx="1.2" dy="2.2" stdDeviation="2.4" flood-color="#000" flood-opacity="0.55"/>'
+      + '</filter></defs>'
+      + '<g filter="url(#kit-ptr-sh)">'
+      + '<path d="M2.67 1.78 L2.67 27.30 L9.62 21.24 L13.58 31.40 L18.02 29.46 L14.06 19.36 L23.40 19.36 Z"'
+      + ' fill="#ffffff" stroke="#0a0a0a" stroke-width="1.55" stroke-linejoin="round"/>'
+      + '</g></svg>';
+  }
+
+  /* ---------- 手绘标注几何（rough 风格，自研；返回 path 的 d 串） ---------- */
+  function _jline(rnd, x1, y1, x2, y2, amp) {
+    var mx = (x1 + x2) / 2 + (rnd() - 0.5) * amp;
+    var my = (y1 + y2) / 2 + (rnd() - 0.5) * amp;
+    return 'M' + x1.toFixed(1) + ' ' + y1.toFixed(1) + 'Q' + mx.toFixed(1) + ' ' + my.toFixed(1)
+      + ' ' + x2.toFixed(1) + ' ' + y2.toFixed(1);
+  }
+  function _closed(pts) {
+    var n = pts.length, d = 'M' + pts[0][0].toFixed(1) + ' ' + pts[0][1].toFixed(1);
+    for (var i = 0; i < n; i++) {
+      var p0 = pts[i], p1 = pts[(i + 1) % n];
+      var mx = (p0[0] + p1[0]) / 2, my = (p0[1] + p1[1]) / 2;
+      d += 'Q' + p0[0].toFixed(1) + ' ' + p0[1].toFixed(1) + ' ' + mx.toFixed(1) + ' ' + my.toFixed(1);
+    }
+    return d + 'Z';
+  }
+
+  /* type: underline | strike | box | bracket | cross | circle | highlight
+   * rect: {x,y,w,h}（相对场景）→ {strokes:[d], fills:[d]} */
+  function rough(type, rect, seed, passes) {
+    var rnd = seeded(seed == null ? 'rough' : seed);
+    passes = passes || 2;
+    var x = rect.x, y = rect.y, w = rect.w, h = rect.h;
+    var x2 = x + w, y2 = y + h, mx = x + w / 2, my = y + h / 2;
+    var strokes = [], fills = [], k;
+    function twice(fn) { for (var i = 0; i < passes; i++) strokes.push(fn()); }
+
+    if (type === 'underline') {
+      var uy = y2 + h * 0.06;
+      twice(function () { return _jline(rnd, x - w * 0.02, uy + (rnd() - 0.5) * 3, x2 + w * 0.02, uy + (rnd() - 0.5) * 3, h * 0.10); });
+    } else if (type === 'strike') {
+      twice(function () { return _jline(rnd, x - w * 0.01, my + (rnd() - 0.5) * 3, x2 + w * 0.01, my + (rnd() - 0.5) * 3, h * 0.08); });
+    } else if (type === 'box') {
+      twice(function () { return _jline(rnd, x - 6, y - 5, x2 + 7, y - 7, 7); });
+      twice(function () { return _jline(rnd, x2 + 6, y - 4, x2 + 8, y2 + 6, 7); });
+      twice(function () { return _jline(rnd, x2 + 5, y2 + 5, x - 7, y2 + 7, 7); });
+      twice(function () { return _jline(rnd, x - 5, y2 + 6, x - 8, y - 6, 7); });
+    } else if (type === 'bracket') {
+      var bx = x - 26;
+      for (k = 0; k < 2; k++) {
+        var o = k * 3;
+        strokes.push(_jline(rnd, bx + 22 - o, y - 8 + o, bx + o, y - 4, 4));
+        strokes.push(_jline(rnd, bx + o, y - 4, bx + o, y2 + 4, 6));
+        strokes.push(_jline(rnd, bx + o, y2 + 4, bx + 22 - o, y2 + 8 - o, 4));
+      }
+    } else if (type === 'cross') {
+      twice(function () { return _jline(rnd, x, y, x2, y2, 10); });
+      twice(function () { return _jline(rnd, x2, y, x, y2, 10); });
+    } else if (type === 'circle') {
+      for (var t = 0; t < passes; t++) {
+        var pts = [], N = 26, rx = w * 0.58 + t * 4, ry = h * 0.78 + t * 4;
+        for (var i = 0; i < N; i++) {
+          var ang = (i / N) * Math.PI * 2 - 0.35 + t * 0.12;
+          var wob = 1 + (rnd() - 0.5) * 0.10;
+          pts.push([mx + Math.cos(ang) * rx * wob, my + Math.sin(ang) * ry * wob]);
+        }
+        strokes.push(_closed(pts));
+      }
+    } else if (type === 'highlight') {
+      fills.push('M' + (x - 10) + ' ' + (y - 4) + 'L' + (x2 + 12) + ' ' + (y - 8)
+        + 'L' + (x2 + 8) + ' ' + (y2 + 4) + 'L' + (x - 12) + ' ' + (y2 + 8) + 'Z');
+    }
+    return { strokes: strokes, fills: fills };
+  }
+
+  /* ---------- 按视觉行量矩形（不改 DOM；相对元素左上角） ---------- */
+  function lines(el) {
+    if (!el) return [];
+    var box = el.getBoundingClientRect(), out = [], cur = null;
+    var walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, null);
+    var range = document.createRange(), n, i, r, top;
+    while ((n = walker.nextNode())) {
+      for (i = 0; i < n.length; i++) {
+        range.setStart(n, i); range.setEnd(n, i + 1);
+        r = range.getBoundingClientRect();
+        if (!r.width && !r.height) continue;
+        top = Math.round(r.top);
+        if (!cur || Math.abs(cur.top - top) > 2) {
+          cur = { top: top, left: r.left, right: r.right, h: r.height };
+          out.push(cur);
+        } else {
+          if (r.left < cur.left) cur.left = r.left;
+          if (r.right > cur.right) cur.right = r.right;
+          if (r.height > cur.h) cur.h = r.height;
+        }
+      }
+    }
+    return out.map(function (c) {
+      return { x: c.left - box.left, y: c.top - box.top, w: c.right - c.left, h: c.h };
+    });
+  }
+
+  /* 二分字号，把文本压进 n 行 */
+  function fitLines(el, n, opts) {
+    if (!el) return 0;
+    var o = opts || {}, lo = o.min || 18, hi = o.max || 160, best = lo;
+    for (var k = 0; k < 18; k++) {
+      var mid = (lo + hi) / 2;
+      el.style.fontSize = mid + 'px';
+      if (lines(el).length <= n) { best = mid; lo = mid; } else { hi = mid; }
+      if (hi - lo < 0.6) break;
+    }
+    el.style.fontSize = best + 'px';
+    return best;
+  }
+
+  /* ---------- 词级字幕：按停顿/时长分页 ---------- */
+  function captionTokens(items, maxSpan, gap) {
+    maxSpan = maxSpan || 1.9; gap = gap || 0.22;
+    var pages = [], cur = { tokens: [], from: 0, to: 0 };
+    items.forEach(function (it, idx) {
+      if (!cur.tokens.length) cur.from = it.from;
+      var span = it.to - cur.from;
+      var silence = cur.tokens.length ? it.from - cur.to : 0;
+      if (cur.tokens.length && (span > maxSpan || silence >= gap)) {
+        cur.to = cur.tokens[cur.tokens.length - 1].to;
+        pages.push(cur);
+        cur = { tokens: [], from: it.from, to: 0 };
+      }
+      cur.tokens.push({ text: it.text, from: it.from, to: it.to, i: idx });
+      cur.to = it.to;
+    });
+    if (cur.tokens.length) { cur.to = cur.tokens[cur.tokens.length - 1].to; pages.push(cur); }
+    return pages;
+  }
+
+  /* ---------- 照片形变：WebGL 单 pass，5 个模式（0 波动 1 湍流 2 碎裂 3 球面 4 鱼眼） ---------- */
+  var DFM_VS = 'attribute vec2 pos;varying vec2 vUv;void main(){vUv=pos*0.5+0.5;gl_Position=vec4(pos,0.0,1.0);}';
+  var DFM_FS = [
+    'varying vec2 vUv;',
+    'uniform sampler2D uTex; uniform float uT, uP; uniform vec2 uRes; uniform int uMode;',
+    'float sn(vec2 p){ return sin(p.x*3.1+p.y*1.7)*0.5+sin(p.x*7.3-p.y*5.1)*0.5; }',
+    'float h21(vec2 p){ p=fract(p*vec2(123.34,456.21)); p+=dot(p,p+45.32); return fract(p.x*p.y); }',
+    'void main(){',
+    '  vec2 uv=vUv; float p=uP; float t=uT; vec2 uv2=uv; float shade=1.0;',
+    '  if(uMode==0){',
+    '    uv2=uv+vec2(sin(uv.y*14.0+t*3.0)*0.030*p, cos(uv.x*9.0+t*2.2)*0.012*p);',
+    '  } else if(uMode==1){',
+    '    float a=sn(uv*5.0+t*0.6); float b=sn(uv*5.0+t*0.6+17.0);',
+    '    uv2=uv+vec2(a,b)*0.075*p; shade=0.9+0.2*sn(uv*3.0);',
+    '  } else if(uMode==2){',
+    '    vec2 grid=vec2(6.0,10.0); vec2 gid=floor(uv*grid); vec2 f=fract(uv*grid);',
+    '    float r=h21(gid); vec2 dir=normalize(vec2(h21(gid+3.1)-0.5,h21(gid+7.7)-0.5)+1e-5);',
+    '    uv2=uv+dir*p*(0.02+0.16*r);',
+    '    float gap=step(0.035,f.x)*step(0.035,f.y)*step(f.x,0.965)*step(f.y,0.965);',
+    '    shade=mix(0.12,1.0,gap);',
+    '  } else if(uMode==3){',
+    '    vec2 q=(uv-0.5)*2.0; float r=length(q); float z=sqrt(max(0.0,1.0-r*r));',
+    '    float k=mix(1.0,1.0/(0.32+0.68*z),p); uv2=0.5+q*k*0.5;',
+    '    float sph=(r<1.0)?(0.30+0.80*z):0.0; shade=mix(1.0,sph,p);',
+    '  } else {',
+    '    vec2 q=uv-0.5; float r=length(q); float k=1.0+1.15*p;',
+    '    uv2=0.5+(q/(r+1e-5))*pow(min(r*1.42,1.0),k)*0.5+(q*0.5);',
+    '  }',
+    '  vec4 c=texture2D(uTex,clamp(uv2,0.001,0.999));',
+    '  gl_FragColor=vec4(c.rgb*shade,1.0);',
+    '}'
+  ].join('\n');
+
+  function deform(canvas, src, mode) {
+    if (!canvas) return null;
+    var gl = canvas.getContext('webgl', { premultipliedAlpha: false, alpha: true })
+      || canvas.getContext('experimental-webgl');
+    if (!gl) return null;
+    function sh(type, code) {
+      var o = gl.createShader(type);
+      gl.shaderSource(o, code); gl.compileShader(o);
+      return gl.getShaderParameter(o, gl.COMPILE_STATUS) ? o : null;
+    }
+    var vs = sh(gl.VERTEX_SHADER, DFM_VS);
+    var fs = sh(gl.FRAGMENT_SHADER, 'precision highp float;\n' + DFM_FS);
+    if (!vs || !fs) return null;
+    var prog = gl.createProgram();
+    gl.attachShader(prog, vs); gl.attachShader(prog, fs); gl.linkProgram(prog);
+    if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) return null;
+    gl.useProgram(prog);
+    var buf = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
+    var aPos = gl.getAttribLocation(prog, 'pos');
+    gl.enableVertexAttribArray(aPos);
+    gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 0, 0);
+    var U = {}, tex = null, loaded = false;
+    function u(name) { if (!(name in U)) U[name] = gl.getUniformLocation(prog, name); return U[name]; }
+    function upload(img) {
+      if (!img || !img.naturalWidth) return;
+      if (!tex) tex = gl.createTexture();
+      gl.bindTexture(gl.TEXTURE_2D, tex);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
+      loaded = true;
+    }
+    if (src) {
+      if (src.complete && src.naturalWidth) upload(src);
+      else src.addEventListener('load', function () { upload(src); });
+    }
+    return {
+      ok: true,
+      ready: function () { return loaded; },
+      draw: function (p, t) {
+        if (!loaded) return;
+        gl.viewport(0, 0, canvas.width, canvas.height);
+        gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT);
+        gl.activeTexture(gl.TEXTURE0);
+        gl.bindTexture(gl.TEXTURE_2D, tex);
+        gl.uniform1i(u('uTex'), 0);
+        gl.uniform1f(u('uT'), t || 0);
+        gl.uniform1f(u('uP'), p || 0);
+        gl.uniform2f(u('uRes'), canvas.width, canvas.height);
+        gl.uniform1i(u('uMode'), mode || 0);
+        gl.drawArrays(gl.TRIANGLES, 0, 3);
+      }
+    };
+  }
+
   global.kit = {
     split: split,
     pointer: pointer,
@@ -248,6 +493,12 @@
     fitScale: fitScale,
     noise2: noise2,
     pathAt: pathAt,
-    drawPath: drawPath
+    drawPath: drawPath,
+    cursorSVG: cursorSVG,
+    rough: rough,
+    lines: lines,
+    fitLines: fitLines,
+    captionTokens: captionTokens,
+    deform: deform
   };
 })(window);

@@ -32,7 +32,6 @@ MAPPING = {
     "h01p": "图像计划提示词.md",
     "h01c": "组件语法提示词.md",
     "h01t": "转场设计提示词.md",
-    "h01g": "背景系统提示词.md",
     "h01s": "HTML骨架提示词.md",
     # 2026-11-10 起 04 改成迭代节点逐屏生成：h02a–d 由 h02s 取代。
     # 旧的四组提示词保留给 归档/04_黑帧口播_分组生成_分组版备份.yml。
@@ -48,7 +47,6 @@ CODE_MAPPING = {
     "h00": "split_scene_groups_black_frame.py",
     "h01v": "normalize_transition_plan.py",
     "h01pv": "normalize_image_plan.py",
-    "h01w": "split_background_spec.py",
     "h02": "validate_html_composition_black_frame.py",
     "h03": "merge_scene_groups_black_frame.py",
 }
@@ -111,6 +109,26 @@ def strip_generated(code: str) -> str:
         return code
     return code[:i] + code[j:]
 
+def reattach_generated(wanted: str, have_raw: str) -> str:
+    """把 YAML 里现有的 TPL/DEFAULTS 段拼回剥离后的代码。
+
+    H02SX 的 TPL/DEFAULTS 归 sync_expander 管：这里只维护手写部分，
+    但写回时整段 code 字段会被替换——不把生成段拼回去，Dify 里就只剩
+    `def main(...)` 的前半截，运行时报 NameError: name 'TPL' is not defined。
+    """
+    marker = "\n\n    parts = []"
+    if not have_raw or "    TPL = {" not in have_raw:
+        return wanted
+    i = have_raw.index("    TPL = {")
+    j = have_raw.find(marker, i)
+    gen = have_raw[i:j] if j > 0 else have_raw[i:]
+    gen = gen.rstrip("\n")
+    k = wanted.find(marker)
+    if k < 0:
+        return wanted.rstrip("\n") + "\n" + gen + "\n"
+    return wanted[:k] + "\n" + gen + wanted[k:]
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--check", action="store_true", help="只报告差异，不写回")
@@ -141,14 +159,17 @@ def main() -> None:
             have = current_code(block)
             pattern = r'^        code: (".*")$'
             prefix = "        code: "
+        have_raw = have or ""
         if kind == "code":
-            have = strip_generated(have)
+            have = strip_generated(have_raw)
             wanted = strip_generated(wanted)
         if have == wanted:
             continue
         changed.append((node_id, asset_name, len(have or ""), len(wanted)))
         if args.check:
             continue
+        if kind == "code":
+            wanted = reattach_generated(wanted, have_raw)
         scalar = json.dumps(wanted, ensure_ascii=False)
         new_block, count = re.subn(pattern, lambda _m, _p=prefix, _s=scalar: _p + _s, block, count=1, flags=re.M)
         if count != 1:

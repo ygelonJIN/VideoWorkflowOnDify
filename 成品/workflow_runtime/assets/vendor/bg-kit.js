@@ -1,4 +1,4 @@
-/* bg-kit.js — 确定性 canvas 背景（B08–B21）
+/* bg-kit.js — 确定性 canvas 背景（B23–B39，Remotion 来源）
  * 每条背景都是 t 的纯函数：同一个 t 画出来永远一样，可 seek、可复现。
  * 由场景脚本调用 bgkit.bind(timeline, canvas, name, params)，用一条覆盖全场的
  * 哑 tween 驱动重绘（不占 eventCallback，不和场景显隐抢 onUpdate）。
@@ -130,7 +130,7 @@
   };
 
 
-  /* ---------- B23–B36：从 Remotion effects 的观感改写成的 t 纯函数 ---------- */
+  /* ---------- B23–B39：Remotion effects 的 t 纯函数 ---------- */
   Object.assign(P, {
     halftone: function (c, w, h, t, o) {
       var step = o.step || 13, r0 = step * 0.60;
@@ -324,21 +324,171 @@
     }
   });
 
+
+  /* ---------- B37–B39：从 Remotion 候选移植（2026-11-13） ---------- */
+  /* 值噪声：确定性哈希 + 三线性插值，纯 t 函数 */
+  function _h31(x, y, z) {
+    var n = Math.sin(x * 127.1 + y * 311.7 + z * 74.7) * 43758.5453;
+    return n - Math.floor(n);
+  }
+  function _vnoise(x, y, z) {
+    var ix = Math.floor(x), iy = Math.floor(y), iz = Math.floor(z);
+    var fx = x - ix, fy = y - iy, fz = z - iz;
+    var ux = fx * fx * (3 - 2 * fx), uy = fy * fy * (3 - 2 * fy), uz = fz * fz * (3 - 2 * fz);
+    function L(a, b, t) { return a + (b - a) * t; }
+    var c000 = _h31(ix, iy, iz), c100 = _h31(ix + 1, iy, iz);
+    var c010 = _h31(ix, iy + 1, iz), c110 = _h31(ix + 1, iy + 1, iz);
+    var c001 = _h31(ix, iy, iz + 1), c101 = _h31(ix + 1, iy, iz + 1);
+    var c011 = _h31(ix, iy + 1, iz + 1), c111 = _h31(ix + 1, iy + 1, iz + 1);
+    return L(L(L(c000, c100, ux), L(c010, c110, ux), uy),
+             L(L(c001, c101, ux), L(c011, c111, ux), uy), uz);
+  }
+  function _fbm(x, y, z, oct) {
+    var sum = 0, amp = 0.5, norm = 0, f = 1, i;
+    for (i = 0; i < (oct || 5); i++) { sum += amp * _vnoise(x * f, y * f, z * f); norm += amp; amp *= 0.5; f *= 2.02; }
+    return sum / norm;
+  }
+
+  /* 半分辨率画布：噪声在 1/4 像素上算，再放大——观感是柔和的，代价是 1/16 */
+  var _halfCache = {};
+  function _halfCtx(w, h, scale) {
+    var key = w + 'x' + h + ':' + scale;
+    var c = _halfCache[key];
+    if (!c) {
+      c = document.createElement('canvas');
+      c.width = Math.max(2, Math.round(w / scale));
+      c.height = Math.max(2, Math.round(h / scale));
+      _halfCache[key] = c;
+    }
+    return c;
+  }
+
+  var EX = {
+    cloudnoise: function (c, w, h, t, o) {
+      var sc = o.scale || 4, hw = Math.round(w / sc), hh = Math.round(h / sc);
+      var cv = _halfCtx(w, h, sc), hc = cv.getContext('2d');
+      var img = hc.createImageData(hw, hh), d = img.data;
+      var amp = o.amount == null ? 1 : o.amount;
+      var i = 0, px, py, n, r, g, b;
+      for (py = 0; py < hh; py++) {
+        for (px = 0; px < hw; px++) {
+          n = _fbm(px / hw * 3.2, py / hh * 3.2, t * 0.35, 5);
+          var k1 = Math.max(0, Math.min(1, (n - 0.30) / 0.58));
+          var k2 = Math.max(0, Math.min(1, (n - 0.70) / 0.27));
+          r = (0.028 + (0.20 - 0.028) * k1) * 255; r += (0.98 * 255 - r) * k2 * 0.85;
+          g = (0.055 + (0.85 - 0.055) * k1) * 255; g += (0.86 * 255 - g) * k2 * 0.85;
+          b = (0.095 + (0.72 - 0.095) * k1) * 255; b += (0.42 * 255 - b) * k2 * 0.85;
+          var dim = (0.55 + 0.75 * amp) / 1.3;
+          d[i++] = r * dim; d[i++] = g * dim; d[i++] = b * dim; d[i++] = 255;
+        }
+      }
+      hc.putImageData(img, 0, 0);
+      c.clearRect(0, 0, w, h);
+      c.imageSmoothingEnabled = true;
+      c.drawImage(cv, 0, 0, w, h);
+    },
+
+    warpnoise: function (c, w, h, t, o) {
+      var sc = o.scale || 4, hw = Math.round(w / sc), hh = Math.round(h / sc);
+      var cv = _halfCtx(w, h, sc), hc = cv.getContext('2d');
+      var img = hc.createImageData(hw, hh), d = img.data;
+      var amp = o.amount == null ? 1 : o.amount;
+      var i = 0, px, py, n, wv, r, g, b;
+      for (py = 0; py < hh; py++) {
+        for (px = 0; px < hw; px++) {
+          var u = px / hw * 2.4, v = py / hh * 2.4;
+          wv = _fbm(u, v, t * 0.25, 4);
+          n = _fbm(u * 1.25 + 1.7 * wv, v * 1.25 + 1.7 * wv, t * 0.30, 5);
+          var k1 = Math.max(0, Math.min(1, (n - 0.28) / 0.60));
+          var k2 = Math.max(0, Math.min(1, (n - 0.68) / 0.28));
+          r = (0.030 + (0.22 - 0.030) * k1) * 255; r += (0.96 * 255 - r) * k2 * 0.8;
+          g = (0.060 + (0.78 - 0.060) * k1) * 255; g += (0.84 * 255 - g) * k2 * 0.8;
+          b = (0.100 + (0.68 - 0.100) * k1) * 255; b += (0.46 * 255 - b) * k2 * 0.8;
+          var dim = (0.55 + 0.75 * amp) / 1.3;
+          d[i++] = r * dim; d[i++] = g * dim; d[i++] = b * dim; d[i++] = 255;
+        }
+      }
+      hc.putImageData(img, 0, 0);
+      c.clearRect(0, 0, w, h);
+      c.imageSmoothingEnabled = true;
+      c.drawImage(cv, 0, 0, w, h);
+    },
+
+    drift: function (c, w, h, t, o) {
+      var n = o.count || 260, r = rng(o.seed || 11);
+      var sim = (c.__kitSimplex || (c.__kitSimplex = _makeSimplex(o.seed || 11)));
+      var spr = c.__kitGlow || (c.__kitGlow = [_glow('#86F0C0'), _glow('#FFD45E'), _glow('#5FA8FF')]);
+      c.clearRect(0, 0, w, h);
+      c.fillStyle = o.bg || '#060809';
+      c.fillRect(0, 0, w, h);
+      var i, p, nx, ny, a, size;
+      var P = c.__kitPts;
+      if (!P || P.length !== n) {
+        P = []; c.__kitPts = P;
+        for (i = 0; i < n; i++) {
+          P.push({ x: r() * w, y: r() * h, r: 2.4 + r() * 5.2, sp: 0.55 + r() * 0.9, ph: r() * TAU, c: i % 3 });
+        }
+      }
+      for (i = 0; i < n; i++) {
+        p = P[i];
+        nx = sim(p.x * 0.0022, p.y * 0.0022 + t * 0.07) * 72;
+        ny = sim(p.x * 0.0022 + 31.7, p.y * 0.0022 + t * 0.06) * 72;
+        a = 0.22 + 0.78 * Math.pow(0.5 + 0.5 * Math.sin(t * p.sp + p.ph), 2);
+        size = p.r * (2.6 + a * 2.2);
+        c.globalAlpha = a * 0.9;
+        c.drawImage(spr[p.c], p.x + nx - size / 2, p.y + ny - size / 2, size, size);
+      }
+      c.globalAlpha = 1;
+    }
+  };
+
+  function _glow(color) {
+    var cv = document.createElement('canvas');
+    cv.width = cv.height = 64;
+    var g = cv.getContext('2d');
+    var rg = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+    rg.addColorStop(0, 'rgba(255,255,255,1)');
+    rg.addColorStop(0.35, 'rgba(255,255,255,0.55)');
+    rg.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = rg; g.fillRect(0, 0, 64, 64);
+    g.globalCompositeOperation = 'source-in';
+    g.fillStyle = color; g.fillRect(0, 0, 64, 64);
+    g.globalCompositeOperation = 'source-over';
+    return cv;
+  }
+
+  var _SIM_F2 = 0.5 * (Math.sqrt(3) - 1), _SIM_G2 = (3 - Math.sqrt(3)) / 6;
+  var _SIM_GRAD = [1,1,0,-1,1,0,1,-1,0,-1,-1,0,1,0,1,-1,0,1,1,0,-1,-1,0,-1,0,1,1,0,-1,1,0,1,-1,0,-1,-1];
+  function _makeSimplex(seed) {
+    var r = rng(seed), p = new Uint8Array(256), i, j, tmp;
+    for (i = 0; i < 256; i++) p[i] = i;
+    for (i = 255; i > 0; i--) { j = Math.floor(r() * (i + 1)); tmp = p[i]; p[i] = p[j]; p[j] = tmp; }
+    var perm = new Uint8Array(512), m12 = new Uint8Array(512);
+    for (i = 0; i < 512; i++) { perm[i] = p[i & 255]; m12[i] = perm[i] % 12; }
+    return function (xin, yin) {
+      var n0 = 0, n1 = 0, n2 = 0;
+      var s = (xin + yin) * _SIM_F2;
+      var i2 = Math.floor(xin + s), j2 = Math.floor(yin + s);
+      var tt = (i2 + j2) * _SIM_G2;
+      var x0 = xin - (i2 - tt), y0 = yin - (j2 - tt);
+      var i1, j1;
+      if (x0 > y0) { i1 = 1; j1 = 0; } else { i1 = 0; j1 = 1; }
+      var x1 = x0 - i1 + _SIM_G2, y1 = y0 - j1 + _SIM_G2;
+      var x2 = x0 - 1 + 2 * _SIM_G2, y2 = y0 - 1 + 2 * _SIM_G2;
+      var ii = i2 & 255, jj = j2 & 255;
+      var t0 = 0.5 - x0 * x0 - y0 * y0;
+      if (t0 > 0) { var g0 = m12[ii + perm[jj]] * 3; t0 *= t0; n0 = t0 * t0 * (_SIM_GRAD[g0] * x0 + _SIM_GRAD[g0 + 1] * y0); }
+      var t1 = 0.5 - x1 * x1 - y1 * y1;
+      if (t1 > 0) { var g1 = m12[ii + i1 + perm[jj + j1]] * 3; t1 *= t1; n1 = t1 * t1 * (_SIM_GRAD[g1] * x1 + _SIM_GRAD[g1 + 1] * y1); }
+      var t2 = 0.5 - x2 * x2 - y2 * y2;
+      if (t2 > 0) { var g2 = m12[ii + 1 + perm[jj + 1]] * 3; t2 *= t2; n2 = t2 * t2 * (_SIM_GRAD[g2] * x2 + _SIM_GRAD[g2 + 1] * y2); }
+      return 70 * (n0 + n1 + n2);
+    };
+  }
+
+  Object.assign(P, EX);
+
   var NAMES = {
-    B08: ["particles", { count: 70 }],
-    B09: ["dots", { step: 28 }],
-    B10: ["grid", { step: 64 }],
-    B11: ["grid", { step: 44 }],
-    B12: ["rays", { count: 11, cy: 1.06 }],
-    B13: ["rays", { count: 7, cx: 0.18, cy: 0.5 }],
-    B14: ["ripples", {}],
-    B15: ["ribbons", { count: 5 }],
-    B16: ["ribbons", { count: 8 }],
-    B17: ["blobs", { seed: 3 }],
-    B18: ["pixels", { size: 52, seed: 5 }],
-    B19: ["dots", { step: 18 }],
-    B20: ["pixels", { size: 34, seed: 9 }],
-    B21: ["pixels", { size: 24, seed: 13 }],
     B23: ["halftone", { step: 13 }],
     B24: ["scanlines", { gap: 4 }],
     B25: ["dotglow", { step: 30 }],
@@ -349,15 +499,17 @@
     B30: ["rain", { count: 90 }],
     B31: ["pixelate", { size: 22 }],
     B32: ["checker", { size: 64 }],
-    B33: ["paper", {}],
     B34: ["beams", { count: 5 }],
     B35: ["dust", { count: 140 }],
-    B36: ["gradientmesh", {}]
+    B36: ["gradientmesh", {}],
+    B37: ["cloudnoise", { scale: 4 }],
+    B38: ["warpnoise", { scale: 4 }],
+    B39: ["drift", { count: 260, seed: 11 }]
   };
 
   /* 直接画：给定编号和 t，画一帧（给单画布轮播用） */
   function draw(ctx, name, w, h, t, opts) {
-    var entry = NAMES[name] || NAMES.B08;
+    var entry = NAMES[name] || NAMES.B23;
     var fn = P[entry[0]];
     if (!fn) return false;
     var params = {};
@@ -370,7 +522,7 @@
 
   function bind(timeline, canvas, name, opts) {
     if (!timeline || !canvas) return;
-    var entry = NAMES[name] || NAMES.B08;
+    var entry = NAMES[name] || NAMES.B23;
     var fn = P[entry[0]];
     if (!fn) return;
     var params = {};
@@ -380,6 +532,19 @@
     var ctx = canvas.getContext("2d");
     if (!ctx) return;
     canvas.width = 1080; canvas.height = 1920;
+    /* 颜色不用改 pattern 本身：整层用 CSS filter 调。
+       invert:1  → 白点变黑点（浅底用）
+       hue:180   → 换色相（冷青 → 暖橙这类）
+       saturate  → 降低或提高饱和度
+       这三个都写进 background_params，和 step/count 一样能调。 */
+    (function () {
+      var f = [];
+      if (opts && (opts.invert === 1 || opts.invert === true)) { f.push("invert(1)"); }
+      if (opts && opts.hue != null) { f.push("hue-rotate(" + Number(opts.hue) + "deg)"); }
+      if (opts && opts.saturate != null) { f.push("saturate(" + Number(opts.saturate) + ")"); }
+      if (opts && opts.brightness != null) { f.push("brightness(" + Number(opts.brightness) + ")"); }
+      canvas.style.filter = f.length ? f.join(" ") : "";
+    })();
     var last = -1;
     var stage = document.getElementById("stage");
     var dur = Number(stage && stage.getAttribute("data-duration")) || 60;
@@ -389,13 +554,12 @@
       last = t;
       fn(ctx, canvas.width, canvas.height, t, params);
     }
-    /* 用一条与片长等长的哑 tween 驱动重绘：不延长总时长，seek 到哪一帧都成立 */
-    timeline.to({}, { duration: dur, ease: "none", onUpdate: paint }, 0);
     window.addEventListener("hf-seek", function (e) {
       var t = (e && e.detail && e.detail.time);
-      if (typeof t === "number") { last = -1; fn(ctx, canvas.width, canvas.height, t, params); }
+      if (typeof t === "number") { last = -1; paint(); }
     });
-    fn(ctx, canvas.width, canvas.height, 0, params);
+    last = -1;
+    paint();
   }
 
   global.bgkit = { bind: bind, draw: draw, patterns: Object.keys(NAMES), names: NAMES };

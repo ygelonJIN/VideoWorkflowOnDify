@@ -7,18 +7,14 @@
 - `approved_package_json`：{{#a16.approved_package_json#}}
 - `art_direction_json`：{{#h01d.text#}}
 - `component_grammar_json`：{{#h01c.text#}}
-- `background_css`：{{#h01w.background_css#}}
-- `background_js`：{{#h01w.background_js#}}
-- `background_spec_json`：{{#h01w.background_spec_json#}}
 - `design_brief`：{{#h00.design_brief#}}
 - `image_brief_json`：{{#h01pv.image_brief_json#}}（全片图片风格与每一屏的 `role`：full / inset / portrait / texture / html；图片路径由场景组按 id 写）
 
-## 你只做四件事
+## 你只做三件事
 
 1. **照抄令牌**：把 `art_direction_json.tokens` 原样写进 `:root`，值不许改、不许补、不许自己加减档。**只落颜色、字体栈、圆角、描边、缓动、时长**；字号、行高、间距、对齐不写进 `:root`，也不要在骨架里定义任何全局文字类（`.title` / `.body` / `.kicker` 这类）——字阶归每一屏自己定。
-2. **落结构**：画布、场景外壳、背景容器、四个场景占位、动效占位、转场占位、媒体占位、主时间线脚本。
-3. **接背景**：把 `background_css` 原样拼进 `<style>`，`background_js` 原样包成一段 `<script>`，`#background-layer` 容器放在 `#scenes` 之前。
-4. **接图片**：写图片的基础样式（见下），场景组只负责放 `<img>` 和写自己那一屏的定位，不再重复定义。
+2. **落结构**：画布、场景外壳、四个场景占位、动效占位、转场占位、媒体占位、主时间线脚本。
+3. **接图片**：写图片的基础样式（见下），场景组只负责放 `<img>` 和写自己那一屏的定位，不再重复定义。
 
 ## 必须输出的结构（技术契约）
 
@@ -27,7 +23,6 @@
   - 字体栈直接用 `art_direction_json.typography.stack`。
   - `#stage { position: relative; width: 1080px; height: 1920px; overflow: hidden; }`
   - `#scenes { position: absolute; inset: 0; }`
-  - `#background-layer { position: absolute; inset: 0; z-index: 0; pointer-events: none; }`
   - `.scene { position: absolute; inset: 0; overflow: hidden; }` 兜底
   - **图片基础样式（必须写，场景组会直接用这些类名）**：
 
@@ -43,16 +38,13 @@
   - `.media-scrim` 是压在图上、垫在文字下的遮罩层，默认透明，颜色与强度由场景组按 `art_direction_json` 决定。
   - `.scene-bg` 是 `role=html` 屏的背景容器基础类；场景组用 `.gX-bg scene-bg` 写自己那一屏的 CSS 背景，`data-anim="bg"`，不需要照片。
   - 照片路径统一由场景组写成 `{{IMG:图片id}}`，本地渲染前会替换成真实文件；骨架里**不要**写任何具体图片路径。
-  - `background_css` 原样拼在后面。
 - `<body>`：
-  - `<div id="stage" data-composition-id="..." data-width="1080" data-height="1920" data-duration="..." data-caption-sync="transcript-required" data-render-mode="black-frame">`
-  - `<div id="background-layer" aria-hidden="true"></div>`
+  - `<div id="stage" data-bg-tone="dark|light" data-composition-id="..." data-width="1080" data-height="1920" data-duration="..." data-caption-sync="transcript-required" data-render-mode="black-frame">`（`data-bg-tone` 取 `design_brief.background_tone` 的值，逐字照抄；组件配色靠它切换）
   - `<div id="scenes">` 内四个占位：`<!-- SCENES_A -->` `<!-- SCENES_B -->` `<!-- SCENES_C -->` `<!-- SCENES_D -->`
   - 媒体占位两个：`<template data-media-type="audio" data-audio-role="voiceover" data-media-src="媒体/口播.mp3"></template>` 和 `... data-audio-role="background-music" ...`
   - 动效占位：`<!-- MOTION_SCRIPTS -->`
   - 转场占位：`<!-- TRANSITION_SCRIPTS -->`（放在动效占位之后、主时间线脚本之前）
 - `<head>` 末尾先写 `window.__sceneBuilders = window.__sceneBuilders || [];`
-- `background_js` 不为空时，作为独立 `<script>` 放在 `#background-layer` 之后、`#scenes` 之前。
 
 - body 末尾主时间线脚本**原样照抄**，一个字都不改：
 
@@ -104,6 +96,8 @@
 
 ## 禁止
 
+- **不要新增全片底色层**：本片没有 `#background-layer`。屏与屏之间的底色差异由各自的 B 卡负责。
+
 - **不要在骨架里画任何具象图形**：不写 SVG 插画、不写 canvas、不写用 CSS 拼出来的场景/物体/图标。画面里的具象视觉由照片承担；无图屏（`role=html`）只用抽象结构、线条、色块和排版做背景，不补画具象物体。
 - **不要自己发明颜色、圆角、阴影、缓动**：全部引用 `:root` 变量，变量缺失就照上游原值写，不许补默认值。
 - **字号、行高、间距、对齐不归你**：不要在骨架里写任何全局文字类或字阶，场景组会按自己那一屏的构图和字号力度另写。骨架只保证画布、场景外壳、图层顺序、安全区和图片基础样式。
@@ -113,4 +107,4 @@
 - 不要改主时间线脚本，不要把它包进其它作用域。
 - 不要手写 `<script src="素材/vendor/gsap.min.js">` 或 `motion-kit.js`：本地渲染前会自动注入这两个运行时。
 - 不要用 `Math.random`、`performance.now`、`requestAnimationFrame`、`setTimeout` 当时钟。
-- 不要写死背景样式（背景来自 `background_css` / `background_js`），也不要写转场（转场来自转场脚本节点）。
+- 不要写全片底色、不要写背景层样式：每一屏的背景由该屏的 `data-anim="bg"` 容器 + 背景卡编号（B 系列）承担，骨架里不放 `#background-layer`，也不要有全片统一底色层。也不要写转场（转场来自转场脚本节点）。

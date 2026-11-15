@@ -49,7 +49,10 @@ def main() -> None:
     parser.add_argument("--from", dest="source", type=Path, default=None, help="先把这里的图片搬进图片目录（保持原名）")
     parser.add_argument("--move", action="store_true", help="配合 --from：搬移而不是复制")
     parser.add_argument("--order", choices=("mtime", "name"), default="mtime",
-                        help="排序依据：mtime=修改时间从早到晚（默认），name=文件名里的数字")
+                        help="仅配合 --allow-unnamed 生效：mtime=修改时间从早到晚")
+    parser.add_argument("--strict-ids", action="store_true", help="只认按 id 命名的图片，没命名的直接报错")
+    parser.add_argument("--allow-unnamed", action="store_true",
+                        help="（兼容旧命令，已是默认行为）")
     args = parser.parse_args()
 
     ids = load_ids(args.plan)
@@ -89,15 +92,25 @@ def main() -> None:
     for image_id in ids:
         if image_id in by_id:
             mapping[image_id] = by_id[image_id]
-        elif cursor < len(unnamed):
+        elif cursor < len(unnamed) and not args.strict_ids:
             mapping[image_id] = unnamed[cursor]
             cursor += 1
 
     print("")
-    print("对号（按修改时间从早到晚，文件名不动）：")
+    print("对号：")
     for image_id in ids:
         item = mapping.get(image_id)
         print("  %-6s ← %s" % (image_id, item.name if item else "（还没放）"))
+
+    if unnamed and args.strict_ids:
+        print("")
+        print("图片没有按 id 命名，拒绝按修改时间猜对号：")
+        for item in unnamed[:12]:
+            print("  " + item.name)
+        print("")
+        print("把它们改名成 媒体/图片/%s.png（%s）再跑，或去掉 --strict-ids 按修改时间对号。" % (
+            ids[0] if ids else "s01", "、".join(ids[:6])))
+        raise SystemExit(2)
 
     extra = unnamed[len([i for i in ids if i not in by_id]):]
     if extra:

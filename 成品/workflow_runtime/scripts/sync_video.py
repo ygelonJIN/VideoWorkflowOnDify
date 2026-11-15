@@ -1288,6 +1288,9 @@ SCENE_OFFSET_SCRIPT = """
   // 就会盖掉这一屏自己的入场。2026-11-12：31.27s 的"图片先闪一下再入场"
   // 就是这么来的。转场只许动离场屏。
   function watchIncomingWrite(args){
+    // 2026-11-15：转场模型改成"进入屏提前 0.45s 可见 + 整屏滑入"，切点前写动作是设计要求，
+    // 这条违规不再成立（保留函数体方便以后回滚）。
+    if (document.querySelector('.scene[data-cue-start]')) { return; }
     var vars = varsOf(args);
     if (!vars) { return; }
     var touches = ('opacity' in vars) || ('clipPath' in vars) || ('scale' in vars) ||
@@ -1302,7 +1305,10 @@ SCENE_OFFSET_SCRIPT = """
       if (typeof args[i] === 'number') { position = args[i]; break; }
     }
     if (position === null) { position = sceneStart; }
-    if (Math.abs(position - sceneStart) > 0.12) { return; }
+    // 2026-11-15：场景显隐由渲染器按 data-start 切，进入屏只能在切点之后才可见，
+    // 所以转场必须从 __sceneStart 起、往后 0.45s 内落定。这里只拦比进入屏还早的写入——
+    // 那种动作发生在这屏还不可见的时候，等于白写，还会和入场抢属性。
+    if (position >= sceneStart - 0.12) { return; }
     recordViolation({
       kind: 'transition-on-incoming',
       key: sceneLabelOf(args[0]) + '|' + Math.round(position * 1000),
@@ -1332,16 +1338,25 @@ SCENE_OFFSET_SCRIPT = """
     if (!element || !element.closest) { return null; }
     return element.closest('.scene');
   }
+  // 竞态 2026-11-15：data-start 已经被提前 overlap 秒（为了让进入屏提前可见），
+  // 屏内动效必须锚在真实切点 data-cue-start 上，否则整屏动作会跟着提前。
+  function cueStartOf(element){
+    if (!element || !element.getAttribute) { return 0; }
+    var cue = element.getAttribute('data-cue-start');
+    return Number(cue == null ? (element.getAttribute('data-start') || 0) : cue);
+  }
   function sceneStartOf(target){
     var scene = sceneOfTarget(target);
-    return scene ? Number(scene.getAttribute('data-start') || 0) : null;
+    return scene ? cueStartOf(scene) : null;
   }
   function sceneWindowOf(target){
     var scene = sceneOfTarget(target);
     if (!scene) { return null; }
-    var start = Number(scene.getAttribute('data-start') || 0);
+    var start = cueStartOf(scene);
+    var rawStart = Number(scene.getAttribute('data-start') || 0);
     var dur = Number(scene.getAttribute('data-duration') || 0);
-    return dur > 0 ? { start: start, dur: dur } : null;
+    var cueDur = rawStart + dur - start;
+    return cueDur > 0 ? { start: start, dur: cueDur } : null;
   }
   function resolveTarget(selector){
     if (typeof selector !== 'string') { return selector; }
@@ -1421,6 +1436,538 @@ SCENE_OFFSET_SCRIPT = """
 """
 
 
+GT_HEAD_SCRIPTS = (
+    '<script src="assets/gltrans-kit.js"></script>\n'
+    '<script src="assets/gl-transitions.glsl.js"></script>\n'
+)
+
+PAGE_GT_JS = r"""
+(function(){
+  if (window.__gtCut) { return; }
+  var list = [];
+  function sceneEl(id){ return document.querySelector('.scene[data-scene="' + id + '"]'); }
+  function prevId(el){
+    var all = Array.prototype.slice.call(document.querySelectorAll('#stage .scene'));
+    var i = all.indexOf(el);
+    return i > 0 ? all[i - 1].getAttribute('data-scene') : null;
+  }
+  /** 页间 GT 转场：把"上一屏快照"用 gl-transitions 的 shader 过渡到"这一屏快照"。
+   *  快照由 脚本/snapshot_scenes.mjs 在渲染前生成到 媒体/快照/。 */
+  window.__gtCut = function(timeline, shader, id, at, dur, params){
+    var el = sceneEl(id);
+    if (!el || !window.glt) { return; }
+    var prev = prevId(el);
+    if (!prev) { return; }
+    var canvas = document.createElement('canvas');
+    canvas.width = 1080;
+    canvas.height = 1920;
+    canvas.style.cssText = 'position:absolute;left:0;top:0;width:1080px;height:1920px;z-index:45;pointer-events:none;display:none;';
+    el.appendChild(canvas);
+    var item = {el: el, canvas: canvas, fx: null, at: at, dur: (dur > 0 ? dur : 0.55)};
+    list.push(item);
+    // 用页面里预载好的隐藏 img（load 时已就绪）；glt.create 只认元素/颜色，不认路径字符串。
+    var f = document.getElementById('snap-' + prev);
+    var t = document.getElementById('snap-' + id);
+    function build(){
+      if (!f || !t || !f.naturalWidth || !t.naturalWidth) { return; }
+      var fx = window.glt.create(canvas, shader, {from: f, to: t, params: params || {}});
+      if (fx) { item.fx = fx; }
+    }
+    build();
+    if (!item.fx) {
+      if (f) { f.addEventListener('load', build); }
+      if (t) { t.addEventListener('load', build); }
+    }
+  };
+  window.__gtTick = function(t){
+    for (var i = 0; i < list.length; i++) {
+      var item = list[i];
+      var raw = (t - item.at) / item.dur;
+      if (raw < 0 || raw >= 1 || !item.fx || !item.fx.ready()) { item.canvas.style.display = 'none'; continue; }
+      item.canvas.style.display = 'block';
+      item.fx.draw(raw);
+    }
+  };
+  window.__gtItems = list;
+  window.__gtList = function(){ return list.length; };
+})();
+"""
+
+
+SCENE_BASE_STYLE = (
+    '<style id="scene-base-style">\n'
+    # 每屏自成一个层叠上下文：否则屏内的 .scene-copy(z-index:5) 会跑到后面那屏上面，
+    # 转场时上一页的文字就浮在新页画面上（2026-11-15 实测）。
+    '.scene{isolation:isolate;}\n'
+    '.scene > .scene-base{position:absolute;inset:0;z-index:0;'
+    'background:var(--scene-base,#0b0f18);pointer-events:none;}\n'
+    '</style>\n'
+)
+
+
+def install_scene_backdrop(document: str) -> str:
+    """给每一屏铺一层不透明底色。
+
+    为什么必须有：页间转场是"新页从一侧盖上来"。原来屏本身是透明的（只有背景卡 +
+    照片 + 文字），擦开的地方会透出上一屏，成片里看到两页文字叠在一起；
+    有了这层，被擦开的区域就是完整的一页，上一屏被逐步盖住，到擦完才消失。
+    颜色取 stage 的底色变量，深场项目保持一致。
+    """
+    if 'scene-base-style' not in document:
+        if '</head>' in document:
+            document = document.replace('</head>', SCENE_BASE_STYLE + '</head>', 1)
+        else:
+            document = SCENE_BASE_STYLE + document
+    pattern = re.compile(r'(<section\b[^>]*\bclass="[^"]*\bscene\b[^"]*"[^>]*>)', re.I)
+    def _add(match: re.Match) -> str:
+        tag = match.group(1)
+        rest = document[match.end():match.end() + 400]
+        if 'class="scene-base"' in rest:
+            return tag
+        return tag + '\n  <div class="scene-base"></div>'
+    return pattern.sub(_add, document)
+
+
+def install_gt_runtime(document: str) -> str:
+    """装 gl-transitions 运行时和页间 GT 转场 API。"""
+    if 'gltrans-kit.js' not in document:
+        if '</head>' in document:
+            document = document.replace('</head>', GT_HEAD_SCRIPTS + '</head>', 1)
+        else:
+            document = GT_HEAD_SCRIPTS + document
+    document = re.sub(r'<script id="page-gt-runtime">[\s\S]*?</script>\s*', '', document)
+    document = re.sub(r'<div id="gt-snaps"[\s\S]*?</div>\s*', '', document, count=1)
+    # 快照必须在页面 load 之前就绪：渲染器不会等我们在 JS 里 new Image()，
+    # 于是把快照做成隐藏 img 预载，load 事件自然会把它们等齐。
+    scene_ids = re.findall(r'<section\b[^>]*\bdata-scene="([^"]+)"', document)
+    if scene_ids:
+        imgs = "".join(
+            '<img id="snap-%s" src="媒体/快照/%s.png" alt="" style="position:absolute;width:1px;height:1px;opacity:0;pointer-events:none;">'
+            % (sid, sid) for sid in scene_ids)
+        document = document.replace("</body>", '<div id="gt-snaps" hidden>' + imgs + '</div>\n</body>', 1)
+    block = '<script id="page-gt-runtime">' + PAGE_GT_JS + '</script>\n'
+    if "</body>" in document:
+        return document.replace("</body>", block + "</body>", 1)
+    return document + block
+
+
+PAGE_TRANSITIONS_JS = r"""
+(function(){
+  if (window.__pt) { return; }
+  function sceneEl(id){
+    return document.querySelector('.scene[data-scene="' + id + '"]') || document.querySelector('#' + id);
+  }
+  function prevScene(el){
+    var all = Array.prototype.slice.call(document.querySelectorAll('#stage .scene'));
+    var i = all.indexOf(el);
+    return i > 0 ? all[i - 1] : null;
+  }
+  /**
+   * 页间转场：只动 DOM，不依赖纹理，逐帧 seek 可复现。
+   * 用法：__pt(timeline, 'iris', 's02', window.__sceneStart('s02') - 0.45, 0.45)
+   */
+  window.__pt = function(timeline, kind, id, at, dur){
+    var el = sceneEl(id);
+    if (!el || !timeline) { return; }
+    var d = (typeof dur === 'number' && dur > 0) ? dur : 0.45;
+    var base = { duration: d };
+    function fromTo(from, to){
+      to.duration = d;
+      timeline.fromTo(el, from, to, at);
+    }
+    if (kind === 'iris') {
+      fromTo({clipPath: 'circle(0% at 50% 50%)'}, {clipPath: 'circle(78% at 50% 50%)', ease: 'power2.inOut'});
+      return;
+    }
+    if (kind === 'wipe-diag') {
+      fromTo({clipPath: 'polygon(0% 0%, 0% 0%, 0% 100%, 0% 100%)'},
+             {clipPath: 'polygon(0% 0%, 100% 0%, 100% 100%, 0% 100%)', ease: 'power2.inOut'});
+      return;
+    }
+    if (kind === 'curtain') {
+      fromTo({clipPath: 'inset(0% 0% 100% 0%)'}, {clipPath: 'inset(0% 0% 0% 0%)', ease: 'power2.out'});
+      return;
+    }
+    if (kind === 'blinds') {
+      el.style.webkitMaskImage = 'repeating-linear-gradient(0deg, #000 0 8%, transparent 8% 16%)';
+      el.style.maskImage = 'repeating-linear-gradient(0deg, #000 0 8%, transparent 8% 16%)';
+      el.style.webkitMaskSize = '100% 0%';
+      el.style.maskSize = '100% 0%';
+      timeline.fromTo(el, {webkitMaskSize: '100% 0%', maskSize: '100% 0%'},
+        {webkitMaskSize: '100% 100%', maskSize: '100% 100%', duration: d, ease: 'power2.inOut'}, at);
+      return;
+    }
+    if (kind === 'zoom-cover') {
+      fromTo({scale: 1.28}, {scale: 1, ease: 'power2.out'});
+      return;
+    }
+    if (kind === 'push-both') {
+      var prev = prevScene(el);
+      timeline.fromTo(el, {xPercent: 100}, {xPercent: 0, duration: d, ease: 'power2.inOut'}, at);
+      if (prev) { timeline.fromTo(prev, {xPercent: 0}, {xPercent: -100, duration: d, ease: 'power2.inOut'}, at); }
+      return;
+    }
+    if (kind === 'flip3d') {
+      el.style.transformOrigin = '0% 50%';
+      el.style.perspective = '1600px';
+      fromTo({rotationY: 82, opacity: 1, transformOrigin: '0% 50%'},
+             {rotationY: 0, opacity: 1, ease: 'power2.inOut'});
+      return;
+    }
+    if (kind === 'flash-cut') {
+      var flash = document.createElement('div');
+      flash.style.cssText = 'position:absolute;inset:0;background:#fff;z-index:60;pointer-events:none;opacity:0;';
+      el.appendChild(flash);
+      timeline.fromTo(flash, {opacity: 0}, {opacity: 0.85, duration: d * 0.35, ease: 'power1.out'}, at);
+      timeline.to(flash, {opacity: 0, duration: d * 0.65, ease: 'power1.in'}, at + d * 0.35);
+      timeline.set(el, {opacity: 1}, at + d * 0.3);
+      return;
+    }
+    // 兜底：右侧滑入
+    fromTo({xPercent: 100}, {xPercent: 0, ease: 'power2.inOut'});
+  };
+  window.__ptList = ['iris', 'wipe-diag', 'curtain', 'blinds', 'zoom-cover', 'push-both', 'flip3d', 'flash-cut'];
+})();
+"""
+
+
+def install_page_transitions(document: str) -> str:
+    document = re.sub(r'<script id="page-transition-runtime">[\s\S]*?</script>\s*', '', document)
+    block = '<script id="page-transition-runtime">' + PAGE_TRANSITIONS_JS + '</script>\n'
+    if "</body>" in document:
+        return document.replace("</body>", block + "</body>", 1)
+    return document + block
+
+
+def apply_scene_overlap(document: str, overlap: float = 0.45, tail: float = 0.9) -> str:
+    """页间交接：让上一屏在切点之后多留 tail 秒，两屏同时在场才能做"推走"。
+
+    以前是"进入屏提前 0.45s 可见"，但渲染器把进入屏压到 data-start 才显示，
+    结果上一屏在切点瞬间消失 → 永远是硬切。现在改成：
+      - data-start 不动（进入屏在切点才出现，符合渲染器行为）；
+      - 上一屏的 data-duration 延长 tail，切点后两屏同时在；
+      - 转场就是两屏一起动（新页推入、旧页被推出），任何时刻画面都是满的。
+    data-cue-start 仍记真实切点，屏内动效锚在它上面。
+    """
+    pattern = re.compile(r'<section\b[^>]*\bclass="[^"]*\bscene\b[^"]*"[^>]*>', re.I)
+    matches = list(pattern.finditer(document))
+    cues = []
+    for match in matches:
+        tag = match.group(0)
+        cue_m = re.search(r'\bdata-cue-start="([0-9.]+)"', tag)
+        start_m = re.search(r'\bdata-start="([0-9.]+)"', tag)
+        base = cue_m or start_m
+        cues.append(float(base.group(1)) if base else None)
+    repl = []
+    for idx, match in enumerate(matches):
+        if cues[idx] is None:
+            continue
+        cue = cues[idx]
+        end_t = (cues[idx + 1] if idx + 1 < len(cues) and cues[idx + 1] is not None else None)
+        tag = match.group(0)
+        tag = set_attribute(tag, "data-cue-start", "%.3f" % cue)
+        tag = set_attribute(tag, "data-start", "%.3f" % cue)
+        if end_t is not None:
+            tag = set_attribute(tag, "data-duration", "%.3f" % max(0.12, end_t + tail - cue))
+        repl.append((match, tag))
+    for match, tag in reversed(repl):
+        document = document[:match.start()] + tag + document[match.end():]
+    return document
+
+
+def install_scene_window(document: str, overlap: float = 0.0) -> str:
+    """统一的场景可见窗口：进入屏提前 overlap 秒可见。
+
+    为什么必须提前：页间交接只有一个动作——进入屏的画面盖住上一屏。
+    如果进入屏到 data-start 才 visible，它就没机会"盖"，只能硬切。
+
+    2026-11-15 修：以前只挂 __seekTo，而渲染器实际是直接 seek 时间线
+    （页面自己的 onUpdate 显隐驱动在 seek 时照跑），于是进入屏直到 data-start
+    才出现，6 刀转场全部看不见。现在把驱动挂到时间线本身，并在页面 boot
+    之后再接管一次（页面在 DOMContentLoaded 里注册的回调会覆盖这里）。
+    """
+    document = re.sub(r'<script id="scene-window-runtime">[\s\S]*?</script>\s*', '', document)
+    script = (
+        '<script id="scene-window-runtime">\n'
+        '(function(){\n'
+        '  var OVERLAP = %s;\n'
+        '  function driver(t){\n'
+        '    var scenes = Array.prototype.slice.call(document.querySelectorAll(".scene"));\n'
+        '    var any = false;\n'
+        '    for (var i = 0; i < scenes.length; i++) {\n'
+        '      var sc = scenes[i];\n'
+        '      var start = Number(sc.getAttribute("data-start"));\n'
+        '      var dur = Number(sc.getAttribute("data-duration"));\n'
+        '      if (!isFinite(start) || !isFinite(dur)) { continue; }\n'
+        '      var on = t >= Math.max(0, start - OVERLAP) && t < start + dur;\n'
+        '      sc.style.visibility = on ? "visible" : "hidden";\n'
+        '      if (on) { any = true; }\n'
+        '    }\n'
+        '    if (!any && scenes.length) { scenes[0].style.visibility = "visible"; }\n'
+        '    if (typeof window.__gtTick === "function") { window.__gtTick(t); }\n'
+        '  }\n'
+        '  function currentTimeline(){\n'
+        '    return (window.__timelines && Object.values(window.__timelines)[0]) || null;\n'
+        '  }\n'
+        '  function bind(){\n'
+        '    var tl = currentTimeline();\n'
+        '    if (!tl || !tl.seek) { return false; }\n'
+        '    if (tl.__sceneWindowBound) { driver(tl.time()); return true; }\n'
+        '    tl.__sceneWindowBound = true;\n'
+        '    var nativeSeek = tl.seek;\n'
+        '    tl.seek = function(sec, suppress){\n'
+        '      var r = nativeSeek.call(tl, sec, suppress === undefined ? false : suppress);\n'
+        '      driver(tl.time());\n'
+        '      return r;\n'
+        '    };\n'
+        '    var pageCb = null;\n'
+        '    try { pageCb = tl.eventCallback("onUpdate"); } catch (e) {}\n'
+        '    tl.eventCallback("onUpdate", function(){\n'
+        '      if (typeof pageCb === "function") { try { pageCb(); } catch (e) {} }\n'
+        '      driver(tl.time());\n'
+        '    });\n'
+        '    driver(tl.time());\n'
+        '    return true;\n'
+        '  }\n'
+        '  var priorSeekTo = window.__seekTo;\n'
+        '  window.__seekTo = function(sec){\n'
+        '    var tl = currentTimeline();\n'
+        '    if (tl && tl.seek) { tl.seek(Number(sec) || 0, false); }\n'
+        '    driver(tl ? tl.time() : (Number(sec) || 0));\n'
+        '    if (typeof window.__hfRenderState === "function") { try { window.__hfRenderState(tl ? tl.time() : sec); } catch (e) {} }\n'
+        '    if (priorSeekTo) { try { priorSeekTo(sec); } catch (e) {} }\n'
+        '  };\n'
+        '  window.__updateScenes = function(t){ driver(Number(t) || 0); };\n'
+        '  function onSeek(e){\n'
+        '    var d = (e && e.detail) || {};\n'
+        '    var tl = currentTimeline();\n'
+        '    driver(d.time === undefined ? (tl ? tl.time() : 0) : Number(d.time));\n'
+        '  }\n'
+        '  window.addEventListener("hf-seek", onSeek);\n'
+        '  document.addEventListener("hf-seek", onSeek);\n'
+        '  var tries = 0;\n'
+        '  var timer = setInterval(function(){ tries += 1; if (bind() || tries > 200) { clearInterval(timer); } }, 20);\n'
+        '  window.addEventListener("load", function(){ bind(); });\n'
+        '  if (document.readyState !== "loading") { bind(); }\n'
+        '})();\n'
+        '</script>\n' % overlap
+    )
+    if "</body>" in document:
+        return document.replace("</body>", script + "</body>", 1)
+    return document + script
+
+
+KEEP_OUTSIDE_COPY = ("bg", "scrim", "media", "sweep")
+
+
+def _split_top_level(fragment: str) -> list[str]:
+    """把一段 HTML 拆成顶层元素列表（只处理成对标签，注释/文本原样保留）。"""
+    blocks: list[str] = []
+    i = 0
+    n = len(fragment)
+    while i < n:
+        if fragment[i] != "<":
+            j = fragment.find("<", i)
+            j = n if j < 0 else j
+            blocks.append(fragment[i:j])
+            i = j
+            continue
+        m = re.match(r"<([a-zA-Z][\w-]*)", fragment[i:])
+        if not m:
+            blocks.append(fragment[i])
+            i += 1
+            continue
+        tag = m.group(1).lower()
+        if tag in ("br", "img", "hr", "meta", "link", "input", "source"):
+            j = fragment.find(">", i)
+            j = n if j < 0 else j + 1
+            blocks.append(fragment[i:j])
+            i = j
+            continue
+        i = n if i >= n else i
+        depth = 1
+        pos = fragment.find(">", i)
+        pos = n if pos < 0 else pos + 1
+        while depth > 0 and pos < n:
+            open_m = re.search(r"<" + re.escape(tag) + r"[\s>]", fragment[pos:], re.I)
+            close_m = re.search(r"</" + re.escape(tag) + r"\s*>", fragment[pos:], re.I)
+            if close_m is None:
+                pos = n
+                break
+            if open_m is not None and open_m.start() < close_m.start():
+                depth += 1
+                pos += open_m.start() + len(tag) + 1
+            else:
+                depth -= 1
+                pos += close_m.end()
+        blocks.append(fragment[i:pos])
+        i = pos
+    return blocks
+
+
+def normalize_scene_layers(document: str) -> str:
+    """把跑到 .scene-copy 外面的内容收进去。
+
+    2026-11-15 实测：场景组把 U 组件直接写成 section 的兄弟节点，section 是 flex 居中，
+    组件就压在文字上（s06 两段文字重叠 14088px²）。照片/遮罩/背景留在外面，
+    其余内容一律收进 .scene-copy，排版才归 composer 管。
+    """
+    pattern = re.compile(r'(<section\b[^>]*\bclass="[^"]*\bscene\b[^"]*"[^>]*>)([\s\S]*?)(</section>)', re.I)
+    moved_total = 0
+
+    def fix(match: re.Match) -> str:
+        nonlocal moved_total
+        open_tag, inner, close_tag = match.group(1), match.group(2), match.group(3)
+        blocks = _split_top_level(inner)
+        if not blocks:
+            return match.group(0)
+
+        def kind_of(block: str) -> str:
+            head = block[:400]
+            cls = re.search(r'class="([^"]*)"', head)
+            names = set((cls.group(1) if cls else "").split())
+            if "scene-copy" in names:
+                return "copy"
+            anim = re.search(r'data-anim="([^"]+)"', head)
+            if anim and anim.group(1) in KEEP_OUTSIDE_COPY:
+                return "keep"
+            if re.match(r"\s*(<!--|<script|<style|</)", block):
+                return "keep"
+            if not block.lstrip().startswith("<"):
+                return "text"
+            return "content"
+
+        kinds = [kind_of(b) for b in blocks]
+        if "content" not in kinds:
+            return match.group(0)
+
+        copy_idx = kinds.index("copy") if "copy" in kinds else None
+        extras = [b for b, k in zip(blocks, kinds) if k == "content"]
+        if not extras:
+            return match.group(0)
+        moved_total += len(extras)
+        if copy_idx is None:
+            inner = "".join(b for b, k in zip(blocks, kinds) if k != "content")
+            inner += '\n  <div class="scene-copy">\n    ' + "\n    ".join(extras) + "\n  </div>\n"
+            return open_tag + inner + close_tag
+        blocks[copy_idx] = blocks[copy_idx][: blocks[copy_idx].rindex("</div>")] + "\n    " + "\n    ".join(extras) + "\n  </div>"
+        inner = "".join(b for b, k in zip(blocks, kinds) if k != "content")
+        return open_tag + inner + close_tag
+
+    document = pattern.sub(fix, document)
+    if moved_total:
+        print("版面归位：把 %d 块跑到 .scene-copy 外面的内容收回去了" % moved_total)
+    return document
+
+
+def inject_layout_composer(document: str) -> str:
+    """按每屏的 composition 枚举本地生成文字样式。
+
+    场景只写结构 + data-role，不再自己写字号/字色/位置；
+    这里读 data-composition-zone/align/scale 和根上的 data-bg-tone，
+    交给 layout_composer 生成 [data-scene] 作用域的 CSS。
+    旧项目没有这些属性时什么都不做。
+    """
+    try:
+        import layout_composer
+    except Exception:
+        return document
+    root_tone = re.search(r'data-bg-tone="([^"]+)"', document)
+    root_tone = root_tone.group(1) if root_tone else "dark"
+    def _media_rect(sid):
+        """量这一屏照片的矩形：从 scene 里 media 元素的 class 反查它在 <style> 里的定位。"""
+        sec = re.search(r'<section[^>]*data-scene="%s"[^>]*>(.*?)</section>' % re.escape(sid), document, re.S)
+        if not sec:
+            return None
+        media_tag = re.search(r'<[^>]*data-anim="media"[^>]*>', sec.group(1))
+        if not media_tag:
+            return None
+        cls = re.search(r'class="([^"]+)"', media_tag.group(0))
+        if not cls:
+            return None
+        name = next((c for c in cls.group(1).split() if c not in ("media", "media--inset")), None)
+        if not name:
+            return None
+        rule = re.search(r'\[data-scene="%s"\]\s*\.%s\s*\{([^}]*)\}' % (re.escape(sid), re.escape(name)), document)
+        if not rule:
+            return None
+        body = rule.group(1)
+        top_m = re.search(r'top:\s*(-?\d+)px', body)
+        left = re.search(r'left:\s*(-?\d+)px', body)
+        right = re.search(r'right:\s*(-?\d+)px', body)
+        width = re.search(r'width:\s*(\d+)px', body)
+        if not width:
+            return None
+        w = int(width.group(1))
+        auto_left = False
+        if left:
+            l = int(left.group(1))
+        elif right:
+            # 2026-11-15：inset 照片的常见写法是只给 right/width（靠右一块）。
+            # 以前只认 left，这里返回 None，文字区就不知道要避让，直接压在照片上。
+            l = 1080 - int(right.group(1)) - w
+            auto_left = True
+        else:
+            return None
+        top_px = int(top_m.group(1)) if top_m else None
+        return {"left": l, "right": l + w, "cls": name, "auto_left": auto_left,
+                "top": top_px, "bottom": (top_px + int(re.search(r'height:\s*(\d+)px', body).group(1))) if top_px is not None and re.search(r'height:\s*(\d+)px', body) else None}
+
+    scenes = []
+    for match in re.finditer(r'<section\b[^>]*\bclass="[^"]*\bscene\b[^"]*"[^>]*>', document, re.I):
+        tag = match.group(0)
+        local = re.search(r'data-bg-tone="([^"]+)"', tag)
+        tone = local.group(1) if local else root_tone
+        sid = re.search(r'data-scene="([^"]+)"', tag)
+        zone = re.search(r'data-composition-zone="([^"]+)"', tag)
+        align = re.search(r'data-composition-align="([^"]+)"', tag)
+        scale = re.search(r'data-composition-scale="([^"]+)"', tag)
+        if not (sid and zone):
+            continue
+        _sid = sid.group(1)
+        _sec = re.search(r'<section[^>]*data-scene="%s"[^>]*>(.*?)</section>' % re.escape(_sid), document, re.S)
+        _title = re.search(r'data-role="title"[^>]*>(.*?)</', _sec.group(1), re.S) if _sec else None
+        if _title:
+            # 字号要按"最长那一行"算：标题里写了 <br> 时，整块字数算出来的每行字数
+            # 和真实行对不上，124px 的 8 字行会直接顶出卡片（2026-11-15 s01 实测）。
+            _raw = re.split(r'<br\s*/?>', _title.group(1), flags=re.I)
+            _chars = sum(len(re.sub(r'<[^>]+>|\s', '', part)) for part in _raw)
+            _line_chars = max(len(re.sub(r'<[^>]+>|\s', '', part)) for part in _raw) if _raw else 0
+        else:
+            _chars = 0
+            _line_chars = 0
+        scenes.append({
+            "id": _sid,
+            "zone": zone.group(1),
+            "align": align.group(1) if align else "",
+            "scale": scale.group(1) if scale else "",
+            "tone": tone,
+            "chars": _chars,
+            "line_chars": _line_chars,
+            "media": _media_rect(_sid),
+        })
+    # 字号由版面档位决定；data-fit 的 auto-fit 会把它改掉，一律清掉
+    document = re.sub(r'\s+data-fit="[^"]*"', '', document)
+    document = re.sub(r'<style id="layout-composer">[\s\S]*?</style>\s*', '', document, count=1)
+    css = layout_composer.build_document_css(scenes)
+    if not css:
+        return document
+    # 基础类 .media 是 inset:0（四边都钉住），场景只写 right 时浏览器按 left+width 布局，
+    # 照片会被推到左边（s02 实测）。这里给"只写 right"的媒体补一条 left:auto。
+    # 2026-11-15：不同时修这个和 _media_rect，文字避让方向会和照片实际位置相反。
+    fixups = []
+    for scene in scenes:
+        rect = scene.get("media") or {}
+        if rect.get("auto_left") and rect.get("cls"):
+            fixups.append('[data-scene="%s"] .%s{left:auto;}' % (scene["id"], rect["cls"]))
+    if fixups:
+        css = "\n".join(fixups) + "\n" + css
+    block = '<style id="layout-composer">\n%s</style>\n' % css
+    if "</head>" in document:
+        return document.replace("</head>", block + "</head>", 1)
+    return document
+
+
 def install_state_controller(document: str) -> str:
     # 老版本注入了旧控制器时先移除，保证 seek 修复能生效（否则老项目永远用旧版）。
     marker = "/* ---------- deterministic media-clock state controller ---------- */"
@@ -1467,6 +2014,14 @@ def install_scene_offset_runtime(document: str) -> str:
     return SCENE_OFFSET_SCRIPT + document
 
 
+# 2026-11-15：CustomEase 不再注入。它加载后 GSAP 会把带括号的 ease 字符串
+# 交给 CustomEase.create 解析，遇到参数格式不对就抛 "e.match is not a function"，
+# 逐帧 seek 直接崩、整片渲染失败。CustomBounce / CustomWiggle 依赖它，一起去掉。
+# 需要自定义曲线的卡改用内置 ease（back / elastic / power 系列）。
+GSAP_PLUGINS = ("SplitText", "DrawSVGPlugin", "MorphSVGPlugin", "MotionPathPlugin",
+                "EasePack", "Physics2DPlugin", "ScrambleTextPlugin", "TextPlugin", "Flip")
+
+
 def ensure_runtime_scripts(document: str) -> str:
     """Make sure GSAP and motion-kit are loaded; without them every scene builder is a no-op."""
     tags = []
@@ -1476,6 +2031,14 @@ def ensure_runtime_scripts(document: str) -> str:
         tags.append('<script src="素材/vendor/motion-kit.js"></script>')
     if "bg-kit.js" not in document:
         tags.append('<script src="素材/vendor/bg-kit.js"></script>')
+    # GSAP 插件（2026-11-13 起随运行时注入；CustomEase 必须在 CustomBounce/CustomWiggle 之前）
+    for _plug in GSAP_PLUGINS:
+        if _plug + ".min.js" not in document:
+            tags.append('<script src="素材/vendor/gsap-plugins/%s.min.js"></script>' % _plug)
+    # shader 转场（GT 族，2026-11-14）：只有真的用到 glt 才注入，别给普通片子塞 700KB
+    if ("glt.mount(" in document or "gltrans-kit.js" in document) and "gltrans-kit.js" not in document:
+        tags.append('<script src="素材/vendor/gltrans-kit.js"></script>')
+        tags.append('<script src="素材/vendor/gl-transitions.glsl.js"></script>')
     if "auto-fit.js" not in document:
         tags.append('<script src="素材/vendor/auto-fit.js"></script>')
     if "components.css" not in document:
@@ -1672,9 +2235,9 @@ def install_cue_times(document: str, cues: list[dict], entries: list[dict], time
         '  var fromLine = pick(pool, function(row, hit){\n'
         '    return row[1] + row[2] * (hit / Math.max(1, row[0].length)) - sceneStart;\n'
         '  });\n'
-        '  if (fromLine !== null) { return Math.min(Math.max(fromLine, 0.02), Math.max(0.05, sceneDur - 0.05)); }\n'
+        '  if (fromLine !== null) { return Math.min(Math.max(fromLine, 0.02), Math.max(0.05, sceneDur - (window.__cueHold == null ? 1.2 : window.__cueHold))); }\n'
         '  var fromWord = pick((window.__cueWords || {})[scene] || [], function(row){ return row[1]; });\n'
-        '  if (fromWord !== null) { return Math.min(Math.max(fromWord, 0.02), Math.max(0.05, sceneDur - 0.05)); }\n'
+        '  if (fromWord !== null) { return Math.min(Math.max(fromWord, 0.02), Math.max(0.05, sceneDur - (window.__cueHold == null ? 1.2 : window.__cueHold))); }\n'
         '  return null;\n'
         '};\n'
         'window.__cue = function(scene, phrase, fallback){\n'
@@ -1769,6 +2332,13 @@ def rewrite_html(path: Path, cues: list[dict], target_duration: float, transcrip
     document = enforce_production_layout(document, avatar_required=avatar_required)
     document = install_state_controller(document)
     document = apply_chrome_overrides(document)
+    document = apply_scene_overlap(document)
+    document = install_scene_window(document)
+    document = install_gt_runtime(document)
+    document = install_page_transitions(document)
+    document = normalize_scene_layers(document)
+    document = install_scene_backdrop(document)
+    document = inject_layout_composer(document)
     path.write_text(document, encoding="utf-8")
 
 

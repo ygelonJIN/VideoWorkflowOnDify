@@ -269,50 +269,135 @@ def zh_prompt(item: dict, prefix: str = "") -> str:
 
 
 def write_sheet(plan: dict, items: list[dict], out_path: Path, project: str) -> Path:
-    """生成给人用的出图清单：每张图一条 prompt，点一下全选，粘进即梦即可。"""
+    """出图页：只有两个动作——复制全部中文、打开文件夹；点完自动进到"放图"这一步。"""
     import html as html_lib
+    import json as json_lib
 
     prefix = style_prefix(plan)
-    cards = []
-    for item in items:
-        english = build_prompt(item, prefix)
-        cards.append(
-            '<section class="card">'
-            '<div class="head"><b>%s</b><span>%s · 文字留白 %s · 镜头 %s</span></div>'
-            '<p class="sub">%s</p>'
-            '<textarea readonly onclick="this.focus();this.select()">%s</textarea>'
-            '<details><summary>英文提示词（可选）</summary>'
-            '<textarea readonly onclick="this.focus();this.select()">%s</textarea></details>'
-            '<div class="foot">保存为 <code>%s.png</code></div>'
-            '</section>' % (
-                html_lib.escape(item["id"]), html_lib.escape(item["role"]),
-                html_lib.escape(item["text_safe_zone"]), html_lib.escape(item["motion_hint"]),
-                html_lib.escape(item["subject"] or ""),
-                html_lib.escape(zh_prompt(item, prefix)), html_lib.escape(english), html_lib.escape(item["id"]),
-            )
-        )
+    rows = []
+    for index, item in enumerate(items, start=1):
+        rows.append({
+            "no": index,
+            "id": item["id"],
+            "role": item.get("role") or "",
+            "text": zh_prompt(item, prefix),
+        })
+    payload = json_lib.dumps(rows, ensure_ascii=False).replace("</", "<\\/")
+    media_dir = out_path.parent.resolve()
+    image_dir = media_dir / "图片"
+    try:
+        folder_url = image_dir.as_uri()
+    except Exception:
+        folder_url = ""
+    file_names = " ".join("%s.png" % row["id"] for row in rows)
+
     page = """<!doctype html>
 <html lang="zh"><meta charset="utf-8">
-<title>出图清单 - %s</title>
+<title>出图 · __PROJECT__</title>
 <style>
 :root{color-scheme:dark}
-body{margin:0;padding:32px;background:#11141a;color:#e6e8ee;font:14px/1.6 -apple-system,"PingFang SC",sans-serif}
-h1{font-size:20px;margin:0 0 6px}
-.tip{color:#9aa3b2;margin:0 0 24px}
-.card{background:#181c24;border:1px solid #262c38;border-radius:10px;padding:16px;margin-bottom:14px}
-.head{display:flex;gap:10px;align-items:baseline}
-.head b{font-size:15px;color:#7dd3fc}
-.head span{color:#9aa3b2;font-size:12px}
-.sub{margin:6px 0 10px;color:#c8cedb}
-textarea{width:100%%;min-height:110px;box-sizing:border-box;background:#0d1015;color:#d6dae3;border:1px solid #2a313d;border-radius:8px;padding:10px;font:12px/1.55 ui-monospace,Menlo,monospace;resize:vertical}
-textarea:focus{outline:1px solid #3b82f6}
-.foot{margin-top:8px;color:#8b93a3;font-size:12px}
-code{background:#0d1015;padding:1px 5px;border-radius:4px;color:#a5b4fc}
+body{margin:0;padding:40px 32px;background:#11141a;color:#e6e8ee;font:14px/1.65 -apple-system,"PingFang SC",sans-serif}
+.wrap{max-width:760px;margin:0 auto}
+h1{font-size:20px;margin:0 0 4px}
+.muted{color:#9aa3b2;margin:0 0 26px}
+.step{background:#181c24;border:1px solid #262c38;border-radius:12px;padding:26px;margin-bottom:16px}
+.step[hidden]{display:none}
+.step h2{font-size:16px;margin:0 0 6px}
+.step p{margin:0 0 18px;color:#b9c1cf}
+.row{display:flex;gap:12px;flex-wrap:wrap}
+button{font:inherit;padding:11px 20px;border-radius:9px;border:1px solid #2f3a4a;background:#20262f;color:#e6e8ee;cursor:pointer}
+button.primary{background:#2563eb;border-color:#2563eb;color:#fff}
+button:hover{filter:brightness(1.12)}
+.btna{display:inline-block;font:inherit;padding:11px 20px;border-radius:9px;border:1px solid #2f3a4a;background:#20262f;color:#e6e8ee;text-decoration:none}
+.btna:hover{filter:brightness(1.12)}
+.done{color:#7dd3a1}
+code{background:#0d1015;padding:2px 6px;border-radius:5px;color:#a5b4fc}
+.names{margin:0 0 16px;display:flex;gap:10px;flex-wrap:wrap}
+.names span{background:#0d1015;border:1px solid #2a313d;border-radius:7px;padding:6px 10px;font:12px ui-monospace,Menlo,monospace;color:#cbd5e1}
+.cmd{display:block;background:#0d1015;border:1px solid #2a313d;border-radius:8px;padding:12px 14px;font:12px/1.7 ui-monospace,Menlo,monospace;color:#d6dae3;white-space:pre-wrap;word-break:break-all}
+.back{margin-top:16px;color:#7d8797;background:none;border:none;padding:0;cursor:pointer;text-decoration:underline}
 </style>
-<h1>出图清单 · %s</h1>
-<p class="tip">点一下文本框全选 → 复制 → 粘进即梦 → 出图 → 下载后按下面的文件名保存进 <code>媒体/图片/</code>。全部放好后构建时加 <code>--skip-images</code>。</p>
-%s
-</html>""" % (html_lib.escape(project), html_lib.escape(project), "\n".join(cards))
+<div class="wrap">
+<h1>出图 · __PROJECT__</h1>
+<p class="muted">__COUNT__ 张中文提示词，一次复制、一次粘贴。</p>
+
+<section class="step" id="s1">
+  <h2>第 1 步 · 拿提示词</h2>
+  <p>复制全部中文，粘进即梦逐张出图（每张之间已用分隔线隔开）。</p>
+  <div class="row">
+    <button class="primary" id="copy">复制全部中文</button>
+    <a class="btna" id="folder" href="__FOLDER__" target="_blank" rel="noopener">打开文件夹</a>
+  </div>
+  <p class="muted" id="hint" style="margin:14px 0 0"></p>
+</section>
+
+<section class="step" id="s2" hidden>
+  <h2>第 2 步 · 把图放进去</h2>
+  <p>下载后改名，放进 <code>媒体/图片/</code>：</p>
+  <div class="names">__NAMES__</div>
+  <p>齐了以后跑：</p>
+  <code class="cmd">__CMD__</code>
+  <button class="back" id="back">← 回到第 1 步</button>
+</section>
+</div>
+<script>
+var ROWS = __PAYLOAD__;
+var NL = String.fromCharCode(10);
+var SEP = NL + NL + "────────────────────" + NL + NL;
+var FOLDER = "__FOLDER__";
+var PATH = "__PATH__";
+function build(){
+  return ROWS.map(function(r){ return "【第 " + r.no + " 张 · " + r.id + "】" + NL + r.text; }).join(SEP);
+}
+function legacyCopy(text){
+  var ta = document.createElement("textarea");
+  ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0";
+  document.body.appendChild(ta); ta.select();
+  var ok = false; try { ok = document.execCommand("copy"); } catch (e) {}
+  document.body.removeChild(ta); return ok;
+}
+async function copyText(text){
+  try { await navigator.clipboard.writeText(text); return true; }
+  catch (e) { return legacyCopy(text); }
+}
+function goStep(n){
+  document.getElementById("s1").hidden = n !== 1;
+  document.getElementById("s2").hidden = n !== 2;
+  window.scrollTo({top: 0, behavior: "smooth"});
+}
+document.getElementById("copy").addEventListener("click", async function(){
+  var ok = await copyText(build());
+  document.getElementById("hint").innerHTML = ok
+    ? '<span class="done">✓ 已复制 ' + ROWS.length + ' 张提示词</span>（每张之间有分隔线）'
+    : '复制没成功，手动全选文本框复制：' ;
+  if (!ok) {
+    var ta = document.createElement("textarea");
+    ta.value = build(); ta.style.width = "100%"; ta.style.height = "180px"; ta.style.marginTop = "12px";
+    document.getElementById("s1").appendChild(ta); ta.focus(); ta.select();
+  }
+  goStep(2);
+});
+document.getElementById("folder").addEventListener("click", async function(){
+  var copied = await copyText(PATH);
+  document.getElementById("hint").innerHTML = copied
+    ? '<span class="done">✓ 已在浏览器打开图片文件夹</span>，路径也已复制：访达按 ⇧⌘G 粘贴回车即可。'
+    : '路径：<code>' + PATH + '</code>（访达按 ⇧⌘G 粘贴回车）';
+  goStep(2);
+});
+document.getElementById("back").addEventListener("click", function(){ goStep(1); });
+</script>
+</html>"""
+    cmd = ("bash \"成品/workflow_runtime/tools/run_dify_output.sh\" %s "
+           "\"成品/Dify输出/%s-blackframe-input.json\" --replace --skip-images") % (project, project)
+    names = "".join("<span>%s.png</span>" % html_lib.escape(row["id"]) for row in rows)
+    page = (page
+            .replace("__PROJECT__", html_lib.escape(project))
+            .replace("__COUNT__", str(len(rows)))
+            .replace("__NAMES__", names)
+            .replace("__CMD__", html_lib.escape(cmd))
+            .replace("__PAYLOAD__", payload)
+            .replace("__FOLDER__", folder_url.replace('"', "%22"))
+            .replace("__PATH__", str(image_dir).replace("\\", "\\\\").replace('"', '\\"')))
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(page, encoding="utf-8")
     return out_path
@@ -349,9 +434,11 @@ def write_prompt_pack(plan: dict, items: list[dict], out_dir: Path, project: str
 共 %d 张
 
 一、怎么出图
-  1. 打开即梦（或任何文生图工具），比例选 9:16，其次 2:3。
-  2. 打开本目录里的 s01.txt、s02.txt…，复制「中文提示词」那一段粘进去。
+  1. 先打开 媒体/出图清单.html（双击即可）：点「复制全部中文」，全部提示词一次带走，
+     每张之间有分隔线；点完会自动跳到下一步。
+  2. 打开即梦（或任何文生图工具），比例选 9:16，其次 2:3，按分隔逐张粘进去出图。
   3. 每张出图后下载，重命名成 <id>.png。
+  4. 本目录的 s01.txt… 是同样内容的单份备份，需要单张重出时再用。
 
 二、放哪
   全部放进项目的  媒体/图片/ ：

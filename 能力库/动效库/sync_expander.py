@@ -32,6 +32,7 @@ def build_blocks():
     cards = [
         c for c in bp.load()["presets"]
         if c.get("status") == "ready" and not c["id"].startswith("B")
+        and c.get("cap") != "component-html"
     ]
     tpl = ["    TPL = {"]
     for c in cards:
@@ -52,7 +53,7 @@ def audit_params():
     """每张 ready 卡只带自己的 params 也必须能格式化；缺参数就是坏卡。"""
     bad = []
     for c in bp.load()["presets"]:
-        if c.get("status") != "ready" or c["id"].startswith("B"):
+        if c.get("status") != "ready" or c["id"].startswith("B") or c.get("cap") == "component-html":
             continue
         vals = dict(c.get("params") or {})
         vals.update({"sel": "x", "at": "at(0.2)", "k": "0", "sel2": "y"})
@@ -63,8 +64,15 @@ def audit_params():
     return bad
 
 
+MIRROR = REPO / "能力库" / "工作流代码节点" / "expand_motion_plan.py"
+
+
 def splice(code):
     new_block, ids = build_blocks()
+    # sync_prompts_to_yaml.py 会把 TPL/DEFAULTS 整段剥掉（它只写人手维护的部分）。
+    # 这种情况下拿镜像文件当底稿，从镜像里的 TPL 起点拼回去，别让 YAML 丢块。
+    if "    TPL = {" not in code and MIRROR.exists():
+        code = MIRROR.read_text(encoding="utf-8")
     i0 = code.index("    TPL = {")
     i1 = code.index("    DEFAULTS = {")
     i2 = code.index("\n\n    parts = []", i1)
@@ -118,6 +126,8 @@ def main():
         print("YAML 里的代码块定位失败，未写入")
         return 1
     YAML.write_text(raw.replace(esc_old, esc_new), encoding="utf-8")
+    if MIRROR.exists():
+        MIRROR.write_text(new_code, encoding="utf-8")
 
     yaml.safe_load(YAML.read_text(encoding="utf-8"))
     print("已写入：%d 张卡" % len(ids))

@@ -55,6 +55,10 @@ const report = await page.evaluate(() => {
   }
 
   const seekTimeline = (seconds) => {
+    try { return seekTimelineUnsafe(seconds); }
+    catch (err) { problems.push('seek ' + seconds + 's 抛错：' + String(err && err.message || err).slice(0, 80)); }
+  };
+  const seekTimelineUnsafe = (seconds) => {
     if (typeof window.__seekTo === 'function') {
       window.__seekTo(seconds);
       try { window.dispatchEvent(new CustomEvent('hf-seek', { detail: { time: seconds } })); } catch {}

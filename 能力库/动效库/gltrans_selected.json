@@ -1,0 +1,1525 @@
+{
+ "updated": "2026-11-14",
+ "source": "gl-transitions (MIT)",
+ "cards": [
+  {
+   "gt": "GT01",
+   "num": 2,
+   "shader": "ApertureWipe",
+   "name": "光圈快门",
+   "group": "形状",
+   "use": "镜头光圈一转，露出下一张",
+   "avoid": "和 C01 同屏",
+   "p0": 0.14,
+   "p1": 0.87,
+   "params": {
+    "blades": 6,
+    "rotation": 60.0,
+    "shadow": 0.5
+   },
+   "license": "MIT",
+   "desc": "A camera aperture opens its turning blades to reveal the incoming image"
+  },
+  {
+   "gt": "GT02",
+   "num": 3,
+   "shader": "ArrowWipe",
+   "name": "箭头窗",
+   "group": "形状",
+   "use": "箭头形窗口从边缘推进",
+   "avoid": "日式图形之外的题材",
+   "p0": 0.14,
+   "p1": 0.87,
+   "params": {
+    "direction": [
+     1.0,
+     0.0
+    ],
+    "notch": 0.4,
+    "width": 80.0,
+    "count": 1,
+    "origin": false,
+    "smoothness": 0.004
+   },
+   "license": "MIT",
+   "desc": "A notched arrowhead window onto the incoming image flies in from the edge behind it (or appears at the center), then swells until it fills the frame"
+  },
+  {
+   "gt": "GT03",
+   "num": 6,
+   "shader": "BlockCover",
+   "name": "色块盖",
+   "group": "块格",
+   "use": "纯色块一块块盖满，再让开",
+   "avoid": "需要看清主体时",
+   "p0": 0.09,
+   "p1": 0.87,
+   "params": {
+    "blocks": 16,
+    "color": [
+     0.95,
+     0.32,
+     0.26,
+     1.0
+    ],
+    "pop": 0.5,
+    "smoothness": 0.03
+   },
+   "license": "MIT",
+   "desc": "Blocks of a solid color pop in at random over the outgoing image until they cover the frame, then pop out in another random order to show the incoming image"
+  },
+  {
+   "gt": "GT04",
+   "num": 7,
+   "shader": "BlockSlide",
+   "name": "块滑出",
+   "group": "块格",
+   "use": "画面切成块，依次滑走",
+   "avoid": "已用 G02 同屏换格",
+   "p0": 0.29,
+   "p1": 0.94,
+   "params": {
+    "grid": [
+     5,
+     4
+    ],
+    "direction": [
+     1.0,
+     0.0
+    ],
+    "stagger": 0.6,
+    "zoom": 0.35,
+    "background": [
+     0.0,
+     0.0,
+     0.0,
+     1.0
+    ]
+   },
+   "license": "MIT",
+   "desc": "The frame is cut into a grid of blocks that slide out one after another in a staggered cascade, some of them shrinking as they go, while the blocks of the incoming image slide in behind them to take their place"
+  },
+  {
+   "gt": "GT05",
+   "num": 8,
+   "shader": "BloomDissolve",
+   "name": "高光漫出",
+   "group": "光效",
+   "use": "亮部漫成一片光海，再退回去",
+   "avoid": "暗场正文屏",
+   "p0": 0.45,
+   "p1": 0.88,
+   "params": {
+    "spread": 0.25,
+    "threshold": 0.6,
+    "intensity": 1.5,
+    "tint": [
+     1.0,
+     0.9,
+     0.75
+    ]
+   },
+   "license": "MIT",
+   "desc": "The highlights of the outgoing image blow out into a soft, wide glow that floods the frame"
+  },
+  {
+   "gt": "GT06",
+   "num": 14,
+   "shader": "BrushWipe",
+   "name": "笔刷擦",
+   "group": "材质",
+   "use": "几笔大刷子刷过去，手作感",
+   "avoid": "需要精确边界的图形",
+   "p0": 0.12,
+   "p1": 0.85,
+   "params": {
+    "strokes": 4.0,
+    "angle": -7.0,
+    "roughness": 0.6,
+    "waviness": 0.5
+   },
+   "license": "MIT",
+   "desc": "A few broad brush strokes sweep across the frame in turn, back and forth, painting in the incoming image with streaky bristle edges and dry, ragged ends"
+  },
+  {
+   "gt": "GT07",
+   "num": 16,
+   "shader": "ButterflyWaveScrawler",
+   "name": "彩边波纹",
+   "group": "材质",
+   "use": "彩色分离的波纹把画面搅过去",
+   "avoid": "人像特写",
+   "p0": 0.09,
+   "p1": 0.93,
+   "params": {
+    "amplitude": 1.0,
+    "waves": 30.0,
+    "colorSeparation": 0.3
+   },
+   "license": "MIT",
+   "desc": "Wavy, color-separated ripples scramble the outgoing image into the incoming one"
+  },
+  {
+   "gt": "GT08",
+   "num": 17,
+   "shader": "CameraShake",
+   "name": "冲击抖动",
+   "group": "光效",
+   "use": "镜头猛抖几下，带残影和彩边",
+   "avoid": "连续两屏都用",
+   "p0": 0.46,
+   "p1": 0.93,
+   "params": {
+    "strength": 0.5,
+    "jolts": 12.0,
+    "blur": 0.5,
+    "split": 0.5
+   },
+   "license": "MIT",
+   "desc": "The camera jolts violently in random directions, with motion blur and color fringes along each jolt"
+  },
+  {
+   "gt": "GT09",
+   "num": 18,
+   "shader": "CardDeal",
+   "name": "发牌",
+   "group": "三维",
+   "use": "一张张牌从下方甩进来",
+   "avoid": "超过两排",
+   "p0": 0.09,
+   "p1": 0.87,
+   "params": {
+    "grid": [
+     4,
+     3
+    ],
+    "deck": [
+     0.5,
+     -0.4
+    ],
+    "spin": 0.6,
+    "shadow": 0.5
+   },
+   "license": "MIT",
+   "desc": "The incoming image is dealt onto the frame like a hand of cards: tile after tile is flicked from below the frame, spinning through the air with a lifting shadow, and slides to a stop in its place until the picture is complete"
+  },
+  {
+   "gt": "GT10",
+   "num": 19,
+   "shader": "CardSwipe",
+   "name": "掀卡",
+   "group": "三维",
+   "use": "顶上一张卡被甩走",
+   "avoid": "书页类素材",
+   "p0": 0.11,
+   "p1": 0.88,
+   "params": {
+    "direction": [
+     1.0,
+     0.25
+    ],
+    "rotation": 0.5,
+    "depth": 0.15,
+    "backColor": [
+     0.06,
+     0.06,
+     0.07,
+     1.0
+    ]
+   },
+   "license": "MIT",
+   "desc": "The outgoing image is flicked off like the top card of a stack, swinging around a point below it as it flies out, while the incoming card behind it grows to fill the frame"
+  },
+  {
+   "gt": "GT11",
+   "num": 20,
+   "shader": "CellDissolve",
+   "name": "细胞溶解",
+   "group": "材质",
+   "use": "不规则细胞块逐块换掉",
+   "avoid": "和 6/7 同屏",
+   "p0": 0.09,
+   "p1": 0.94,
+   "params": {
+    "cells": 8.0,
+    "smoothness": 0.1,
+    "border": 0.006,
+    "borderColor": [
+     1.0,
+     0.95,
+     0.8,
+     1.0
+    ],
+    "seed": 0.0
+   },
+   "license": "MIT",
+   "desc": "Irregular cells, like cracked mud or soap foam, switch to the incoming image one by one, with an optional bright border glowing along the cracks between them"
+  },
+  {
+   "gt": "GT12",
+   "num": 22,
+   "shader": "CircleBurst",
+   "name": "三色圆爆",
+   "group": "图形",
+   "use": "三个纯色圆依次炸开",
+   "avoid": "需要暖色之外的品牌色",
+   "p0": 0.09,
+   "p1": 0.75,
+   "params": {
+    "center": [
+     0.5,
+     0.5
+    ],
+    "color1": [
+     0.99,
+     0.79,
+     0.29,
+     1.0
+    ],
+    "color2": [
+     0.95,
+     0.38,
+     0.33,
+     1.0
+    ],
+    "color3": [
+     0.13,
+     0.15,
+     0.3,
+     1.0
+    ],
+    "stagger": 0.3
+   },
+   "license": "MIT",
+   "desc": "Discs of three solid colors burst out of a point one after another, each covering the last, then a hole bursts open from the same point in the last one to reveal the incoming image"
+  },
+  {
+   "gt": "GT13",
+   "num": 24,
+   "shader": "CircleOpen",
+   "name": "圆孔开",
+   "group": "形状",
+   "use": "软边圆孔从中心开",
+   "avoid": "和 X30 圆形裁切同屏",
+   "p0": 0.21,
+   "p1": 0.8,
+   "params": {
+    "smoothness": 0.3,
+    "opening": true
+   },
+   "license": "MIT",
+   "desc": "A soft-edged circle opens from the center to reveal the incoming image"
+  },
+  {
+   "gt": "GT14",
+   "num": 26,
+   "shader": "Clothesline",
+   "name": "晾衣绳",
+   "group": "三维",
+   "use": "照片像晾着的相纸被拉远",
+   "avoid": "横构图之外的版式",
+   "p0": 0.11,
+   "p1": 0.93,
+   "params": {
+    "direction": 1.0,
+    "sway": 0.5,
+    "size": 0.72,
+    "background": [
+     0.86,
+     0.84,
+     0.8,
+     1.0
+    ],
+    "lineColor": [
+     0.42,
+     0.34,
+     0.26,
+     1.0
+    ],
+    "pinColor": [
+     0.84,
+     0.68,
+     0.47,
+     1.0
+    ]
+   },
+   "license": "MIT",
+   "desc": "The camera pulls back to show the outgoing image as a print hung by two clothespins on a line in front of a wall, the line is pulled sideways and carries it away while the incoming print slides in, both prints swinging and tilting like hanging paper, then the camera moves back in on the incoming print until it fills the frame"
+  },
+  {
+   "gt": "GT15",
+   "num": 27,
+   "shader": "CodeRain",
+   "name": "代码雨",
+   "group": "图形",
+   "use": "画面化成字符网格被数据流冲开",
+   "avoid": "非技术题材",
+   "p0": 0.19,
+   "p1": 0.62,
+   "params": {
+    "cellSize": 0.045,
+    "trail": 0.5,
+    "tint": 0.5,
+    "glow": [
+     0.2,
+     1.0,
+     0.4,
+     1.0
+    ]
+   },
+   "license": "MIT",
+   "desc": "The outgoing image darkens into a grid of flickering code characters tinted by its colors, then glowing streams of characters fall down the columns at their own speeds, each with a bright head and a fading tail, leaving the incoming image behind"
+  },
+  {
+   "gt": "GT16",
+   "num": 28,
+   "shader": "ColorCoords",
+   "name": "色彩位移",
+   "group": "材质",
+   "use": "两幅画按对方颜色互相推挤",
+   "avoid": "需要看清文字",
+   "p0": 0.21,
+   "p1": 0.95,
+   "params": {},
+   "license": "MIT",
+   "desc": "A crossfade in which the colors of one image displace the other"
+  },
+  {
+   "gt": "GT17",
+   "num": 29,
+   "shader": "ColorDistance",
+   "name": "同色先走",
+   "group": "材质",
+   "use": "颜色接近的先换，远的后换",
+   "avoid": "高对比双图",
+   "p0": 0.28,
+   "p1": 0.95,
+   "params": {
+    "power": 5.0
+   },
+   "license": "MIT",
+   "desc": "Pixels switch to the incoming image in order of how close their colors are"
+  },
+  {
+   "gt": "GT18",
+   "num": 34,
+   "shader": "ComicPanels",
+   "name": "漫画分格",
+   "group": "块格",
+   "use": "切成斜的漫画格，逐格换",
+   "avoid": "严肃商务题材",
+   "p0": 0.09,
+   "p1": 0.93,
+   "params": {
+    "gutter": 0.03,
+    "gutterColor": [
+     1.0,
+     1.0,
+     1.0,
+     1.0
+    ],
+    "borderColor": [
+     0.0,
+     0.0,
+     0.0,
+     1.0
+    ],
+    "seed": 0.0
+   },
+   "license": "MIT",
+   "desc": "The frame splits into slanted comic-book panels with gutters and ink borders"
+  },
+  {
+   "gt": "GT19",
+   "num": 36,
+   "shader": "CrossWarp",
+   "name": "交叉缩放",
+   "group": "照片",
+   "use": "一边推近一边拉远地交叉",
+   "avoid": "已用 C01",
+   "p0": 0.17,
+   "p1": 0.83,
+   "params": {},
+   "license": "MIT",
+   "desc": "The outgoing image zooms in while the incoming one zooms out into place, sweeping from right to left"
+  },
+  {
+   "gt": "GT20",
+   "num": 37,
+   "shader": "CrossZoom",
+   "name": "缩放虚化",
+   "group": "照片",
+   "use": "大幅推近到虚再回到清晰",
+   "avoid": "正文滚动屏",
+   "p0": 0.37,
+   "p1": 0.9,
+   "params": {
+    "strength": 0.4
+   },
+   "license": "MIT",
+   "desc": "A crossfade through a strong zoom blur"
+  },
+  {
+   "gt": "GT21",
+   "num": 38,
+   "shader": "Crosshatch",
+   "name": "交叉线",
+   "group": "材质",
+   "use": "交叉排线从中心长满",
+   "avoid": "细腻产品图",
+   "p0": 0.11,
+   "p1": 0.89,
+   "params": {
+    "center": [
+     0.5,
+     0.5
+    ],
+    "threshold": 3.0,
+    "fadeEdge": 0.1
+   },
+   "license": "MIT",
+   "desc": "The incoming image appears through a crosshatch of lines spreading from the center"
+  },
+  {
+   "gt": "GT22",
+   "num": 43,
+   "shader": "CurvedWipe",
+   "name": "弧边擦",
+   "group": "形状",
+   "use": "擦除边缘鼓成弧",
+   "avoid": "直边擦更合适时",
+   "p0": 0.09,
+   "p1": 0.89,
+   "params": {
+    "direction": [
+     0.0,
+     1.0
+    ],
+    "curvature": 0.6,
+    "smoothness": 0.02,
+    "shadow": [
+     0.0,
+     0.0,
+     0.0,
+     0.4
+    ]
+   },
+   "license": "MIT",
+   "desc": "The outgoing image is pulled away by its middle: the wipe edge bulges into a smooth curve that leads the way, then flattens as it reaches the far side"
+  },
+  {
+   "gt": "GT23",
+   "num": 44,
+   "shader": "CylinderRoll",
+   "name": "卷筒",
+   "group": "三维",
+   "use": "画面绕着滚筒卷上去",
+   "avoid": "横向版面",
+   "p0": 0.35,
+   "p1": 0.91,
+   "params": {
+    "curvature": 0.8,
+    "blur": 0.5,
+    "shading": 0.6,
+    "chroma": 0.5,
+    "downward": false
+   },
+   "license": "MIT",
+   "desc": "The frame wraps around a drum that rolls up, the outgoing image turning away over its top in a motion blur and the incoming one coming around from below and unrolling flat"
+  },
+  {
+   "gt": "GT24",
+   "num": 45,
+   "shader": "DefocusBlur",
+   "name": "失焦对焦",
+   "group": "照片",
+   "use": "整幅失焦再对上，讲「看清」",
+   "avoid": "和 37 同屏",
+   "p0": 0.09,
+   "p1": 0.94,
+   "params": {
+    "blurSize": 0.02
+   },
+   "license": "MIT",
+   "desc": "A crossfade through an out-of-focus blur"
+  },
+  {
+   "gt": "GT25",
+   "num": 50,
+   "shader": "DirectionalWarp",
+   "name": "涂抹擦",
+   "group": "形状",
+   "use": "斜向擦，边缘被抹开",
+   "avoid": "需要硬边",
+   "p0": 0.17,
+   "p1": 0.84,
+   "params": {
+    "smoothness": 0.1,
+    "direction": [
+     -1.0,
+     1.0
+    ]
+   },
+   "license": "MIT",
+   "desc": "A diagonal wipe with a warped, smeared edge"
+  },
+  {
+   "gt": "GT26",
+   "num": 51,
+   "shader": "DirectionalWipe",
+   "name": "直边软擦",
+   "group": "形状",
+   "use": "任意方向的直边擦，软硬可调",
+   "avoid": "已用 X11/X14",
+   "p0": 0.21,
+   "p1": 0.78,
+   "params": {
+    "direction": [
+     1.0,
+     -1.0
+    ],
+    "smoothness": 0.5
+   },
+   "license": "MIT",
+   "desc": "A straight wipe in any direction, diagonal and soft-edged by default"
+  },
+  {
+   "gt": "GT27",
+   "num": 52,
+   "shader": "Disintegrate",
+   "name": "风化成尘",
+   "group": "材质",
+   "use": "从一侧散成颗粒被吹走，讲「作废」",
+   "avoid": "片头第一屏",
+   "p0": 0.13,
+   "p1": 0.63,
+   "params": {
+    "particleSize": 0.008,
+    "direction": [
+     1.0,
+     -0.15
+    ],
+    "spread": 0.75
+   },
+   "license": "MIT",
+   "desc": "The outgoing image crumbles into fine dust from one side, its grains blown away by the wind and fading out, revealing the incoming image underneath"
+  },
+  {
+   "gt": "GT28",
+   "num": 54,
+   "shader": "DominoFall",
+   "name": "多米诺",
+   "group": "块格",
+   "use": "竖条一根根向后倒",
+   "avoid": "文字屏",
+   "p0": 0.11,
+   "p1": 0.89,
+   "params": {
+    "count": 12,
+    "reverse": false,
+    "knock": 0.2,
+    "lean": 0.8,
+    "perspective": 0.8,
+    "shading": 0.6
+   },
+   "license": "MIT",
+   "desc": "The outgoing image is cut into standing slats that topple backward like dominoes in a chain reaction across the frame, each one leaning onto the next and knocking it over, until they all lie flat and reveal the incoming image"
+  },
+  {
+   "gt": "GT29",
+   "num": 55,
+   "shader": "DoomMelt",
+   "name": "融化柱",
+   "group": "材质",
+   "use": "像老游戏那样一列列化下去",
+   "avoid": "正经商务",
+   "p0": 0.09,
+   "p1": 0.41,
+   "params": {
+    "bars": 30,
+    "amplitude": 2.0,
+    "noise": 0.1,
+    "frequency": 0.5,
+    "dripScale": 0.5
+   },
+   "license": "MIT",
+   "desc": "The outgoing image melts down in uneven columns, like the Doom screen wipe"
+  },
+  {
+   "gt": "GT30",
+   "num": 64,
+   "shader": "FacetedGlass",
+   "name": "切面玻璃",
+   "group": "材质",
+   "use": "隔着不规则切面玻璃看",
+   "avoid": "要看清产品细节",
+   "p0": 0.25,
+   "p1": 0.91,
+   "params": {
+    "facets": 5.0,
+    "refraction": 0.1,
+    "bevel": 0.6,
+    "highlight": [
+     1.0,
+     0.98,
+     0.92,
+     1.0
+    ],
+    "seed": 0.0
+   },
+   "license": "MIT",
+   "desc": "The frame is seen through a pane of irregular cut-glass facets, each one showing its own shifted, zoomed and tilted view of the image, with bright beveled edges and thin dark seams"
+  },
+  {
+   "gt": "GT31",
+   "num": 71,
+   "shader": "FilmStrip",
+   "name": "胶片带",
+   "group": "三维",
+   "use": "缩成胶片带往下跑，讲「回看」",
+   "avoid": "竖构图人像",
+   "p0": 0.36,
+   "p1": 0.94,
+   "params": {
+    "frames": 2,
+    "shrink": 0.2,
+    "blur": 0.5,
+    "weave": 0.5,
+    "filmColor": [
+     0.06,
+     0.05,
+     0.05,
+     1.0
+    ],
+    "holeColor": [
+     0.96,
+     0.93,
+     0.85,
+     1.0
+    ]
+   },
+   "license": "MIT",
+   "desc": "The picture slips like film in a projector gate: it shrinks to show the sprocket holes, the strip runs down with motion blur and a slight weave, then the incoming frame lands in place"
+  },
+  {
+   "gt": "GT32",
+   "num": 72,
+   "shader": "Fisheye",
+   "name": "鱼眼",
+   "group": "照片",
+   "use": "鱼眼鼓出来再压平",
+   "avoid": "和 W18 同屏",
+   "p0": 0.38,
+   "p1": 0.94,
+   "params": {
+    "strength": 0.8
+   },
+   "license": "MIT",
+   "desc": "The outgoing image bulges toward the viewer through a strong fisheye lens, then the incoming one flattens back into place"
+  },
+  {
+   "gt": "GT33",
+   "num": 81,
+   "shader": "GeometricCollage",
+   "name": "几何拼贴",
+   "group": "图形",
+   "use": "四分之一圆和三角拼贴进来",
+   "avoid": "小字号正文",
+   "p0": 0.16,
+   "p1": 0.74,
+   "params": {
+    "cells": 2,
+    "stagger": 1.0,
+    "plates": true,
+    "color1": [
+     0.89,
+     0.22,
+     0.17,
+     1.0
+    ],
+    "color2": [
+     0.97,
+     0.77,
+     0.15,
+     1.0
+    ],
+    "color3": [
+     0.14,
+     0.32,
+     0.66,
+     1.0
+    ],
+    "shadow": 0.6
+   },
+   "license": "MIT",
+   "desc": "The incoming image arrives cut into a geometric poster of quarter discs, half discs, triangles and their complements: piece after piece swings in around a corner of its cell, a flat plate of color just ahead of it, and lands flat with a soft paper shadow"
+  },
+  {
+   "gt": "GT34",
+   "num": 84,
+   "shader": "GlitchDisplace",
+   "name": "方块故障",
+   "group": "光效",
+   "use": "方块错位的故障一闪，讲「旧办法崩了」",
+   "avoid": "数据可信屏",
+   "p0": 0.36,
+   "p1": 0.71,
+   "params": {},
+   "license": "MIT",
+   "desc": "Blocks of the image are displaced in a glitch that flashes into the incoming image"
+  },
+  {
+   "gt": "GT35",
+   "num": 89,
+   "shader": "GooeyWipe",
+   "name": "粘液泡",
+   "group": "材质",
+   "use": "液态泡鼓起再融开",
+   "avoid": "精密感产品",
+   "p0": 0.17,
+   "p1": 0.67,
+   "params": {
+    "blobs": 5.0,
+    "smoothness": 0.5,
+    "highlight": [
+     1.0,
+     1.0,
+     1.0,
+     0.7
+    ],
+    "shadow": [
+     0.0,
+     0.0,
+     0.0,
+     0.3
+    ]
+   },
+   "license": "MIT",
+   "desc": "Soft, glossy blobs of liquid pop up over the outgoing image, swell and melt into each other, revealing the incoming image until they cover the whole frame"
+  },
+  {
+   "gt": "GT36",
+   "num": 92,
+   "shader": "Halftone",
+   "name": "半调网点",
+   "group": "材质",
+   "use": "变成印刷网点再还原，印刷/复古",
+   "avoid": "和 B23 背景同屏",
+   "p0": 0.36,
+   "p1": 0.87,
+   "params": {
+    "dots": 28.0,
+    "angle": 45.0,
+    "paper": [
+     1.0,
+     1.0,
+     1.0,
+     1.0
+    ]
+   },
+   "license": "MIT",
+   "desc": "The image breaks into printed halftone dots whose size follows its shades, the dots reshape into the incoming image, then merge back into it"
+  },
+  {
+   "gt": "GT37",
+   "num": 93,
+   "shader": "HeartWipe",
+   "name": "心形开",
+   "group": "形状",
+   "use": "心形从中心长大",
+   "avoid": "商务、数据题材",
+   "p0": 0.2,
+   "p1": 0.81,
+   "params": {
+    "center": [
+     0.5,
+     0.5
+    ],
+    "smoothness": 0.006,
+    "pulse": 0.5,
+    "glowColor": [
+     1.0,
+     0.85,
+     0.9
+    ],
+    "glow": 0.3
+   },
+   "license": "MIT",
+   "desc": "A heart grows from the center with a little heartbeat to reveal the incoming image"
+  },
+  {
+   "gt": "GT38",
+   "num": 95,
+   "shader": "Hexagonalize",
+   "name": "六角化",
+   "group": "材质",
+   "use": "碎成六边形再合拢，讲「拆解重组」",
+   "avoid": "和 98 同屏",
+   "p0": 0.09,
+   "p1": 0.93,
+   "params": {
+    "steps": 50,
+    "horizontalHexagons": 20.0
+   },
+   "license": "MIT",
+   "desc": "Both images turn into hexagons, crossfade, then sharpen again"
+  },
+  {
+   "gt": "GT39",
+   "num": 97,
+   "shader": "Hologram",
+   "name": "全息",
+   "group": "光效",
+   "use": "全息扫描线闪烁，科幻感",
+   "avoid": "正经汇报",
+   "p0": 0.24,
+   "p1": 0.93,
+   "params": {
+    "tint": [
+     0.2,
+     0.75,
+     1.0
+    ],
+    "background": [
+     0.0,
+     0.02,
+     0.05,
+     1.0
+    ],
+    "scanlines": 150.0,
+    "jitter": 0.04,
+    "flicker": 0.6
+   },
+   "license": "MIT",
+   "desc": "The outgoing image turns into a flickering hologram (blue by default) with scanlines and jittering rows, breaks up, and the hologram resolves into the incoming image in full color"
+  },
+  {
+   "gt": "GT40",
+   "num": 98,
+   "shader": "Honeycomb",
+   "name": "蜂巢",
+   "group": "块格",
+   "use": "六边形一块块旋开",
+   "avoid": "和 95 同屏",
+   "p0": 0.25,
+   "p1": 0.78,
+   "params": {
+    "size": 6.0
+   },
+   "license": "MIT",
+   "desc": "The image splits into hexagons that spin and shrink away in a wave from the center, uncovering the incoming image"
+  },
+  {
+   "gt": "GT41",
+   "num": 99,
+   "shader": "HorizontalClose",
+   "name": "上下合",
+   "group": "形状",
+   "use": "从上下两边合上",
+   "avoid": "竖版文字",
+   "p0": 0.4,
+   "p1": 0.84,
+   "params": {},
+   "license": "MIT",
+   "desc": "The incoming image closes in from the top and bottom edges toward the middle"
+  },
+  {
+   "gt": "GT42",
+   "num": 101,
+   "shader": "HorizontalOpen",
+   "name": "上下开",
+   "group": "形状",
+   "use": "中间一条缝向上下开",
+   "avoid": "和 99 同屏",
+   "p0": 0.17,
+   "p1": 0.6,
+   "params": {},
+   "license": "MIT",
+   "desc": "The incoming image opens from a line in the middle toward the top and bottom edges"
+  },
+  {
+   "gt": "GT43",
+   "num": 109,
+   "shader": "LayoutGrid",
+   "name": "杂志网格",
+   "group": "块格",
+   "use": "切成杂志版式一块块推开",
+   "avoid": "和 G02 同屏",
+   "p0": 0.14,
+   "p1": 0.87,
+   "params": {
+    "gutter": 0.04,
+    "overlap": 0.55,
+    "band": 0.22,
+    "shadow": 0.4,
+    "paper": [
+     0.96,
+     0.95,
+     0.91,
+     1.0
+    ],
+    "accent": [
+     0.93,
+     0.27,
+     0.2,
+     1.0
+    ]
+   },
+   "license": "MIT",
+   "desc": "The frame splits into an asymmetric magazine grid as paper gutters open between the panels"
+  },
+  {
+   "gt": "GT44",
+   "num": 111,
+   "shader": "LedWall",
+   "name": "LED 墙",
+   "group": "图形",
+   "use": "LED 灯珠墙，刷新波扫过",
+   "avoid": "小字正文",
+   "p0": 0.28,
+   "p1": 0.94,
+   "params": {
+    "cells": 24.0,
+    "glow": 0.6,
+    "flash": 0.7,
+    "zoom": 0.15,
+    "triads": false,
+    "direction": [
+     1.0,
+     0.0
+    ],
+    "panel": [
+     0.02,
+     0.02,
+     0.025,
+     1.0
+    ]
+   },
+   "license": "MIT",
+   "desc": "The picture zooms into a giant LED screen of round glowing diodes on a dark panel"
+  },
+  {
+   "gt": "GT45",
+   "num": 113,
+   "shader": "LensFlare",
+   "name": "镜头光",
+   "group": "光效",
+   "use": "一道强光扫过并拉出光晕",
+   "avoid": "连续两屏",
+   "p0": 0.17,
+   "p1": 0.79,
+   "params": {
+    "angle": -12.0,
+    "height": 0.18,
+    "intensity": 1.0,
+    "color": [
+     0.35,
+     0.6,
+     1.0
+    ]
+   },
+   "license": "MIT",
+   "desc": "A bright light sweeps across the frame and flares the lens: a long thin horizontal streak, a glowing core and a trail of colored ghost reflections"
+  },
+  {
+   "gt": "GT46",
+   "num": 115,
+   "shader": "LightStreaks",
+   "name": "高光拉丝",
+   "group": "光效",
+   "use": "亮部拉成横向光条，讲「高光时刻」",
+   "avoid": "静态构图屏",
+   "p0": 0.45,
+   "p1": 0.67,
+   "params": {
+    "reach": 0.6,
+    "threshold": 0.7,
+    "intensity": 1.5,
+    "tint": [
+     0.45,
+     0.7,
+     1.0
+    ],
+    "blur": 0.1,
+    "vertical": false
+   },
+   "license": "MIT",
+   "desc": "The highlights of the outgoing image flare into long horizontal (or vertical) lens streaks while it smears with motion blur"
+  },
+  {
+   "gt": "GT47",
+   "num": 122,
+   "shader": "Morph",
+   "name": "互为位移",
+   "group": "材质",
+   "use": "两幅互按对方颜色扭曲，讲「纠缠」",
+   "avoid": "需要清晰的主体",
+   "p0": 0.09,
+   "p1": 0.94,
+   "params": {
+    "strength": 0.1
+   },
+   "license": "MIT",
+   "desc": "A crossfade in which each image is displaced by the other's colors, like a morph"
+  },
+  {
+   "gt": "GT48",
+   "num": 128,
+   "shader": "PaperTear",
+   "name": "撕纸",
+   "group": "三维",
+   "use": "从中线撕开两半",
+   "avoid": "科技感屏",
+   "p0": 0.12,
+   "p1": 0.72,
+   "params": {
+    "roughness": 0.12,
+    "tilt": 0.1,
+    "rim": 0.012,
+    "paper": [
+     1.0,
+     0.98,
+     0.94,
+     1.0
+    ],
+    "shadow": [
+     0.0,
+     0.0,
+     0.0,
+     0.35
+    ]
+   },
+   "license": "MIT",
+   "desc": "The outgoing image tears in two along a ragged line, and the halves are pulled apart to reveal the incoming one"
+  },
+  {
+   "gt": "GT49",
+   "num": 129,
+   "shader": "PerlinDissolve",
+   "name": "噪声溶解",
+   "group": "材质",
+   "use": "噪声团块里露出下一张",
+   "avoid": "需要干净的第一印象",
+   "p0": 0.13,
+   "p1": 0.9,
+   "params": {
+    "scale": 4.0,
+    "smoothness": 0.01,
+    "seed": 12.9898
+   },
+   "license": "MIT",
+   "desc": "The incoming image appears through blobs of Perlin noise"
+  },
+  {
+   "gt": "GT50",
+   "num": 140,
+   "shader": "ProjectorThrow",
+   "name": "放幻灯",
+   "group": "三维",
+   "use": "灯暗下来，投影打上去",
+   "avoid": "明亮商务风",
+   "p0": 0.21,
+   "p1": 0.93,
+   "params": {
+    "darkness": 0.8,
+    "keystone": 0.45,
+    "blur": 0.015
+   },
+   "license": "MIT",
+   "desc": "The lights go down on the outgoing image and a projector throws the incoming one onto it: a small, blurred, keystoned picture of light lands on the scene, tinted by the colors it falls on, then grows, comes into focus and squares up until it fills the frame as the scene beneath it fades away"
+  },
+  {
+   "gt": "GT51",
+   "num": 145,
+   "shader": "Reassemble",
+   "name": "碎片重组",
+   "group": "三维",
+   "use": "裂成碎片飞出再拼回",
+   "avoid": "和 158 同屏",
+   "p0": 0.16,
+   "p1": 0.91,
+   "params": {
+    "rows": 4,
+    "depth": 0.8,
+    "spread": 0.05,
+    "backColor": [
+     0.04,
+     0.04,
+     0.05,
+     1.0
+    ]
+   },
+   "license": "MIT",
+   "desc": "The outgoing image cracks into irregular shards that burst apart toward the viewer, each one turning over in 3D at its own moment, then fly back together and lock into place as the incoming image carried on their backs"
+  },
+  {
+   "gt": "GT52",
+   "num": 148,
+   "shader": "Refraction",
+   "name": "液体玻璃",
+   "group": "材质",
+   "use": "像透过流动的玻璃看",
+   "avoid": "产品细节特写",
+   "p0": 0.46,
+   "p1": 0.88,
+   "params": {
+    "strength": 0.15,
+    "scale": 2.5,
+    "dispersion": 0.5,
+    "brightness": 1.0
+   },
+   "license": "MIT",
+   "desc": "The frame is seen through flowing liquid glass that bends the outgoing image more and more, with rainbow fringes, flares up as the incoming image takes over, then calms down and clears"
+  },
+  {
+   "gt": "GT53",
+   "num": 151,
+   "shader": "RingSpin",
+   "name": "同心环转",
+   "group": "图形",
+   "use": "同心环像密码锁一样转",
+   "avoid": "静态版式",
+   "p0": 0.23,
+   "p1": 0.87,
+   "params": {
+    "rings": 6,
+    "square": false,
+    "turns": 1,
+    "stagger": 0.5,
+    "blur": 0.6,
+    "settle": 0.5
+   },
+   "license": "MIT",
+   "desc": "The frame is cut into concentric rings that spin like the dials of a combination lock, in alternating directions and blurred with speed, one after another from the center outward"
+  },
+  {
+   "gt": "GT54",
+   "num": 152,
+   "shader": "RingsWipe",
+   "name": "环扫",
+   "group": "形状",
+   "use": "一圈圈从中心扫开",
+   "avoid": "和 151 同屏",
+   "p0": 0.16,
+   "p1": 0.86,
+   "params": {
+    "count": 6,
+    "center": [
+     0.5,
+     0.5
+    ],
+    "stagger": 0.5,
+    "radial": false,
+    "borderWidth": 0.008,
+    "borderColor": [
+     1.0,
+     1.0,
+     1.0,
+     1.0
+    ],
+    "smoothness": 0.004
+   },
+   "license": "MIT",
+   "desc": "Concentric rings ripple out from the center and, one after another, each sweeps around like a clock hand in the opposite direction of its neighbors to reveal the incoming image, or fills across its width, with optional colored borders between the rings"
+  },
+  {
+   "gt": "GT55",
+   "num": 158,
+   "shader": "Shatter",
+   "name": "玻璃碎",
+   "group": "三维",
+   "use": "从撞击点碎开",
+   "avoid": "片头第一屏",
+   "p0": 0.12,
+   "p1": 0.76,
+   "params": {
+    "center": [
+     0.5,
+     0.5
+    ],
+    "shards": 6.0,
+    "gravity": 1.0,
+    "seed": 0.0
+   },
+   "license": "MIT",
+   "desc": "The outgoing image cracks like a pane of glass from an impact point, then its shards break loose from the impact outward, tumbling in 3D and falling away with gravity to reveal the incoming image behind"
+  },
+  {
+   "gt": "GT56",
+   "num": 159,
+   "shader": "Shockwave",
+   "name": "冲击波",
+   "group": "图形",
+   "use": "中心一圈冲击波推开",
+   "avoid": "连续两屏",
+   "p0": 0.2,
+   "p1": 0.73,
+   "params": {
+    "tileSize": 0.035,
+    "scatter": 0.85,
+    "diagonal": 0.9,
+    "prism": 0.65,
+    "glow": 0.75
+   },
+   "license": "",
+   "desc": ""
+  },
+  {
+   "gt": "GT57",
+   "num": 162,
+   "shader": "ShutterWipe",
+   "name": "快门帘",
+   "group": "形状",
+   "use": "相机快门帘扫过",
+   "avoid": "日常口播屏",
+   "p0": 0.16,
+   "p1": 0.92,
+   "params": {
+    "blades": 5,
+    "tilt": 0.06,
+    "gate": 0.035,
+    "color": [
+     0.09,
+     0.09,
+     0.1,
+     1.0
+    ]
+   },
+   "license": "MIT",
+   "desc": "A camera's focal-plane shutter fires across the frame, seen through the camera's gate: thin metal blades fan down from a tight stack above it until they overlap over the whole frame, then keep running down and stack below it, uncovering the incoming image from the top"
+  },
+  {
+   "gt": "GT58",
+   "num": 165,
+   "shader": "SimpleZoomOut",
+   "name": "缩回",
+   "group": "照片",
+   "use": "画面拉远露出下一张",
+   "avoid": "已用 C02",
+   "p0": 0.35,
+   "p1": 0.92,
+   "params": {
+    "zoom_quickness": 0.8,
+    "fade": true
+   },
+   "license": "MIT",
+   "desc": "The incoming image zooms out into place while fading in"
+  },
+  {
+   "gt": "GT59",
+   "num": 166,
+   "shader": "SketchDissolve",
+   "name": "铅笔素描",
+   "group": "材质",
+   "use": "铅笔从线稿画出来，讲「还在草稿」",
+   "avoid": "需要照片真实感",
+   "p0": 0.09,
+   "p1": 0.86,
+   "params": {
+    "lineWidth": 1.5,
+    "edges": 1.0,
+    "hatching": 0.6,
+    "paper": [
+     0.96,
+     0.94,
+     0.89,
+     1.0
+    ],
+    "ink": [
+     0.16,
+     0.16,
+     0.2,
+     1.0
+    ]
+   },
+   "license": "MIT",
+   "desc": "The outgoing image fades back to blank paper while the incoming one is drawn on it in pencil, outlines first and then hatching in the shadows, before its shading and colors fill in until the picture is complete"
+  },
+  {
+   "gt": "GT60",
+   "num": 169,
+   "shader": "SlotReels",
+   "name": "老虎机",
+   "group": "块格",
+   "use": "竖排放滚轮一样翻，讲「结果揭晓」",
+   "avoid": "超过两组",
+   "p0": 0.09,
+   "p1": 0.87,
+   "params": {
+    "reels": 5,
+    "blur": 0.6,
+    "stagger": 0.45,
+    "bounce": 0.5,
+    "separator": [
+     0.04,
+     0.04,
+     0.05,
+     1.0
+    ]
+   },
+   "license": "MIT",
+   "desc": "The frame is cut into vertical reels that spin downward like drums, motion-blurred with speed, carrying the outgoing image then the incoming one, and stop one after another from left to right with a small mechanical bounce"
+  },
+  {
+   "gt": "GT61",
+   "num": 172,
+   "shader": "Snapshot",
+   "name": "拍立得",
+   "group": "三维",
+   "use": "闪光定格成相纸再飞走",
+   "avoid": "严肃题材",
+   "p0": 0.09,
+   "p1": 0.85,
+   "params": {
+    "tilt": 0.35,
+    "border": 0.04,
+    "flash": 0.85,
+    "shadow": 0.45,
+    "borderColor": [
+     0.96,
+     0.94,
+     0.89,
+     1.0
+    ]
+   },
+   "license": "MIT",
+   "desc": "A camera flash freezes the outgoing image into a printed photo with a white border, which shrinks, tilts and drops out of the frame, revealing the incoming image behind it"
+  },
+  {
+   "gt": "GT62",
+   "num": 176,
+   "shader": "SplatterWipe",
+   "name": "泼溅",
+   "group": "材质",
+   "use": "一坨坨颜料砸开",
+   "avoid": "精密仪器",
+   "p0": 0.12,
+   "p1": 0.75,
+   "params": {
+    "splats": 4.0,
+    "spikiness": 0.6,
+    "droplets": 0.6,
+    "drips": 0.5,
+    "rim": 0.5,
+    "seed": 3.0
+   },
+   "license": "MIT",
+   "desc": "Splats of paint land one after another, each popping in with a spiky outline, flung droplets and a few drips running down, revealing the incoming image until they cover the frame"
+  },
+  {
+   "gt": "GT63",
+   "num": 188,
+   "shader": "StaticFade",
+   "name": "雪花闪",
+   "group": "光效",
+   "use": "中途一屏雪花，讲「信号断了」",
+   "avoid": "长段落",
+   "p0": 0.1,
+   "p1": 0.88,
+   "params": {
+    "n_noise_pixels": 200.0,
+    "static_luminosity": 0.8
+   },
+   "license": "MIT",
+   "desc": "Cuts to the incoming image halfway, hidden behind a burst of TV static"
+  },
+  {
+   "gt": "GT64",
+   "num": 193,
+   "shader": "StripDatamoshGlitch",
+   "name": "数据错位",
+   "group": "光效",
+   "use": "条带撕裂的数据错位",
+   "avoid": "需要稳定画面",
+   "p0": 0.09,
+   "p1": 0.87,
+   "params": {
+    "strength": 1.0,
+    "horizontalBars": 42.0,
+    "verticalSlits": 18.0,
+    "tear": 0.18,
+    "chroma": 0.032,
+    "residue": 0.62,
+    "noiseAmount": 0.16,
+    "scanAmount": 0.13,
+    "flashAmount": 0.2
+   },
+   "license": "MIT",
+   "desc": "A datamosh glitch: torn strips, chroma shifts and scan noise drag the outgoing image into the incoming one"
+  },
+  {
+   "gt": "GT65",
+   "num": 199,
+   "shader": "TruchetWipe",
+   "name": "拼花路径",
+   "group": "图形",
+   "use": "弧线长成路径，路径里是下一张",
+   "avoid": "和 152 同屏",
+   "p0": 0.24,
+   "p1": 0.79,
+   "params": {
+    "cells": 8.0,
+    "outline": 0.6,
+    "spread": 0.75
+   },
+   "license": "MIT",
+   "desc": "A grid of square tiles, each holding two quarter-circle arcs, links into long winding paths"
+  },
+  {
+   "gt": "GT66",
+   "num": 202,
+   "shader": "TvLostSignal",
+   "name": "失信号",
+   "group": "光效",
+   "use": "追踪线漂移、行撕裂，讲「系统不行了」",
+   "avoid": "展示产品界面时",
+   "p0": 0.09,
+   "p1": 0.94,
+   "params": {},
+   "license": "MIT",
+   "desc": "A crossfade with drifting tracking lines and tearing, like a TV losing its signal"
+  },
+  {
+   "gt": "GT67",
+   "num": 211,
+   "shader": "Vortex",
+   "name": "龙卷方块",
+   "group": "块格",
+   "use": "方块被旋风卷走",
+   "avoid": "需要保留主体",
+   "p0": 0.18,
+   "p1": 0.79,
+   "params": {
+    "grid": 24,
+    "center": [
+     0.5,
+     0.5
+    ],
+    "spin": 1.0,
+    "randomness": 0.2
+   },
+   "license": "MIT",
+   "desc": "The outgoing image breaks into hundreds of small squares that a tornado carries away along a spiral around the center, from the eye outward, uncovering the incoming image"
+  },
+  {
+   "gt": "GT68",
+   "num": 216,
+   "shader": "WhipPan",
+   "name": "甩镜",
+   "group": "形状",
+   "use": "快速横甩，两头都拉丝",
+   "avoid": "和 X21 同屏",
+   "p0": 0.28,
+   "p1": 0.9,
+   "params": {
+    "direction": [
+     -1.0,
+     0.0
+    ],
+    "blur": 0.4
+   },
+   "license": "MIT",
+   "desc": "A fast camera pan that streaks both images with motion blur, the incoming one arriving from the opposite side"
+  }
+ ]
+}

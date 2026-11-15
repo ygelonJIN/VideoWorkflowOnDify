@@ -85,6 +85,12 @@ const report = await page.evaluate(() => {
   // 页面里靠 onUpdate 计算的显隐/状态就不会更新，检查会误报整屏空白。
   // 渲染器走的是 totalTime(t, false)，这里保持一致。
   const seekTimeline = (seconds) => {
+    // seek 失败不能把整个排版检查打断：页面自己的驱动或 GSAP 内部偶发抛错时，
+    // 检查器会连"出画布/空页"这些真正要拦的东西都跑不到。
+    try { return seekTimelineUnsafe(seconds); }
+    catch (err) { warnings.push('seek ' + seconds + 's 时页面抛错：' + String(err && err.message || err).slice(0, 80)); }
+  };
+  const seekTimelineUnsafe = (seconds) => {
     if (typeof window.__seekTo === 'function') {
       window.__seekTo(seconds);
       try { window.dispatchEvent(new CustomEvent('hf-seek', { detail: { time: seconds } })); } catch {}

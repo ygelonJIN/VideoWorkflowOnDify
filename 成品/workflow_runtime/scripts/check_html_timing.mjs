@@ -54,9 +54,15 @@ const report = await page.evaluate(async () => {
   if (!sceneEls.length) { return {errors: ['没有 #stage .scene'], warnings, sceneReports, flashes}; }
 
   const seek = async (t) => {
-    if (typeof window.__seekTo === 'function') { await window.__seekTo(t); }
-    else { timeline.seek(t, false); if (typeof window.__hfRenderState === 'function') window.__hfRenderState(t); }
-    if (typeof window.__updateScenes === 'function') window.__updateScenes(t);
+    // 单次 seek 抛错不打断逐帧检查：否则一条坏 tween 会让整片检查直接崩掉，
+    // 连"空页/闪回"这些真正要拦的问题都跑不到。
+    try {
+      if (typeof window.__seekTo === 'function') { await window.__seekTo(t); }
+      else { timeline.seek(t, false); if (typeof window.__hfRenderState === 'function') window.__hfRenderState(t); }
+      if (typeof window.__updateScenes === 'function') window.__updateScenes(t);
+    } catch (err) {
+      warnings.push('seek ' + Number(t).toFixed(2) + 's 抛错：' + String(err && err.message || err).slice(0, 80));
+    }
   };
 
   const scenes = sceneEls.map(el => ({

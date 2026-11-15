@@ -12,7 +12,8 @@ def main(html: str, script: str) -> dict:
     if sid:
         names = {n for n in re.findall(r'data-anim="([\w-]+)"', h) if n}
         referenced = {n for n in re.findall(r'data-anim="([\w-]+)"', s) if n}
-        missing = sorted(names - referenced - {"bg", "scrim"})
+        # media 归转场节点：照片层的进入由转场脚本在 data-start - 0.5 秒滑入完成，这里再补一个 opacity 0 的默认入场会让照片晚一拍出现。
+        missing = sorted(names - referenced - {"bg", "scrim", "media"})
         if missing:
             lines = []
             for name in missing:

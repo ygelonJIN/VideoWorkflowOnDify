@@ -204,7 +204,7 @@ def generate_images(project_dir: Path, plan_path: Path, args) -> None:
 IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".webp"}
 
 
-def image_mapping(project_dir: Path, image_ids: list[str]) -> dict[str, Path]:
+def image_mapping(project_dir: Path, image_ids: list[str], allow_unnamed: bool = True) -> dict[str, Path]:
     """按「已按 id 命名的优先 → 其余按修改时间从早到晚」对号，不改用户文件名。"""
     image_dir = project_dir / "媒体" / "图片"
     if not image_dir.exists():
@@ -223,15 +223,26 @@ def image_mapping(project_dir: Path, image_ids: list[str]) -> dict[str, Path]:
     for image_id in image_ids:
         if image_id in by_id:
             mapping[image_id] = by_id[image_id]
-        elif cursor < len(unnamed):
+        elif cursor < len(unnamed) and allow_unnamed:
             mapping[image_id] = unnamed[cursor]
             cursor += 1
+    if unnamed and not allow_unnamed and any(i not in by_id for i in image_ids):
+        raise SystemExit(
+            "图片没有按 id 命名，--strict-ids 模式下拒绝按修改时间对号：\n  %s\n"
+            "改名成 媒体/图片/<id>.png（%s）后重跑，或去掉 --strict-ids 按修改时间对号。"
+            % ("\n  ".join(item.name for item in unnamed[:12]), "、".join(image_ids[:6]))
+        )
+    if unnamed and any(i not in by_id for i in image_ids):
+        print("图片对号（按修改时间从早到晚；已按 id 命名的优先）：")
+        for image_id in image_ids:
+            target = mapping.get(image_id)
+            print("  %-6s ← %s" % (image_id, target.name if target else "（还缺）"))
     return mapping
 
 
-def replace_image_placeholders(html: str, project_dir: Path, image_ids: list[str], allow_missing: bool) -> str:
+def replace_image_placeholders(html: str, project_dir: Path, image_ids: list[str], allow_missing: bool, allow_unnamed: bool = True) -> str:
     """把 {{IMG:id}} 换成真实文件路径；文件保持原名，只做映射。"""
-    mapping = image_mapping(project_dir, image_ids)
+    mapping = image_mapping(project_dir, image_ids, allow_unnamed)
     missing: list[str] = []
     used: list[str] = []
 
@@ -283,8 +294,51 @@ def check_scene_images(html: str) -> list[str]:
     return without
 
 
+def _rmtree_force(path: Path) -> None:
+    """删项目目录：macOS 上 Finder/Spotlight 会往里塞 .DS_Store，
+    直接 rmtree 偶尔报 "Directory not empty"，重试几次再交给 rm -rf。"""
+    import subprocess as _sp
+    for _ in range(3):
+        try:
+            shutil.rmtree(path)
+            return
+        except FileNotFoundError:
+            return
+        except OSError:
+            time.sleep(0.3)
+    _sp.run(["rm", "-rf", str(path)], check=False)
+
+
+def _key_from_shell_rc(name: str) -> str:
+    """环境里没有就翻一次 shell 配置（~/.zshrc 等）拿 Key。
+
+    只在进程内用，不写进任何文件、不打印值：日志里只说从哪个文件读到的。
+    起因：统一入口用非登录 shell 跑，~/.zshrc 里的 export 不会自动生效，
+    每次都报「缺少 MIMO_API_KEY」，人还得手动 source 一遍。
+    """
+    import glob
+    candidates = [str(Path.home() / ".zshrc"), str(Path.home() / ".zprofile"),
+                  str(Path.home() / ".bash_profile"), str(Path.home() / ".profile")]
+    candidates += sorted(glob.glob(str(Path.home() / ".config" / "*" / "*.sh")))
+    pattern = re.compile(r'^\s*(?:export\s+)?' + re.escape(name) + r'=(.*)$', re.M)
+    for path in candidates:
+        try:
+            text = Path(path).read_text(encoding="utf-8", errors="ignore")
+        except Exception:
+            continue
+        match = pattern.search(text)
+        if not match:
+            continue
+        value = match.group(1).strip().strip('"').strip("'")
+        if value and not value.startswith("$"):
+            print("已从 %s 读取 %s（不打印内容）" % (path, name))
+            os.environ[name] = value
+            return value
+    return ""
+
+
 def generate_mimo_voice(script: str, output: Path, model: str, voice: str, base_url: str) -> None:
-    api_key = os.environ.get("MIMO_API_KEY", "").strip()
+    api_key = os.environ.get("MIMO_API_KEY", "").strip() or _key_from_shell_rc("MIMO_API_KEY")
     if not api_key:
         raise SystemExit("缺少 MIMO_API_KEY；请设置环境变量，但不要把 Key 写入项目文件或日志")
     endpoint = base_url.rstrip("/") + "/chat/completions"
@@ -420,6 +474,8 @@ def main() -> None:
     parser.add_argument("--skip-images", action="store_true", help="跳过生图，直接用 媒体/图片/ 里已有的文件")
     parser.add_argument("--images-only", action="store_true", help="只生成图片，不生成口播、不渲染")
     parser.add_argument("--allow-missing-images", action="store_true", help="缺图也继续渲染（只用于排查版面）")
+    parser.add_argument("--allow-unnamed", action="store_true", help="（兼容旧命令，已是默认行为）")
+    parser.add_argument("--strict-ids", action="store_true", help="只认按 id 命名的图片，没命名的直接报错")
     parser.add_argument("--image-dry-run", action="store_true", help="用占位图跑通链路，不调用生图 API")
     parser.add_argument("--image-only-ids", default="", help="只生成这些图片 id，逗号分隔，用于先看一张效果")
     parser.add_argument("--skip-render", action="store_true")
@@ -466,7 +522,7 @@ def main() -> None:
                 print("未完成项目已清理，媒体目录临时保留（图片/口播不会被重新生成）")
             else:
                 print("未完成项目已清理，不保留备份")
-            shutil.rmtree(project_dir)
+            _rmtree_force(project_dir)
         else:
             backup_root = BASE / "项目备份"
             backup_root.mkdir(parents=True, exist_ok=True)
@@ -536,7 +592,7 @@ def main() -> None:
                      if isinstance(item, dict) and item.get("id") and str(item.get("role") or "").lower() != "html"]
         if not image_ids:
             image_ids = wanted
-        html_final = replace_image_placeholders(data["html_document"], project_dir, image_ids, args.allow_missing_images)
+        html_final = replace_image_placeholders(data["html_document"], project_dir, image_ids, args.allow_missing_images, not args.strict_ids)
         no_image_scenes = check_scene_images(html_final)
         if no_image_scenes:
             print("警告：这些场景没有图片，画面只剩文字：" + "、".join(no_image_scenes[:10]))

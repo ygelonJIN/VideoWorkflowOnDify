@@ -75,6 +75,17 @@ def main(approved_package_json: str, motion_plan_json: str) -> dict:
                 first["scene_id"], last["scene_id"]))
     composition_warnings = list(dict.fromkeys(composition_warnings))
 
+    # 背景卡不成族、不按明暗筛。全部 39 张都是 canvas 动态卡，每张自带底色和字色。
+    # 2026-11-14 改：删掉 B01–B07 / B41–B48 那批静态 CSS 卡（背景在成片里是一片纯色且不动），
+    # 也不再按"浅色片子/深色片子"分组——每屏选一张，字色跟这张卡的 ink 走。
+    strategy = storyboard.get("creative_strategy") or {}
+    # 背景卡只用有出处的实现（Remotion 系 B23–B39 + 既有 B08–B21），不自创。
+    # 全部是 canvas 动态卡，由 bgkit.bind 按 t 重绘。
+    background_pool = [
+        "B23", "B24", "B25", "B26", "B27", "B28", "B29", "B30",
+        "B31", "B32", "B34", "B35", "B36", "B37", "B38", "B39",
+    ]
+
     # 逐屏载荷：迭代节点一次只给模型一屏，附带前后屏的构图，方便它避开相邻同构。
     scene_payloads = []
     previous_component = ""
@@ -88,7 +99,10 @@ def main(approved_package_json: str, motion_plan_json: str) -> dict:
         item["prev_composition"] = ledger[index - 1] if index > 0 else {}
         item["next_composition"] = ledger[index + 1] if index + 1 < len(ledger) else {}
         # 全片视觉编号：背景 B + 组件 U，由这一个节点统一分配，画面阶段只套库、不自己画。
-        background_pool = ["B05", "B01", "B03", "B06", "B04", "B07", "B02"]
+        # 2026-11-14 改：背景卡按明暗分两族，同一支片子只用一族。
+        # 旧写法把"深色 CSS 卡"和"透明 canvas 卡"按一深一透交替排进一个池子，
+        # 相邻两屏必然一深一浅，成片里就是明暗硬跳 + 白字压在浅底上。
+        # 现在由 background_tone 先锁定全片一族，池内编号的自带底色都同族。
         text = (str(item.get("on_screen_text") or "") + " " + str(item.get("voiceover_text") or "")).strip()
         component = "U01"
         if re.search(r"[0-9]+|[一二三四五六七八九十百千万亿]{1,}(?:万|亿|块|元|%|天|次)", text):
@@ -101,18 +115,27 @@ def main(approved_package_json: str, motion_plan_json: str) -> dict:
             order = ["U01", "U03", "U05", "U02", "U04"]
             component = order[(order.index(component) + 1) % len(order)]
         previous_component = component
+        bg_id = background_pool[index % len(background_pool)]
         item["visual_budget"] = {
-            "background": background_pool[index % len(background_pool)],
+            "background": bg_id,
+            "background_tone": "dark",
             "components": [component],
         }
 
         # 全片动效编号：逐屏循环前由这一个节点统一分配，相邻不重复、单编号不超过一半屏数。
-        entrance_pool = ["T02", "T01", "T03", "T09"]
-        state_pool = ["X02", "X01"]
-        item["motion_budget"] = {
+        # 2026-11-14：池子从 4 张扩到 8 张。原来全片只有"逐字上浮/模糊聚焦/折页/逐字"四种，
+        # 看两屏就是同一套动作，这是"文字动效很弱"的直接原因。
+        entrance_pool = ["T02", "T01", "T03", "T09", "T05", "T12", "T15", "T21"]
+        state_pool = ["S02", "X01", "S04", "S06", "X01", "S02", "S04", "S12"]
+        # 组件动效：这屏有组件就给一个专属槽位，组件根不再被拆字卡糟蹋。
+        component_pool = ["UA01", "UA02", "UA03"]
+        budget = {
             "entrance": entrance_pool[index % len(entrance_pool)],
             "state": state_pool[index % len(state_pool)],
         }
+        if component:
+            budget["component"] = component_pool[index % len(component_pool)]
+        item["motion_budget"] = budget
         scene_payloads.append(json.dumps(item, ensure_ascii=False))
     distinct_families = len({entry["family"] for entry in ledger if entry["family"]})
     need_families = min(4, len(ledger))
@@ -177,7 +200,6 @@ def main(approved_package_json: str, motion_plan_json: str) -> dict:
             "composition_warnings": composition_warnings,
         }, ensure_ascii=False))
 
-    strategy = storyboard.get("creative_strategy") or {}
     design_brief = json.dumps({
         "title": strategy.get("title", ""),
         "subtitle": strategy.get("subtitle", ""),

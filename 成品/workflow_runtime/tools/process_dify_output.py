@@ -192,6 +192,8 @@ def main() -> None:
     parser.add_argument("--tts-voice", help="音色 voice ID 或 macOS voice 名")
     parser.add_argument("--prepare", action="store_true", help="黑帧口播：只建项目、落图像计划、出提示词包，不出图不渲染")
     parser.add_argument("--skip-images", action="store_true", help="黑帧口播：跳过生图，用 媒体/图片/ 里已有的图合并出片")
+    parser.add_argument("--strict-ids", action="store_true", help="黑帧口播：只认按 id 命名的图片")
+    parser.add_argument("--allow-unnamed", action="store_true", help="（兼容旧命令，已是默认行为）")
     parser.add_argument("--no-open", action="store_true", help="HTML-only 输出保存后不打开浏览器")
     args = parser.parse_args()
 
@@ -297,6 +299,8 @@ def main() -> None:
             command.extend(["--images-only", "--skip-images"])
         elif args.skip_images:
             command.append("--skip-images")
+        if args.strict_ids:
+            command.append("--strict-ids")
         if args.prepare:
             print("检测到黑帧口播输出：只准备项目与出图提示词，不渲染。")
         else:

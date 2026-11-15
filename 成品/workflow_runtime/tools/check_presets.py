@@ -1,10 +1,14 @@
 #!/usr/bin/env python3
 """校验动效计划与页面里的动效实现是否符合能力白名单。
 
-两个用法：
+三个用法：
 
     python3 check_presets.py --plan motion_plan.json
     python3 check_presets.py --html index.html
+    python3 check_presets.py --stats [--family 状态]
+
+--stats  从 presets.json 现算族分布，输出一张 markdown 速查表（族 / 数量 / 编号+名字）。
+         卡数、族分布一律用这里算，文档里不抄数字——抄下来几天就错。
 
 --plan   检查 A10 输出的 `motion_plan_json`：
          · 每条 sequences 的 preset 必须在白名单里（或为空）
@@ -137,13 +141,57 @@ def check_html(doc: str) -> list[str]:
     return problems
 
 
+def _load_presets_path():
+    for up in _Path(__file__).resolve().parents:
+        cand = up / "能力库" / "动效库" / "presets.json"
+        if cand.exists():
+            return cand
+    return None
+
+
+def print_stats(family: str | None = None) -> int:
+    path = _load_presets_path()
+    if path is None:
+        print("找不到 能力库/动效库/presets.json", file=sys.stderr)
+        return 1
+    cards = json.loads(path.read_text(encoding="utf-8")).get("presets", [])
+    if family:
+        picked = [c for c in cards if c.get("family") == family]
+        if not picked:
+            print(f"没有族「{family}」", file=sys.stderr)
+            return 1
+        for c in picked:
+            print(f"- **{c['id']}** {c.get('name','')} · {c.get('status','?')} — {c.get('use','')}")
+        print(f"\n共 {len(picked)} 张")
+        return 0
+
+    by_family: dict[str, list[dict]] = {}
+    for c in cards:
+        by_family.setdefault(c.get("family") or "未分类", []).append(c)
+    order = sorted(by_family.items(), key=lambda kv: -len(kv[1]))
+    total = len(cards)
+    ready = sum(1 for c in cards if c.get("status") == "ready")
+    print(f"共 {total} 张（ready {ready} / 其他 {total - ready}），来源 {path}")
+    print()
+    print("| 族 | 数量 | 编号 |")
+    print("|---|---:|---|")
+    for fam, items in order:
+        ids = " ".join(c["id"] for c in items)
+        print(f"| {fam} | {len(items)} | {ids} |")
+    return 0
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--plan")
     ap.add_argument("--html")
+    ap.add_argument("--stats", action="store_true", help="打印族分布速查表")
+    ap.add_argument("--family", help="配合 --stats，展开某一族的编号与用途")
     args = ap.parse_args()
+    if args.stats:
+        return print_stats(args.family)
     if not args.plan and not args.html:
-        ap.error("至少给一个 --plan 或 --html")
+        ap.error("至少给一个 --plan、--html 或 --stats")
 
     failed = False
     if args.plan:

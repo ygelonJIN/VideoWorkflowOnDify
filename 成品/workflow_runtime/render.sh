@@ -128,6 +128,12 @@ elif [ -f 口播文案.txt ]; then
 fi
 python3 脚本/sync_video.py "${SYNC_ARGS[@]}" "${TRANSCRIPT_ARG[@]}"
 
+STAGE="生成页间转场快照"
+if [ -f 脚本/snapshot_scenes.mjs ] && grep -q "__gtCut" index.html; then
+  echo "生成每屏快照（页间 GT 转场当纹理用）..."
+  HYPERFRAMES_CLI="$HF_CLI" HYPERFRAMES_BROWSER_PATH="$CHROME_BIN" "$NODE_BIN" 脚本/snapshot_scenes.mjs index.html || echo "⚠️ 快照生成失败（页间转场会退回硬切）"
+fi
+
 STAGE="检查生产契约（check_html_contract.py）"
 echo "检查生产契约（结构残缺会停止，其余告警继续）..."
 if ! python3 脚本/check_html_contract.py index.html; then

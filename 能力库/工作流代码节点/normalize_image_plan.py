@@ -35,7 +35,10 @@ def main(image_plan_text: str, approved_package_json: str) -> dict:
     scenes = [item for item in (storyboard.get("scenes") or []) if isinstance(item, dict)]
 
     # html = 这一屏不生成照片，由场景组用 CSS 背景承担画面。
-    allowed_roles = {"full", "inset", "portrait", "texture", "html"}
+    # 2026-11-15：prompt 里没有 full 这一档（照片永远不铺满整屏），
+    # 这里却把 full 当合法值、还把未知值归一化成 full——模型写 full 就整屏铺满、
+    # 文字只好压在画面上。合法档位与 prompt 完全对齐：large / inset / portrait / texture / html。
+    allowed_roles = {"large", "inset", "portrait", "texture", "html"}
     allowed_sizes = {"1024x1536", "1536x1024", "1024x1024"}
     allowed_motion = {"push-in", "pull-out", "pan-left", "pan-right", "tilt-up", "reveal", "parallax", "hold"}
     allowed_zones = {"top", "bottom", "left", "right", "center"}
@@ -53,10 +56,13 @@ def main(image_plan_text: str, approved_package_json: str) -> dict:
         while image_id in used_ids:
             image_id += "_b"
         used_ids.add(image_id)
-        role = str(item.get("role") or "full").strip().lower()
-        if role not in allowed_roles:
-            warnings.append("%s role=%s 已归一化为 full" % (image_id, role))
-            role = "full"
+        role = str(item.get("role") or "large").strip().lower()
+        if role in ("full", "cover", "background", "photo"):
+            warnings.append("%s role=%s 是满屏写法，已降级为 large（照片不铺满整屏）" % (image_id, role))
+            role = "large"
+        elif role not in allowed_roles:
+            warnings.append("%s role=%s 已归一化为 large" % (image_id, role))
+            role = "large"
         size = str(item.get("size") or "").strip().lower()
         if size not in allowed_sizes:
             size = "1536x1024" if role == "inset" else "1024x1536"
