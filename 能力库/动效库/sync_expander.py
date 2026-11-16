@@ -11,7 +11,8 @@
     python3 sync_expander.py --check    # 只检查是否已同步，不同步退出码 1
 
 约定：
-- 只同步 status=ready 且不是 B 开头的卡（背景由 bgkit 走 canvas，不进 TPL）。
+- 只同步 status=ready 的元素动效卡：背景（bgkit 走 canvas）、组件（HTML 结构）、
+  页间转场（sync_video 的 __pt）都不进 TPL。
 - {{x}} → %(x)s，% 转义成 %%。
 - 缺 sel2 时给个默认值，避免 L01 这类双目标卡展开时报 KeyError。
 """
@@ -32,7 +33,7 @@ def build_blocks():
     cards = [
         c for c in bp.load()["presets"]
         if c.get("status") == "ready" and not c["id"].startswith("B")
-        and c.get("cap") != "component-html"
+        and c.get("cap") not in ("component-html", "page-transition")
     ]
     tpl = ["    TPL = {"]
     for c in cards:
@@ -46,14 +47,34 @@ def build_blocks():
         keys.setdefault("stagger", 0.05)
         default.append('        "%s": %r,' % (c["id"], keys))
     default += ["    }", ""]
-    return "\n".join(tpl) + "\n" + "\n".join(default), [c["id"] for c in cards]
+
+    # text_safe=false：卡结束时元素偏离原位（S21 甩出去只回一部分）或放大后不回落
+    # （T16 到 4 倍）。这类卡一旦点在 title/body 上，文字就跑出画布或糊满整屏，
+    # 逐帧检查还全过。展开层拿到这张表就换成同槽位的替身卡，并把原编号记进 skipped。
+    unsafe = [
+        "    # 不能落在常驻文字上的卡：落在 data-role 节点时换同槽位替身。",
+        "    # 由 sync_expander.py 从 presets.json 的 text_safe / text_swap 生成，不要手改。",
+        "    UNSAFE_TEXT = {",
+    ]
+    for c in bp.load()["presets"]:
+        if c.get("text_safe") is False:
+            swap = str(c.get("text_swap") or "").strip().upper()
+            if swap:
+                unsafe.append('        "%s": "%s",' % (c["id"], swap))
+    unsafe += ["    }", ""]
+    return ("\n".join(tpl) + "\n" + "\n".join(default) + "\n" + "\n".join(unsafe),
+            [c["id"] for c in cards])
 
 
 def audit_params():
     """每张 ready 卡只带自己的 params 也必须能格式化；缺参数就是坏卡。"""
     bad = []
+    ready = {}
     for c in bp.load()["presets"]:
-        if c.get("status") != "ready" or c["id"].startswith("B") or c.get("cap") == "component-html":
+        if c.get("status") == "ready":
+            ready[c["id"]] = c
+    for c in bp.load()["presets"]:
+        if c.get("status") != "ready" or c["id"].startswith("B") or c.get("cap") in ("component-html", "page-transition"):
             continue
         vals = dict(c.get("params") or {})
         vals.update({"sel": "x", "at": "at(0.2)", "k": "0", "sel2": "y"})
@@ -61,18 +82,20 @@ def audit_params():
             bp.to_python_template(c["code"]) % vals
         except Exception as e:
             bad.append((c["id"], str(e)[:40]))
+        # text_swap 必须真的能被展开：不在 TPL 里换了也白换。
+        if c.get("text_safe") is False:
+            swap = str(c.get("text_swap") or "").strip().upper()
+            if not swap:
+                bad.append((c["id"], "text_safe=false 但没有 text_swap"))
+            elif swap.startswith("B") or swap not in ready:
+                bad.append((c["id"], "text_swap %s 不是可展开的 ready 卡" % swap))
+            elif ready[swap].get("cap") in ("component-html", "page-transition"):
+                bad.append((c["id"], "text_swap %s 是组件/转场卡，进不了 TPL" % swap))
     return bad
-
-
-MIRROR = REPO / "能力库" / "工作流代码节点" / "expand_motion_plan.py"
 
 
 def splice(code):
     new_block, ids = build_blocks()
-    # sync_prompts_to_yaml.py 会把 TPL/DEFAULTS 整段剥掉（它只写人手维护的部分）。
-    # 这种情况下拿镜像文件当底稿，从镜像里的 TPL 起点拼回去，别让 YAML 丢块。
-    if "    TPL = {" not in code and MIRROR.exists():
-        code = MIRROR.read_text(encoding="utf-8")
     i0 = code.index("    TPL = {")
     i1 = code.index("    DEFAULTS = {")
     i2 = code.index("\n\n    parts = []", i1)
@@ -126,8 +149,6 @@ def main():
         print("YAML 里的代码块定位失败，未写入")
         return 1
     YAML.write_text(raw.replace(esc_old, esc_new), encoding="utf-8")
-    if MIRROR.exists():
-        MIRROR.write_text(new_code, encoding="utf-8")
 
     yaml.safe_load(YAML.read_text(encoding="utf-8"))
     print("已写入：%d 张卡" % len(ids))

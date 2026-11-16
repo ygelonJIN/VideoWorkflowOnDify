@@ -1,0 +1,797 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Studio · 导航与出片重构预览（顶栏版）</title>
+<link rel="stylesheet" href="./tokens.css">
+<style>
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: var(--font-ui);
+    font-size: var(--text-13);
+    -webkit-font-smoothing: antialiased;
+  }
+  button { font: inherit; color: inherit; }
+  code, .mono { font-family: var(--font-mono); }
+
+  /* ---------------- 外壳：左栏删除，只剩顶栏 + 工作区 ---------------- */
+  .app {
+    display: grid;
+    grid-template-areas: "top" "work";
+    grid-template-rows: var(--top-h) minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--sp-4);
+    height: 100vh;
+    padding: var(--sp-4);
+  }
+  /* 对照：旧版左栏（点右下角开关才出现） */
+  .app.legacy {
+    grid-template-areas: "top top" "rail work";
+    grid-template-columns: 132px minmax(0, 1fr);
+  }
+
+  .card {
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    border-radius: var(--panel-radius);
+    box-shadow: var(--shadow-1), var(--shadow-2);
+  }
+
+  /* ---------------- 顶栏：全局动作 ---------------- */
+  .topbar {
+    grid-area: top;
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: var(--sp-2);
+    min-height: var(--top-h);
+    /* 左侧 84px 给 macOS 红绿灯；预览里这块是空的 */
+    padding: 0 var(--sp-4) 0 84px;
+  }
+  .brand { display: flex; align-items: baseline; gap: 8px; padding-right: 4px; }
+  .brand .name { font-size: var(--text-15); font-weight: var(--fw-semibold); letter-spacing: -.01em; }
+  .brand .sub { color: var(--fg-faint); font-size: var(--text-11); letter-spacing: var(--tracking-wide); text-transform: uppercase; }
+  .vline { width: 1px; height: 24px; background: var(--border); margin: 0 var(--sp-2); }
+  .spacer { flex: 1; }
+
+  .select {
+    height: 34px;
+    padding: 0 var(--sp-4);
+    border-radius: var(--btn-radius);
+    border: 1px solid var(--border);
+    background: var(--bg-raised);
+    color: var(--fg);
+    font-size: var(--text-12);
+    max-width: 260px;
+  }
+
+  .btn {
+    height: 36px;
+    padding: 0 var(--sp-4);
+    border-radius: var(--btn-radius);
+    border: 1px solid var(--border-strong);
+    background: transparent;
+    font-size: var(--text-13);
+    font-weight: var(--fw-medium);
+    white-space: nowrap;
+    cursor: pointer;
+    transition: background var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease),
+                transform var(--dur-fast) var(--ease), opacity var(--dur-fast) var(--ease);
+  }
+  .btn:hover { background: var(--bg-hover); }
+  .btn:active { transform: translateY(1px); }
+  .btn:disabled { opacity: .4; cursor: default; transform: none; background: transparent; }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); box-shadow: var(--shadow-2); }
+  .btn.primary:hover { box-shadow: var(--shadow-3); }
+  .btn.ghost { border-color: transparent; color: var(--fg-muted); }
+  .btn.sm { height: 30px; padding: 0 var(--sp-3); font-size: var(--text-12); }
+  .btn.warn { border-color: var(--warn); color: var(--warn); }
+
+  /* 视图分段控件：占掉原来左栏的三个按钮 */
+  .seg {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    padding: 3px;
+    border-radius: var(--radius-full);
+    background: var(--bg-code);
+    border: 1px solid var(--border);
+  }
+  .seg button {
+    position: relative;
+    height: 30px;
+    padding: 0 20px;
+    border: 0;
+    border-radius: var(--radius-full);
+    background: transparent;
+    color: var(--fg-muted);
+    font-size: var(--text-13);
+    font-weight: var(--fw-medium);
+    cursor: pointer;
+    transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
+  }
+  .seg button:hover { color: var(--fg); }
+  .seg button.on {
+    background: var(--bg-raised);
+    color: var(--accent);
+    box-shadow: inset 0 0 0 1px var(--accent-ring), var(--shadow-1);
+  }
+  .seg .badge {
+    position: absolute; top: 2px; right: 9px;
+    min-width: 14px; height: 14px; padding: 0 3px;
+    border-radius: var(--radius-full);
+    background: var(--accent); color: var(--accent-fg);
+    font-family: var(--font-mono); font-size: 9px; line-height: 14px; text-align: center;
+  }
+
+  .clock { color: var(--fg-faint); font-family: var(--font-mono); font-size: var(--text-11); white-space: nowrap; }
+
+  /* ---------------- 旧版左栏（仅对照用） ---------------- */
+  .rail {
+    grid-area: rail;
+    display: none;
+    flex-direction: column;
+    gap: var(--sp-1);
+    padding: var(--sp-5) var(--sp-3) var(--sp-4);
+    min-height: 0;
+  }
+  .app.legacy .rail { display: flex; }
+  .app.legacy .brand-rail { padding: 0 var(--sp-3) var(--sp-5); }
+  .rail .tool {
+    height: 42px; border: 0; border-radius: var(--radius-sm);
+    background: transparent; color: var(--fg-muted);
+    font-size: var(--text-13); font-weight: var(--fw-medium); cursor: pointer;
+  }
+  .rail .tool.on { background: var(--accent-soft); color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent-ring); }
+  .rail .foot { margin-top: auto; display: flex; flex-direction: column; gap: 6px; padding-top: var(--sp-4); border-top: 1px solid var(--border); }
+  .rail .foot .btn { width: 100%; height: 30px; font-size: var(--text-12); }
+
+  /* ---------------- 工作区 ---------------- */
+  .work {
+    grid-area: work;
+    display: grid;
+    grid-template-rows: minmax(0, 1fr) auto;
+    gap: var(--sp-4);
+    min-height: 0;
+  }
+  .main { display: grid; grid-template-columns: minmax(0, 1fr) var(--insp-w); gap: var(--sp-4); min-height: 0; }
+  .main.solo { grid-template-columns: minmax(0, 1fr); }
+  .view { display: none; min-height: 0; }
+  .view.on { display: block; }
+  .view.fill { display: none; }
+  .view.fill.on { display: flex; flex-direction: column; }
+
+  /* ---------------- 画布 ---------------- */
+  .canvas-wrap {
+    position: relative;
+    overflow: hidden;
+    background: var(--bg-canvas);
+    background-image: radial-gradient(var(--grid) 1.2px, transparent 1.2px);
+    background-size: 24px 24px;
+  }
+  .stage { position: absolute; inset: 0; }
+  .node {
+    position: absolute; width: 250px; min-height: 92px;
+    padding: 12px 14px;
+    border-radius: var(--node-radius);
+    background: var(--node-bg);
+    border: 1px solid var(--node-border);
+    box-shadow: var(--node-shadow);
+  }
+  .node.sel { outline: 2px solid var(--accent-ring); border-color: var(--accent); }
+  .node .t { font-size: var(--text-13); font-weight: var(--fw-semibold); }
+  .node .k { margin-top: 3px; color: var(--fg-faint); font-family: var(--font-mono); font-size: var(--text-11); }
+  .node .m { margin-top: 8px; color: var(--fg-faint); font-family: var(--font-mono); font-size: var(--text-11); }
+  .node .st { display: inline-block; margin-top: 8px; padding: 1px 7px; border-radius: var(--radius-full); font-size: var(--text-11); }
+  .node .st.ok { background: var(--ok-soft); color: var(--ok); }
+  .node .st.run { background: var(--run-soft); color: var(--run); }
+  .node .st.wait { background: var(--bg-code); color: var(--fg-faint); }
+
+  /* 画布内浮动工具条：原来挤在顶栏的加节点 / 连线 / 详情 */
+  .dock {
+    position: absolute; left: 50%; top: var(--sp-4); transform: translateX(-50%);
+    z-index: 6;
+    display: flex; align-items: center; gap: 4px;
+    padding: 4px;
+    border-radius: var(--radius-full);
+    background: var(--bg-raised);
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow-2);
+  }
+  .dock button {
+    height: 32px; padding: 0 14px; border: 0; border-radius: var(--radius-full);
+    background: transparent; color: var(--fg-muted); font-size: var(--text-12); cursor: pointer;
+  }
+  .dock button:hover { background: var(--bg-hover); color: var(--fg); }
+  .dock button.on { background: var(--accent-soft); color: var(--accent); }
+  .dock .sep { width: 1px; height: 18px; background: var(--border); margin: 0 2px; }
+
+  .zoomtools {
+    position: absolute; right: var(--sp-5); bottom: var(--sp-5); z-index: 6;
+    display: flex; gap: 2px; padding: 4px;
+    border-radius: var(--radius-full); background: var(--bg-raised);
+    border: 1px solid var(--border); box-shadow: var(--shadow-2);
+  }
+  .zoomtools button { height: 30px; padding: 0 14px; border: 0; border-radius: var(--radius-full); background: transparent; color: var(--fg-muted); font-size: var(--text-12); cursor: pointer; }
+  .zoomtools button:hover { background: var(--bg-hover); color: var(--fg); }
+  .hud {
+    position: absolute; left: var(--sp-5); top: var(--sp-4); z-index: 5;
+    display: flex; align-items: center; gap: 10px; height: 32px; padding: 0 14px;
+    border-radius: var(--radius-full); background: var(--bg-panel); border: 1px solid var(--border);
+    box-shadow: var(--shadow-1); color: var(--fg-faint);
+    font-family: var(--font-mono); font-size: var(--text-11);
+  }
+  .hud b { color: var(--fg); font-weight: var(--fw-medium); }
+
+  /* ---------------- 节点详情 ---------------- */
+  .inspector { padding: var(--sp-5); overflow: auto; }
+  .insp-head { display: flex; align-items: baseline; gap: 8px; }
+  .insp-head h2 { margin: 0; font-size: var(--text-16); font-weight: var(--fw-semibold); }
+  .insp-sub { margin-top: 4px; color: var(--fg-faint); font-family: var(--font-mono); font-size: var(--text-11); }
+  .sec { margin-top: var(--sp-6); }
+  .sec-title { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; color: var(--fg-muted); font-size: var(--text-11); letter-spacing: var(--tracking-wide); text-transform: uppercase; }
+  .sec-title .act { margin-left: auto; text-transform: none; letter-spacing: 0; }
+  .vars { width: 100%; border-collapse: collapse; font-family: var(--font-mono); font-size: var(--text-12); }
+  .vars td { padding: 6px 0; border-bottom: 1px solid var(--border); color: var(--fg-muted); }
+  .vars td:last-child { text-align: right; color: var(--fg); }
+  .code { padding: 12px; border-radius: var(--radius-sm); background: var(--bg-code); font-family: var(--font-mono); font-size: var(--text-11); line-height: 1.6; color: var(--fg-muted); white-space: pre-wrap; max-height: 220px; overflow: auto; }
+
+  /* ---------------- 出片 ---------------- */
+  .produce { padding: var(--sp-6); overflow: auto; }
+  .produce-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: var(--sp-4); }
+  .produce-title { font-size: var(--text-18); font-weight: var(--fw-semibold); letter-spacing: -.01em; }
+  .produce-sub { color: var(--fg-faint); font-size: var(--text-12); }
+
+  .steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+  .step { border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-raised); }
+  .step.open { background: var(--bg-panel); box-shadow: var(--shadow-1); }
+  .step.done { border-color: #2f7d5d2e; }
+  .step.flash { animation: flash .9s var(--ease); }
+  @keyframes flash {
+    0% { box-shadow: 0 0 0 0 var(--accent-ring); border-color: var(--accent); }
+    100% { box-shadow: 0 0 0 0 transparent; }
+  }
+  .step-head { display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px 14px; border: 0; background: transparent; text-align: left; cursor: pointer; border-radius: var(--radius-sm); }
+  .step-head:hover { background: var(--bg-hover); }
+  .step-no {
+    flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+    width: 22px; height: 22px; border: 1px solid var(--border); border-radius: 50%;
+    color: var(--fg-muted); font-family: var(--font-mono); font-size: var(--text-11);
+  }
+  .step.open .step-no { border-color: var(--accent); color: var(--accent); }
+  .step.done .step-no { border-color: transparent; background: var(--ok-soft); color: var(--ok); }
+  .step-title { font-size: var(--text-13); font-weight: var(--fw-medium); white-space: nowrap; }
+  .step-sum { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--fg-faint); font-size: var(--text-12); }
+  .step-chev { color: var(--fg-faint); font-size: var(--text-11); }
+  .step-body { padding: 2px 14px 14px; display: flex; flex-direction: column; gap: 10px; }
+  .step-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0; }
+  .hint { color: var(--fg-muted); font-size: var(--text-13); line-height: 1.6; }
+  .hint.sm { font-size: var(--text-12); color: var(--fg-faint); }
+  .pill { display: inline-flex; align-items: center; height: 26px; padding: 0 10px; border-radius: var(--radius-full); background: var(--bg-raised); border: 1px solid var(--border); color: var(--fg-muted); font-size: var(--text-11); }
+  .pill.ok { color: var(--ok); border-color: #2f7d5d33; background: var(--ok-soft); }
+  .pill.run { color: var(--run); border-color: #5b63c833; background: var(--run-soft); }
+  .warn-box { padding: 10px 12px; border-radius: var(--radius-sm); background: var(--warn-soft); color: var(--warn); font-size: var(--text-12); }
+
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip { padding: 2px 9px; border: 1px solid var(--border); border-radius: var(--radius-full); color: var(--fg-faint); font-family: var(--font-mono); font-size: var(--text-11); }
+  .chip.ok { border-color: #2f7d5d33; background: var(--ok-soft); color: var(--ok); }
+
+  .dropzone {
+    display: flex; flex-direction: column; align-items: center; gap: 6px;
+    padding: 22px; border: 1.5px dashed var(--border-strong); border-radius: var(--radius-md);
+    background: var(--bg-panel); cursor: pointer; text-align: center;
+  }
+  .dropzone:hover { border-color: var(--run); background: var(--run-soft); }
+  .dropzone .dz-t { font-size: var(--text-14); font-weight: var(--fw-semibold); }
+  .dropzone .dz-s { color: var(--fg-faint); font-size: var(--text-11); }
+
+  .inbox { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 8px; }
+  .inbox-card { padding: 6px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-raised); cursor: pointer; text-align: left; }
+  .inbox-card:hover { border-color: var(--accent); }
+  .inbox-card .ph { width: 100%; aspect-ratio: 1; border-radius: var(--radius-xs); background: linear-gradient(135deg, #dfe6ef, #eef2f7); }
+  .inbox-card span { display: block; margin-top: 5px; color: var(--fg-faint); font-family: var(--font-mono); font-size: 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  .make-log { margin: 0; padding: 10px 12px; max-height: 180px; overflow: auto; border-radius: var(--radius-sm); background: #10161f; color: #b9c7d6; font-family: var(--font-mono); font-size: 11px; line-height: 1.65; }
+
+  /* 出图提示词：只剩两个动作 */
+  .prompt-actions { display: inline-flex; gap: 6px; }
+
+  /* ---------------- 产物 ---------------- */
+  .browser { display: grid; grid-template-columns: 210px 260px minmax(0, 1fr); overflow: hidden; min-height: 0; }
+  .col { overflow: auto; border-right: 1px solid var(--border); min-height: 0; }
+  .col:last-child { border-right: 0; }
+  .col-title { position: sticky; top: 0; display: flex; align-items: center; gap: 8px; padding: 10px 14px; background: var(--bg-panel); border-bottom: 1px solid var(--border); color: var(--fg-muted); font-size: var(--text-11); letter-spacing: var(--tracking-wide); text-transform: uppercase; }
+  .row { display: flex; align-items: baseline; gap: 8px; padding: 8px 14px; color: var(--fg-muted); font-size: var(--text-12); cursor: pointer; border-bottom: 1px solid transparent; }
+  .row:hover { background: var(--bg-hover); }
+  .row.on { background: var(--accent-soft); color: var(--accent); }
+  .row .dim { color: var(--fg-faint); font-family: var(--font-mono); font-size: 10px; margin-left: auto; }
+  .row.dir { color: var(--accent); font-weight: var(--fw-medium); }
+  .preview { padding: 16px; }
+  .preview-box { padding: 14px; border-radius: var(--radius-sm); background: var(--bg-code); font-family: var(--font-mono); font-size: 11px; line-height: 1.7; color: var(--fg-muted); white-space: pre-wrap; }
+
+  /* ---------------- 底部 ---------------- */
+  .bottom { display: grid; grid-template-rows: 46px minmax(0, 1fr); height: var(--bottom-h); min-height: 0; overflow: hidden; }
+  .bottom.collapsed { height: auto; grid-template-rows: 44px 0; }
+  .bottom.collapsed .pane { display: none; }
+  .tabs { display: flex; align-items: center; gap: 4px; padding: 0 var(--sp-4); border-bottom: 1px solid var(--border); }
+  .tab { padding: 8px 14px; border-radius: var(--radius-sm); color: var(--fg-muted); font-size: var(--text-13); cursor: pointer; }
+  .tab:hover { background: var(--bg-hover); }
+  .tab.on { background: var(--accent-soft); color: var(--accent); font-weight: var(--fw-medium); }
+  .tabs .right { margin-left: auto; display: flex; align-items: center; gap: 14px; min-width: 0; color: var(--fg-faint); font-family: var(--font-mono); font-size: var(--text-11); }
+  .tabs .meta { max-width: 520px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .log { height: 100%; overflow: auto; padding: 10px 16px; font-family: var(--font-mono); font-size: var(--text-11); line-height: 1.85; color: var(--fg-muted); }
+  .log .t { color: var(--fg-faint); margin-right: 10px; }
+  .log .ok { color: var(--ok); margin-right: 8px; }
+  .log .run { color: var(--run); margin-right: 8px; }
+  .log .dim { color: var(--fg-faint); }
+  .run-next { display: flex; align-items: center; gap: 10px; margin: 0 0 10px; padding: 8px 12px; border-radius: var(--radius-sm); background: var(--ok-soft); color: var(--fg-muted); }
+
+  /* ---------------- 预览说明与对照开关 ---------------- */
+  .note {
+    position: fixed; right: 20px; top: 92px; z-index: 40; width: 268px;
+    padding: 14px 16px; border-radius: var(--radius-md);
+    background: rgba(255,255,255,.92); border: 1px solid var(--border);
+    box-shadow: var(--shadow-3); backdrop-filter: blur(8px);
+    font-size: var(--text-12); line-height: 1.65; color: var(--fg-muted);
+  }
+  .note h4 { margin: 0 0 6px; color: var(--fg); font-size: var(--text-13); font-weight: var(--fw-semibold); }
+  .note ol { margin: 6px 0 0; padding-left: 18px; }
+  .note ol li { margin: 3px 0; }
+  .note .note-foot { display: flex; gap: 6px; margin-top: 10px; }
+  .note .x { position: absolute; right: 8px; top: 6px; border: 0; background: transparent; color: var(--fg-faint); font-size: 14px; cursor: pointer; }
+
+  .toast {
+    position: fixed; left: 50%; bottom: 28px; transform: translate(-50%, 12px);
+    z-index: 60; display: flex; align-items: center; gap: 12px;
+    padding: 10px 14px; border-radius: var(--radius-full);
+    background: #1b2430; color: #eef1f5; box-shadow: var(--shadow-4);
+    font-size: var(--text-12); opacity: 0; pointer-events: none;
+    transition: opacity var(--dur) var(--ease), transform var(--dur) var(--ease);
+  }
+  .toast.show { opacity: 1; transform: translate(-50%, 0); }
+</style>
+</head>
+<body>
+<div class="app" id="app">
+
+  <!-- ============ 顶栏：导航 + 全局动作 ============ -->
+  <header class="topbar card">
+    <div class="brand">
+      <span class="name">视频工作流</span>
+      <span class="sub">Studio</span>
+    </div>
+    <div class="vline"></div>
+    <select class="select">
+      <option>04_黑帧口播_分组生成.yml</option>
+      <option>01_有数字人完整视频工作流.yml</option>
+    </select>
+    <button class="btn sm ghost">打开…</button>
+
+    <span class="spacer"></span>
+
+    <!-- 原来的左栏三格搬到这里 -->
+    <div class="seg" role="tablist" aria-label="视图">
+      <button role="tab" data-view="canvas" class="on">画布</button>
+      <button role="tab" data-view="produce">出片<span class="badge">5</span></button>
+      <button role="tab" data-view="artifacts">产物</button>
+    </div>
+
+    <span class="spacer"></span>
+
+    <span class="clock">26 节点 · key 已配置</span>
+    <button class="btn sm ghost" id="undoBtn">撤销</button>
+    <button class="btn sm ghost" id="redoBtn" disabled>重做</button>
+    <div class="vline"></div>
+    <button class="btn sm" id="inputBtn">输入</button>
+    <button class="btn sm primary" id="runBtn">运行</button>
+    <button class="btn sm ghost" id="settingsBtn">设置</button>
+  </header>
+
+  <!-- ============ 旧版左栏：只用于对照 ============ -->
+  <aside class="rail card">
+    <div class="brand-rail">
+      <span class="name" style="display:block;font-size:var(--text-16);font-weight:600">视频工作流</span>
+      <span style="display:block;margin-top:2px;color:var(--fg-faint);font-size:11px;letter-spacing:.12em;text-transform:uppercase">Studio</span>
+    </div>
+    <button class="tool on">画布</button>
+    <button class="tool">出片</button>
+    <button class="tool">产物</button>
+    <div class="foot">
+      <button class="btn sm ghost">设置</button>
+      <div style="display:flex;gap:4px">
+        <button class="btn sm" style="flex:1;height:30px;font-size:12px">撤销</button>
+        <button class="btn sm" style="flex:1;height:30px;font-size:12px" disabled>重做</button>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ============ 工作区 ============ -->
+  <div class="work">
+    <div class="main" id="main">
+
+      <!-- 画布 -->
+      <section class="view on card canvas-wrap" data-view="canvas" id="viewCanvas">
+        <div class="hud"><b>60%</b><span>拖动画布 · 滚轮缩放</span></div>
+
+        <div class="dock">
+          <button id="addNodeBtn">添加节点 ▾</button>
+          <button id="connectBtn">连线</button>
+          <div class="sep"></div>
+          <button id="inspBtn" class="on">详情</button>
+        </div>
+
+        <div class="stage">
+          <svg width="100%" height="100%" style="position:absolute;inset:0;overflow:visible">
+            <path d="M 330 118 C 370 118, 380 118, 410 118" fill="none" stroke="var(--edge)" stroke-width="2"/>
+            <path d="M 660 118 C 700 118, 710 118, 740 118" fill="none" stroke="var(--edge)" stroke-width="2"/>
+            <path d="M 590 210 C 590 250, 590 250, 590 288" fill="none" stroke="var(--edge)" stroke-width="2"/>
+            <path d="M 410 210 C 410 250, 410 250, 410 288" fill="none" stroke="var(--edge)" stroke-width="2"/>
+          </svg>
+
+          <div class="node" style="left:80px;top:70px">
+            <div class="t">A00_输入活动需求</div>
+            <div class="k">start</div>
+            <div class="st ok">完成 · 12ms</div>
+          </div>
+          <div class="node" style="left:410px;top:70px">
+            <div class="t">A01_整理自然语言需求</div>
+            <div class="k">llm · deepseek-chat</div>
+            <div class="st ok">完成 · 3.4s</div>
+          </div>
+          <div class="node sel" style="left:740px;top:70px">
+            <div class="t">A06_生成口播文案</div>
+            <div class="k">llm · deepseek-chat</div>
+            <div class="st run">运行中</div>
+          </div>
+          <div class="node" style="left:80px;top:288px">
+            <div class="t">A02_解析整理结果</div>
+            <div class="k">code</div>
+            <div class="st wait">等待</div>
+          </div>
+          <div class="node" style="left:410px;top:288px">
+            <div class="t">A07_整理口播</div>
+            <div class="k">code</div>
+            <div class="st wait">等待</div>
+          </div>
+        </div>
+
+        <div class="zoomtools">
+          <button>缩小</button><button>100%</button><button>放大</button><button>适应</button>
+        </div>
+      </section>
+
+      <!-- 节点详情 -->
+      <aside class="view on card inspector" data-view="canvas" id="viewInspector">
+        <div class="insp-head">
+          <h2>A06_生成口播文案</h2>
+          <span class="pill run">运行中</span>
+        </div>
+        <div class="insp-sub">llm · a06</div>
+
+        <div class="sec">
+          <div class="sec-title">输出变量</div>
+          <table class="vars">
+            <tr><td>text</td><td>string</td></tr>
+            <tr><td>usage</td><td>object</td></tr>
+          </table>
+        </div>
+        <div class="sec">
+          <div class="sec-title">提示词 <span class="act"><button class="btn sm ghost">复制</button></span></div>
+          <div class="code">你是短视频口播编剧。按 brief 写 45 秒口播，开场 3 秒必须给出钩子……
+
+{{#a03.brief_json#}}</div>
+        </div>
+      </aside>
+
+      <!-- 出片 -->
+      <section class="view fill card produce" data-view="produce" id="viewProduce">
+        <div class="produce-head">
+          <span class="produce-title">出片</span>
+          <span class="produce-sub">跑完工作流后按 1 → 5 走</span>
+          <span class="spacer"></span>
+          <button class="btn sm ghost">看产物</button>
+        </div>
+
+        <ol class="steps" id="steps">
+          <!-- 1 -->
+          <li class="step done" data-step="1">
+            <div class="step-head" data-toggle="1">
+              <span class="step-no">✓</span>
+              <span class="step-title">运行结果</span>
+              <span class="step-sum">已完成 · 26 节点 · 18.4s</span>
+              <span class="step-chev">展开</span>
+            </div>
+            <div class="step-body" hidden>
+              <div class="step-row">
+                <span class="pill ok">success</span>
+                <span class="hint sm">26 个节点 · 18.4s</span>
+                <span class="spacer"></span>
+                <button class="btn sm">重新运行</button>
+              </div>
+            </div>
+          </li>
+
+          <!-- 2 -->
+          <li class="step done" data-step="2">
+            <div class="step-head" data-toggle="2">
+              <span class="step-no">✓</span>
+              <span class="step-title">准备项目</span>
+              <span class="step-sum">项目 20261116-1712</span>
+              <span class="step-chev">展开</span>
+            </div>
+            <div class="step-body" hidden>
+              <div class="step-row">
+                <span class="hint sm">HTML视频项目/20261116-1712/ · 媒体/出图 已写入 5 个 txt</span>
+                <span class="spacer"></span>
+                <button class="btn sm ghost">打开项目</button>
+              </div>
+            </div>
+          </li>
+
+          <!-- 3：只剩两个动作，点完自动展开放图 -->
+          <li class="step done" data-step="3">
+            <div class="step-head" data-toggle="3">
+              <span class="step-no">✓</span>
+              <span class="step-title">出图提示词</span>
+              <span class="step-sum">5 张 · 已写入 媒体/出图</span>
+              <span class="prompt-actions">
+                <button class="btn sm" data-prompt-action="copy">复制所有提示词</button>
+                <button class="btn sm ghost" data-prompt-action="open">打开文件夹</button>
+              </span>
+              <span class="step-chev">展开</span>
+            </div>
+            <div class="step-body" hidden>
+              <div class="hint sm">提示词写在 <code>媒体/出图/s01.txt … s05.txt</code>，文件名就是屏 id。逐张内容在文件夹里看。</div>
+            </div>
+          </li>
+
+          <!-- 4 -->
+          <li class="step" data-step="4">
+            <div class="step-head" data-toggle="4">
+              <span class="step-no">4</span>
+              <span class="step-title">放图</span>
+              <span class="step-sum">1 / 5 张已就位</span>
+              <span class="step-chev">展开</span>
+            </div>
+            <div class="step-body" hidden>
+              <div class="step-row">
+                <span class="pill">已放 1 / 5 张</span>
+                <span class="hint sm">文件叫 s02.png 就按 id 对；其余按修改时间顺序对号</span>
+                <span class="spacer"></span>
+                <button class="btn sm ghost">刷新</button>
+                <button class="btn sm ghost">打开文件夹</button>
+              </div>
+              <div class="chips">
+                <span class="chip ok">s01 ✓</span>
+                <span class="chip">s02 缺</span>
+                <span class="chip">s03 缺</span>
+                <span class="chip">s04 缺</span>
+                <span class="chip">s05 缺</span>
+              </div>
+              <div class="dropzone">
+                <div class="dz-t">把图片拖到这里</div>
+                <div class="dz-s">存到 HTML视频项目/20261116-1712/媒体/图片；不改工作流、不改 YAML</div>
+                <button class="btn sm">或点这里选择图片</button>
+              </div>
+              <div class="inbox">
+                <button class="inbox-card"><div class="ph"></div><span>s01.png</span></button>
+              </div>
+            </div>
+          </li>
+
+          <!-- 5 -->
+          <li class="step" data-step="5">
+            <div class="step-head" data-toggle="5">
+              <span class="step-no">5</span>
+              <span class="step-title">渲染成片</span>
+              <span class="step-sum">配音 + 字幕 + mp4</span>
+              <span class="step-chev">展开</span>
+            </div>
+            <div class="step-body" hidden>
+              <div class="step-row">
+                <span class="hint sm">配音：MIMO key 已配置 · 音色 中文女声</span>
+                <label class="hint sm" style="display:inline-flex;gap:6px;align-items:center"><input type="checkbox"> 缺图也继续</label>
+                <span class="spacer"></span>
+                <button class="btn sm primary" disabled>渲染成片</button>
+              </div>
+              <div class="warn-box">还缺 4 张：s02、s03、s04、s05。补齐再渲染，或勾「缺图也继续」。</div>
+            </div>
+          </li>
+        </ol>
+      </section>
+
+      <!-- 产物 -->
+      <section class="view fill card" data-view="artifacts" id="viewArtifacts" style="overflow:hidden">
+        <div class="browser">
+          <div class="col">
+            <div class="col-title">项目</div>
+            <div class="row on">20261116-1712<span class="dim">5 图</span></div>
+            <div class="row">20261115-2033<span class="dim">成片</span></div>
+            <div class="row">20261114-0918<span class="dim">成片</span></div>
+          </div>
+          <div class="col">
+            <div class="col-title">文件</div>
+            <div class="row dir">媒体/</div>
+            <div class="row dir">成片/</div>
+            <div class="row dir">诊断/</div>
+            <div class="row">index.html<span class="dim">142KB</span></div>
+            <div class="row on">voiceover.mp3<span class="dim">1.1MB</span></div>
+            <div class="row">字幕.srt<span class="dim">2KB</span></div>
+          </div>
+          <div class="col preview">
+            <div class="col-title">预览</div>
+            <div class="preview">
+              <div class="preview-box">1
+00:00:00,000 --> 00:00:03,120
+三年换了四份工作，问题真的在运气吗？
+
+2
+00:00:03,120 --> 00:00:07,480
+我用一个月试了一个笨办法。</div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <!-- 底部运行台 -->
+    <footer class="bottom card" id="bottom">
+      <div class="tabs">
+        <span class="tab on">运行台</span>
+        <span class="tab">终端</span>
+        <span class="right">
+          <span class="meta">04_黑帧口播_分组生成.yml · 26 节点 · deepseek-chat · key 已配置</span>
+          <span>success · 18.40s</span>
+        </span>
+        <button class="btn sm ghost" id="collapser">收起</button>
+      </div>
+      <div class="pane">
+        <div class="log">
+          <div class="run-next"><span>运行完成 · 26 节点 · 18.4s</span><span class="spacer"></span><button class="btn sm primary">下一步：去出片</button></div>
+          <div><span class="t">17:12:03</span><span class="ok">完成</span>A06_生成口播文案<span class="dim">3.4s</span></div>
+          <div><span class="t">17:12:06</span><span class="ok">完成</span>A07_整理口播<span class="dim">210ms</span></div>
+          <div><span class="t">17:12:09</span><span class="ok">完成</span>A09_整理分镜<span class="dim">180ms</span></div>
+          <div><span class="t">17:12:18</span><span class="ok">完成</span>H03_合并场景组<span class="dim">1.2s</span></div>
+          <div class="dim">产物：voiceover_script、html_document、image_plan_json、approved_package_json</div>
+        </div>
+      </div>
+    </footer>
+  </div>
+</div>
+
+<!-- 预览说明 -->
+<div class="note" id="note">
+  <button class="x" id="noteClose">×</button>
+  <h4>重构预览（顶栏版）</h4>
+  <ol>
+    <li>左栏已删，画布/出片/产物进顶栏中间的分段控件</li>
+    <li>撤销·重做·设置 从左下角上到顶栏右侧</li>
+    <li>加节点 / 连线 / 详情 收进画布浮动条</li>
+    <li>出图提示词只剩两个按钮，点任一都会展开「放图」</li>
+  </ol>
+  <div class="note-foot">
+    <button class="btn sm" id="legacyBtn">对照旧版左栏</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"><span id="toastText"></span></div>
+
+<script>
+  const app = document.getElementById('app');
+  const note = document.getElementById('note');
+  const toast = document.getElementById('toast');
+  const toastText = document.getElementById('toastText');
+  const main = document.getElementById('main');
+  let toastTimer = 0;
+
+  function say(text) {
+    toastText.textContent = text;
+    toast.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => toast.classList.remove('show'), 2200);
+  }
+
+  /* ---- 视图切换 ---- */
+  function setView(view) {
+    for (const button of document.querySelectorAll('.seg button')) {
+      button.classList.toggle('on', button.dataset.view === view);
+    }
+    for (const section of document.querySelectorAll('.view')) {
+      const match = section.dataset.view === view;
+      if (match) section.classList.add('on'); else section.classList.remove('on');
+    }
+    // 出片 / 产物 是整幅宽，画布才带右侧详情
+    main.classList.toggle('solo', view !== 'canvas');
+    // 撤销/重做只在画布有意义
+    const canvasContext = view === 'canvas';
+    document.getElementById('undoBtn').disabled = !canvasContext;
+    document.getElementById('redoBtn').disabled = true;
+    document.getElementById('inspBtn').disabled = !canvasContext;
+  }
+  for (const button of document.querySelectorAll('.seg button')) {
+    button.addEventListener('click', () => setView(button.dataset.view));
+  }
+
+  /* ---- 出片步骤：手风琴 ---- */
+  function openStep(index, flash) {
+    for (const step of document.querySelectorAll('.step')) {
+      const on = Number(step.dataset.step) === index;
+      step.classList.toggle('open', on);
+      step.querySelector('.step-body').hidden = !on;
+      step.querySelector('.step-chev').textContent = on ? '收起' : '展开';
+      if (on && flash) {
+        step.classList.remove('flash');
+        void step.offsetWidth;
+        step.classList.add('flash');
+        step.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      }
+    }
+  }
+  for (const head of document.querySelectorAll('.step-head')) {
+    head.addEventListener('click', (event) => {
+      if (event.target.closest('[data-prompt-action]')) return;
+      const index = Number(head.dataset.toggle);
+      const step = head.closest('.step');
+      if (step.classList.contains('open')) {
+        // 允许全部收起
+        step.classList.remove('open');
+        step.querySelector('.step-body').hidden = true;
+        step.querySelector('.step-chev').textContent = '展开';
+        return;
+      }
+      openStep(index, false);
+    });
+  }
+
+  /* ---- 出图提示词：两个按钮，点完都展开放图 ---- */
+  for (const button of document.querySelectorAll('[data-prompt-action]')) {
+    button.addEventListener('click', (event) => {
+      event.stopPropagation();
+      if (button.dataset.promptAction === 'copy') {
+        say('已复制 5 张中文提示词到剪贴板 · 放图已展开');
+      } else {
+        say('已在 Finder 打开 媒体/出图 · 放图已展开');
+      }
+      // 关键行为：不管点哪个，都自动切到第 4 步
+      openStep(4, true);
+    });
+  }
+
+  /* ---- 顶栏动作 ---- */
+  document.getElementById('undoBtn').addEventListener('click', () => say('撤销：YAML 已回退一步（可在顶栏继续重做）'));
+  document.getElementById('settingsBtn').addEventListener('click', () => say('设置抽屉：模型 key / TTS / 审阅闸门'));
+  document.getElementById('inputBtn').addEventListener('click', () => say('输入抽屉：活动需求、目标时长、创作偏好'));
+  document.getElementById('runBtn').addEventListener('click', () => say('运行：真实调用模型（预览里不执行）'));
+  document.getElementById('inspBtn').addEventListener('click', () => {
+    const inspector = document.getElementById('viewInspector');
+    inspector.classList.toggle('on');
+    main.classList.toggle('solo', !inspector.classList.contains('on'));
+    document.getElementById('inspBtn').classList.toggle('on', inspector.classList.contains('on'));
+  });
+  document.getElementById('addNodeBtn').addEventListener('click', () => say('添加节点：Code / LLM / if-else / 模板 / HTTP / End'));
+  document.getElementById('connectBtn').addEventListener('click', () => say('连线：先点起点，再点目标'));
+  document.getElementById('collapser').addEventListener('click', () => {
+    const bottom = document.getElementById('bottom');
+    bottom.classList.toggle('collapsed');
+    document.getElementById('collapser').textContent = bottom.classList.contains('collapsed') ? '展开' : '收起';
+  });
+
+  /* ---- 对照旧版 ---- */
+  document.getElementById('legacyBtn').addEventListener('click', () => {
+    app.classList.toggle('legacy');
+    const on = app.classList.contains('legacy');
+    document.getElementById('legacyBtn').textContent = on ? '回到新顶栏' : '对照旧版左栏';
+    say(on ? '旧版：左栏占 132px，只有三个按钮' : '新版：左栏删除，画布多出 148px 宽');
+  });
+  document.getElementById('noteClose').addEventListener('click', () => { note.style.display = 'none'; });
+
+  openStep(3, false);
+  setView('produce');
+</script>
+</body>
+</html>

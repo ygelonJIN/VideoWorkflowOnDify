@@ -8,8 +8,8 @@
 
 做四件事，顺序固定：
     1. presets.json 删条目（唯一源）
-    2. 能力卡.md 删对应表格行
-    3. 跑同步链：sync_expander.py → sync_prompts_to_yaml.py → check
+    2. gen_catalog.py 重生成 能力卡.md / 组件卡.md / H00 目录
+    3. 跑同步链：sync_expander.py → check
     4. 删样片（样片/全卡审阅/<族>/）与源工程（样片/全卡审阅/源/<族>/）
 
 编号删后**永久留空，不再复用**：已发布过的编号进过提示词，复用会让旧记录对不上。
@@ -60,30 +60,20 @@ def main() -> None:
         print("  · presets.json：%d → %d 张" % (len(by_id), len(keep)))
     else:
         data["presets"] = keep
-        data["updated"] = "2026-11-14"
+        data["updated"] = __import__("datetime").date.today().isoformat()
         PRESETS.write_text(json.dumps(data, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
         print("✓ presets.json：%d → %d 张" % (len(by_id), len(keep)))
 
-    # 2) 能力卡（按行匹配 "| 编号 |"）
-    lines = CARDS_MD.read_text(encoding="utf-8").split("\n")
-    drop = set(args.ids)
-    kept, removed = [], 0
-    for line in lines:
-        m = re.match(r"\|\s*([A-Z]{1,3}\d{1,3})\s*\|", line)
-        if m and m.group(1) in drop:
-            removed += 1
-            continue
-        kept.append(line)
+    # 2) 能力卡 / 组件卡 / H00 目录：全是生成物，跑一次生成器即可
     if not args.dry_run:
-        CARDS_MD.write_text("\n".join(kept), encoding="utf-8")
-        print("✓ 能力卡.md：删掉 %d 行" % removed)
+        if run([sys.executable, str(HERE / "gen_catalog.py")]) != 0:
+            raise SystemExit("gen_catalog 失败")
+        print("✓ 能力卡.md / 组件卡.md / H00 目录：已按 presets.json 重生成")
 
     # 3) 同步链
     if not args.dry_run:
         if run([sys.executable, str(HERE / "sync_expander.py")]) != 0:
             raise SystemExit("sync_expander 失败")
-        if run([sys.executable, str(WORK / "成品/workflow_runtime/tools/sync_prompts_to_yaml.py")]) != 0:
-            raise SystemExit("sync_prompts_to_yaml 失败")
         if run([sys.executable, str(HERE / "sync_expander.py"), "--check"]) != 0:
             raise SystemExit("同步检查没过，先看差异再删样片")
 
@@ -105,7 +95,7 @@ def main() -> None:
         print("（dry-run，什么都没动）")
     else:
         print("改完。收尾两件事：")
-        print("  1. 把这几个编号追加到 能力库/动效库/已有能力一览.md 的「做过又删了」清单")
+        print("  1. 把这几个编号追加到 能力库/动效库/来源台账.md 的「删过、不再复用」清单")
         print("  2. 如果它们出现在某条成片的项目里，那条片子要重跑")
 
 

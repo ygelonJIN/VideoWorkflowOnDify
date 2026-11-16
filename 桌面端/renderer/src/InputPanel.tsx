@@ -95,7 +95,7 @@ export function InputPanel({ inputs, variables, running, hasKey, reviewGate, can
         </div>
       )}
       {!hasKey && (
-        <div className="warn-box">还没有 API Key，运行会直接失败；先在左栏「设置」里填 Key。</div>
+        <div className="warn-box">还没有 API Key，运行会直接失败；先在顶栏「设置」里填 Key。</div>
       )}
       {hasKey && (
         <div className="hint-text">每次运行都会跑完整链路；开着「口播后暂停」会先停在 A07，审完口播再跑分镜和画面。</div>

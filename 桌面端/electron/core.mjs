@@ -21,7 +21,6 @@ export async function engine() {
       config: await import(pathToFileURL(path.join(engineDir, "config.js")).href),
       runner: await import(pathToFileURL(path.join(engineDir, "run.js")).href),
       yamlEdit: await import(pathToFileURL(path.join(engineDir, "yamlEdit.js")).href),
-      mirrors: await import(pathToFileURL(path.join(engineDir, "mirrors.js")).href),
     };
   }
   return engineCache;
@@ -360,36 +359,19 @@ export async function inputDefaults() {
   return defaults;
 }
 
-const MIRROR_TOOL = path.join(workspaceDir, "成品", "workflow_runtime", "tools", "sync_prompts_to_yaml.py");
-
-/** 改 YAML 里的提示词/代码/标题；04 的提示词和代码节点同步写回 能力库/ 镜像。 */
+/** 改 YAML 里的提示词/代码/标题。
+ *
+ * 2026-11-16 起不再维护 能力库/ 的提示词与代码镜像：提示词/代码节点只有 YAML 一份真源，
+ * 镜像表与镜像目录都已删除。这里只写 YAML，不再做任何镜像同步。
+ */
 export async function updateNode({ path: yamlPath, nodeId, field, value, messageIndex }) {
   const safe = safePath(yamlPath);
-  const { yamlEdit, mirrors } = await engine();
+  const { yamlEdit } = await engine();
   const raw = await readFile(safe, "utf8");
   const next = yamlEdit.updateNodeField(raw, nodeId, field, String(value ?? ""), messageIndex);
   recordHistory(safe, raw);
   await writeAtomic(safe, next);
-
-  let mirror = null;
-  let mirrorWarning;
-  if (path.basename(safe).startsWith("04") && (field === "prompt" || field === "code")) {
-    const maps = await mirrors.loadMirrorMaps(MIRROR_TOOL);
-    if (maps.warning) mirrorWarning = maps.warning;
-    const name = field === "prompt" ? maps.prompts[nodeId] : maps.codes[nodeId];
-    if (name) {
-      const dir = field === "prompt" ? "能力库/工作流提示词" : "能力库/工作流代码节点";
-      const target = path.join(workspaceDir, dir, name);
-      if (existsSync(target)) {
-        const mirrorText = field === "prompt" ? yamlEdit.promptTextOf(next, nodeId) : String(value ?? "");
-        await writeFile(target, mirrorText, "utf8");
-        mirror = path.relative(workspaceDir, target);
-      } else {
-        mirrorWarning = `映射表里有 ${nodeId} → ${name}，但镜像文件不存在，能力库/ 未同步`;
-      }
-    }
-  }
-  return { ok: true, path: safe, mirror, ...(mirrorWarning ? { mirrorWarning } : {}), ...historyFlags(safe) };
+  return { ok: true, path: safe, ...historyFlags(safe) };
 }
 
 const HISTORY_LIMIT = 50;

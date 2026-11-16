@@ -56,6 +56,11 @@ WHITELIST = {
     "S12": ("state_change", "row_reveal"),
     "W02": ("zoom_focus", "enter"),
     "Z01": ("zoom_focus", "enter"),
+    "Z04": ("enter", "zoom_focus"),
+    "Z05": ("enter", "zoom_focus"),
+    "Z07": ("enter",),
+    "Z11": ("enter", "row_reveal"),
+    "U38": ("enter", "row_reveal"),
     "U01": ("state_change", "row_reveal"),
     "U02": ("state_change",),
     "U03": ("state_change", "row_reveal"),
@@ -80,6 +85,10 @@ def _load_known_ids():
     return set()
 
 KNOWN_IDS = _load_known_ids()
+
+# 2026-11-16：语义白名单只对表里还活着的编号生效。旧清单里躺着 T07/T08/P01… 这些
+# 早就删掉的卡，留着只会让 --plan 报"语义不符"，而那张卡根本不存在。
+WHITELIST = {k: v for k, v in WHITELIST.items() if k in KNOWN_IDS}
 
 KIT_FUNCS = {"split", "pointer", "spring", "cubicBezier", "seeded"}
 
@@ -170,8 +179,19 @@ def print_stats(family: str | None = None) -> int:
         by_family.setdefault(c.get("family") or "未分类", []).append(c)
     order = sorted(by_family.items(), key=lambda kv: -len(kv[1]))
     total = len(cards)
-    ready = sum(1 for c in cards if c.get("status") == "ready")
-    print(f"共 {total} 张（ready {ready} / 其他 {total - ready}），来源 {path}")
+    ready = [c for c in cards if c.get("status") == "ready"]
+    archived = [c for c in cards if c.get("status") == "archived"]
+    selectable = [c for c in cards if c.get("role") not in (None, "none", "archive", "special_dom")]
+    print(f"共 {total} 张（ready {len(ready)} / archived {len(archived)} / 其他 {total - len(ready) - len(archived)}）")
+    print(f"生产可选 {len(selectable)} 张：异族按 role 分组见 能力卡.md；来源 {path}")
+    print()
+    role_count = {}
+    for c in selectable:
+        role_count[c.get("role")] = role_count.get(c.get("role"), 0) + 1
+    print("| role | 数量 |")
+    print("|---|---:|")
+    for role, count in sorted(role_count.items(), key=lambda kv: -kv[1]):
+        print(f"| {role} | {count} |")
     print()
     print("| 族 | 数量 | 编号 |")
     print("|---|---:|---|")

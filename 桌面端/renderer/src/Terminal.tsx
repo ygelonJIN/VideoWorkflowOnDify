@@ -44,7 +44,7 @@ export function Terminal() {
   return (
     <div className="term-panel">
       <div className="term-presets">
-        <span className="hint-text">自由命令，在工作区根目录执行。出片流程在左栏「出片」，不用这里。</span>
+        <span className="hint-text">自由命令，在工作区根目录执行。出片流程在顶栏「出片」，不用这里。</span>
         <span className="spacer" />
         <button className="btn" onClick={() => setOutput("")} disabled={running}>清空</button>
       </div>

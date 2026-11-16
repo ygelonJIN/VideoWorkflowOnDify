@@ -58,7 +58,9 @@ def main() -> None:
                 return False
             for token in tokens:
                 if token.startswith("["):
-                    if token not in doc:
+                    # 属性选择器在文档里以属性形式出现（data-anim="x"），不带方括号
+                    attr = token[1:-1]
+                    if attr not in doc and token not in doc:
                         return False
                 elif token.startswith("#"):
                     if not re.search(r"(?<![\w-])id=[\"']" + re.escape(token[1:]) + r"[\"']", doc):
@@ -73,6 +75,38 @@ def main() -> None:
                 motion_blocking.append("动效选择器 %d 个全部命中 0 个元素，成片会是静帧" % len(_selectors))
             elif _resolved < len(_selectors) * 0.6:
                 motion_blocking.append("动效选择器只有 %d/%d 能命中元素，动效大面积失效" % (_resolved, len(_selectors)))
+    # ---- 动效目标按屏校验（2026-11-16）----
+    # 上面那段命中判定是在整篇文档里找 token：s03 指 body、body 只在 s04 存在，也判"命中"，
+    # 于是"每屏动效指不到自己的元素"这个错永远报不出来。这里按屏再查一遍，只写诊断。
+    if _selectors:
+        _scene_cache = {}
+
+        def _scene_block(scope):
+            if scope not in _scene_cache:
+                hit = re.search(r'<section[^>]*data-scene="%s"[\s\S]*?</section>' % re.escape(scope), doc)
+                _scene_cache[scope] = hit.group(0) if hit else ""
+            return _scene_cache[scope]
+
+        _scope_miss = []
+        for _sel in _selectors:
+            _scope = re.match(r'\s*\[data-scene="([^"]+)"\]', _sel)
+            if not _scope:
+                continue
+            _block = _scene_block(_scope.group(1))
+            if not _block:
+                continue
+            for _anim in re.findall(r'\[data-anim="([^"]+)"\]', _sel):
+                # HTML 里写的是属性本身（data-anim="title"），不是 CSS 选择器那种方括号写法
+                if ('data-anim="%s"' % _anim) not in _block:
+                    _scope_miss.append("%s 没有 %s" % (_scope.group(1), _anim))
+        if _scope_miss:
+            errors.append("动效目标不在本屏：%s（跨屏同名元素不算命中；先查 H02SM 的 target）"
+                          % "、".join(sorted(set(_scope_miss))[:6]))
+    _skipped_motion = re.findall(r'data-motion-skipped="([^"]*)"', doc)
+    if _skipped_motion:
+        errors.append("动效目标已改到本屏主文字：%s（H02SM 给的 target 与这一屏的实际元素对不上，需重跑 H02SM）"
+                      % "；".join(html_lib.unescape(item) for item in _skipped_motion[:6]))
+
     if black_frame:
         if 'data-render-mode="black-frame"' not in doc:
             errors.append("缺少黑帧模式标记")

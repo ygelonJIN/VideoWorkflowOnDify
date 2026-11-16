@@ -20,7 +20,7 @@ mkdir -p "$OUT/$FAM"
 
 ( cd "$DIR" && HYPERFRAMES_BROWSER_PATH="$CHROME" \
     HYPERFRAMES_CACHE_DIR="$PWD/.hyperframes/cache" \
-    "$N22" "$HF" render . -w 1 -f 30 -q looks \
+    "$N22" "$HF" render . -w "${HF_WORKERS:-1}" -f 30 -q looks \
       --no-browser-gpu --experimental-fast-capture=false -o out.mp4 >/dev/null )
 mv "$DIR/out.mp4" "$OUT/$FAM/$ID-$NAME.mp4"
 rm -rf "$DIR/.hyperframes"

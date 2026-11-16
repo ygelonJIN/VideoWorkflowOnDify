@@ -3,14 +3,14 @@
    只读 design/v2/tokens.css 的语义变量；尺寸走 --sp-* / --radius-* / --text-*。
    零图标：所有操作用文字；连线不带箭头；节点状态用文字。
 
-   骨架：
-   ┌──────────┬──────────────────────────────┐
-   │ 左边栏   │ 顶栏                          │
-   │ 贯穿整高 ├───────────────┬──────────────┤
-   │ 画布     │ 画布 / 产物    │ 节点详情(可收)│
-   │ 产物     ├───────────────┴──────────────┤
-   │          │ 运行台 / 终端(可收)            │
-   └──────────┴──────────────────────────────┘
+   骨架（2026-11-16：左栏取消，导航进顶栏）：
+   ┌─────────────────────────────────────────────┐
+   │ 顶栏：工作流 · 画布/出片/产物 · 撤销 · 运行 · 设置 │
+   ├───────────────────────────────┬─────────────┤
+   │ 画布（浮动条：加节点/连线/详情） │ 节点详情(可收)│
+   ├───────────────────────────────┴─────────────┤
+   │ 运行台 / 终端(可收)                          │
+   └─────────────────────────────────────────────┘
    =========================================================================== */
 
 * { box-sizing: border-box; }
@@ -35,7 +35,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .app {
   position: relative;
   display: grid;
-  grid-template-columns: var(--rail-w) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
   grid-template-rows: var(--top-h) minmax(0, 1fr);
   gap: var(--sp-4);
   height: 100vh;
@@ -50,80 +50,92 @@ button, input, select, textarea { font: inherit; color: inherit; }
   box-shadow: var(--shadow-1), var(--shadow-2);
 }
 
-/* ---------- 左边栏：顶栏之下，到底部为止 ---------- */
+/* ---------- 顶栏里的品牌与视图分段控件 ---------- */
 
-.rail {
+.topbar .brand {
   display: flex;
-  flex-direction: column;
-  gap: var(--sp-1);
-  grid-column: 1;
-  grid-row: 2;
-  /* 和其他卡片一样留 --sp-4 间距 */
-  padding: var(--sp-5) var(--sp-3) var(--sp-4);
-  min-height: 0;
-  overflow: auto;
+  align-items: baseline;
+  gap: var(--sp-2);
+  padding-right: var(--sp-1);
+  white-space: nowrap;
 }
-
-.brand { padding: 0 var(--sp-3) var(--sp-5); }
-.brand .name {
-  display: block;
-  font-size: var(--text-16);
+.topbar .brand .name {
+  font-size: var(--text-15);
   font-weight: var(--fw-semibold);
   letter-spacing: -.01em;
 }
-.brand .sub {
-  display: block;
-  margin-top: 2px;
+.topbar .brand .sub {
   color: var(--fg-faint);
   font-size: var(--text-11);
   letter-spacing: var(--tracking-wide);
   text-transform: uppercase;
 }
 
-.nav { display: flex; flex-direction: column; gap: 2px; }
+.vline {
+  flex-shrink: 0;
+  width: 1px;
+  height: 24px;
+  margin: 0 var(--sp-2);
+  background: var(--border);
+}
 
-.rail-actions { display: flex; gap: var(--sp-1); padding: 0 var(--sp-2); }
-.rail-settings { width: 100%; }
-.rail-actions .btn { flex: 1; height: 30px; padding: 0 var(--sp-2); font-size: var(--text-12); }
-
-.rail .tool {
+/* 画布 / 出片 / 产物：原来左栏的三个按钮 */
+.seg {
+  flex-shrink: 0;
   display: flex;
   align-items: center;
-  justify-content: center;
-  height: 42px;
-  padding: 0 var(--sp-4);
+  gap: 2px;
+  padding: 3px;
+  border-radius: var(--radius-full);
+  background: var(--bg-code);
+  border: 1px solid var(--border);
+}
+.seg button {
+  position: relative;
+  height: 30px;
+  padding: 0 var(--sp-5);
   border: 0;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-full);
   background: transparent;
   color: var(--fg-muted);
   font-size: var(--text-13);
   font-weight: var(--fw-medium);
-  letter-spacing: .02em;
-  text-align: left;
+  white-space: nowrap;
   cursor: pointer;
   transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
 }
-.rail .tool:hover { background: var(--bg-hover); color: var(--fg); }
-.rail .tool.on {
-  background: var(--accent-soft);
+.seg button:hover { color: var(--fg); }
+.seg button.on {
+  background: var(--bg-raised);
   color: var(--accent);
-  box-shadow: inset 0 0 0 1px var(--accent-ring);
+  box-shadow: inset 0 0 0 1px var(--accent-ring), var(--shadow-1);
+}
+/* 出片有可出片结果时亮一个点，不用数字：数量在步骤条里 */
+.seg button .dot {
+  position: absolute;
+  top: 4px;
+  right: 8px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--run);
 }
 
-.rail-foot {
-  margin-top: auto;
-  display: flex;
-  flex-direction: column;
-  gap: var(--sp-2);
-  padding-top: var(--sp-4);
-  border-top: 1px solid var(--border);
+.topbar-meta {
+  min-width: 0;
+  max-width: 320px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--fg-faint);
+  font-family: var(--font-mono);
+  font-size: var(--text-11);
 }
-.rail-foot .rail-settings { color: var(--fg-muted); }
 
 /* ---------- 右侧工作区 ---------- */
 
 .work {
-  grid-column: 2;
+  grid-column: 1;
   grid-row: 2;
   display: grid;
   grid-template-rows: minmax(0, 1fr) auto;
@@ -137,7 +149,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
   display: flex;
   align-items: center;
   gap: var(--sp-2);
-  grid-column: 1 / -1;
+  grid-column: 1;
   grid-row: 1;
   /* 顶栏铺到最左，左侧 84px 留给红绿灯 */
   min-height: var(--top-h);
@@ -247,8 +259,12 @@ button, input, select, textarea { font: inherit; color: inherit; }
 
 .canvas-hud {
   position: absolute;
+  /* 左下：和右下角的缩放按钮对称，把顶部整条让给中间的浮动条和右上搜索 */
   left: var(--sp-5);
-  top: var(--sp-5);
+  bottom: var(--sp-5);
+  /* 运行中那条会很长，别顶到右下角的缩放按钮上 */
+  max-width: calc(100% - 340px);
+  overflow: hidden;
   z-index: var(--z-hud);
   display: flex;
   align-items: center;
@@ -266,7 +282,6 @@ button, input, select, textarea { font: inherit; color: inherit; }
   white-space: nowrap;
 }
 .canvas-hud .zoom { color: var(--fg); font-weight: var(--fw-medium); }
-.canvas-hud .hint { color: var(--fg-faint); overflow: hidden; text-overflow: ellipsis; }
 
 .stage {
   position: absolute;
@@ -382,6 +397,53 @@ button, input, select, textarea { font: inherit; color: inherit; }
   transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
 }
 .canvas-tools button:hover { background: var(--bg-hover); color: var(--fg); }
+
+/* 画布浮动工具条：加节点 / 连线 / 详情。原来挤在顶栏，属于画布局部动作 */
+.canvas-dock {
+  position: absolute;
+  /* 贴左上角：顶部右侧是搜索框，中间留空给画布本身 */
+  left: var(--sp-5);
+  top: var(--sp-4);
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+  padding: 4px;
+  border-radius: var(--radius-full);
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-2);
+  /* 比左下角的信息条高一层：两层胶囊撞在一起时也要点得到 */
+  z-index: calc(var(--z-hud) + 1);
+}
+.canvas-dock .btn {
+  height: 30px;
+  padding: 0 var(--sp-4);
+  border-color: transparent;
+  border-radius: var(--radius-full);
+  color: var(--fg-muted);
+  font-size: var(--text-12);
+  font-weight: var(--fw-medium);
+}
+.canvas-dock .btn:hover { background: var(--bg-hover); color: var(--fg); }
+.canvas-dock .btn:disabled { background: transparent; }
+.canvas-dock .btn.primary {
+  border-color: var(--accent);
+  color: var(--accent-fg);
+}
+.canvas-dock .btn.on {
+  background: var(--accent-soft);
+  color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent-ring);
+}
+.canvas-dock .sel { flex-shrink: 0; max-width: 132px; }
+.canvas-dock .sel-btn { height: 30px; border-radius: var(--radius-full); font-size: var(--text-12); }
+.canvas-dock .dock-sep {
+  flex-shrink: 0;
+  width: 1px;
+  height: 18px;
+  margin: 0 2px;
+  background: var(--border);
+}
 
 /* ---------- 产物：主区三栏 ---------- */
 
@@ -1041,68 +1103,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 }
 .inbox-ph { width: 100%; aspect-ratio: 1; background: var(--bg-code); border-radius: var(--radius-xs); }
 
-/* ---------- 图像提示词（跑完自动出现） ---------- */
 
-.image-prompts {
-  height: 100%;
-  padding: var(--sp-4) var(--sp-5);
-  overflow: auto;
-  display: flex;
-  flex-direction: column;
-  gap: var(--sp-3);
-}
-.ip-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
-  gap: var(--sp-3);
-}
-.ip-card {
-  padding: var(--sp-3) var(--sp-4);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--bg-panel);
-}
-.ip-head {
-  display: flex;
-  align-items: center;
-  gap: var(--sp-2);
-  margin-bottom: var(--sp-2);
-  color: var(--fg-muted);
-  font-family: var(--font-mono);
-  font-size: var(--text-12);
-}
-.ip-head > span:first-child {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.ip-text {
-  margin: 0 0 var(--sp-2);
-  padding: var(--sp-2) var(--sp-3);
-  border-radius: var(--radius-xs);
-  background: var(--bg-code);
-  color: var(--fg-muted);
-  font-family: var(--font-mono);
-  font-size: var(--text-11);
-  line-height: 1.6;
-  white-space: pre-wrap;
-  word-break: break-word;
-  max-height: 180px;
-  overflow: auto;
-}
-.ip-text.zh { color: var(--fg-faint); }
-.ip-neg { color: var(--fg-faint); font-size: var(--text-11); }
-
-.ip-thumb {
-  width: 100%;
-  max-height: 160px;
-  object-fit: cover;
-  border-radius: var(--radius-xs);
-  margin-bottom: var(--sp-2);
-  background: var(--bg-code);
-}
 
 /* ---------- 制作（准备项目 / 渲染） ---------- */
 
@@ -1199,6 +1200,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
   text-align: left;
 }
 .step-head:hover { background: var(--bg-hover); border-radius: var(--radius-sm); }
+.step-head:focus-visible { outline: 2px solid var(--accent-ring); outline-offset: -2px; border-radius: var(--radius-sm); }
 .step-no {
   display: flex;
   align-items: center;
@@ -1216,13 +1218,15 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .step.done .step-no { border-color: transparent; background: var(--ok-soft); color: var(--ok); }
 .step-title { font-size: var(--text-13); font-weight: var(--fw-medium); white-space: nowrap; }
 .step-sum { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--fg-faint); font-size: var(--text-12); }
+/* 折叠状态下也能点的动作：出图提示词的「复制所有提示词 / 打开文件夹」 */
+.step-actions { flex-shrink: 0; display: inline-flex; align-items: center; gap: var(--sp-2); }
+.step-actions .btn { height: 28px; }
 .step-chev { color: var(--fg-faint); font-size: var(--text-11); }
 .step-body { padding: 0 var(--sp-4) var(--sp-4); display: flex; flex-direction: column; gap: var(--sp-3); }
 .step-row { display: flex; align-items: center; gap: var(--sp-3); flex-wrap: wrap; }
 .step-row .spacer { flex: 1; }
 .step-row .field.inline { margin: 0; }
 .step-body .make-log { flex: none; max-height: 260px; }
-.step-body .ip-grid { max-height: 460px; overflow: auto; padding-right: var(--sp-1); }
 
 .check { display: inline-flex; align-items: center; gap: 6px; color: var(--fg-muted); font-size: var(--text-12); cursor: pointer; }
 
@@ -1391,3 +1395,17 @@ button, input, select, textarea { font: inherit; color: inherit; }
   cursor: pointer;
 }
 .review-close:hover { background: var(--bg-hover); color: var(--fg); }
+
+/* ---------- 窄窗口：顶栏与画布三段 HUD 先让位给必要信息 ---------- */
+
+@media (max-width: 1240px) {
+  .topbar .brand .sub { display: none; }
+  .topbar-meta { max-width: 160px; }
+}
+@media (max-width: 1200px) {
+  .produce-sub { display: none; }
+}
+@media (min-width: 1240px) {
+  /* 宽窗口：分段控件严格居中，两侧内容宽度不等也不偏 */
+  .topbar .seg { position: absolute; left: 50%; transform: translateX(-50%); }
+}

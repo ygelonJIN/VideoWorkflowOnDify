@@ -13,7 +13,7 @@ export interface Bridge {
   inputs(): Promise<Partial<RunInputs>>;
   onEvent(handler: (event: TraceEvent) => void): () => void;
   projects(): Promise<Project[]>;
-  updateNode(options: { path: string; nodeId: string; field: "title" | "prompt" | "code"; value: string; messageIndex?: number }): Promise<{ ok: boolean; mirror?: string | null; mirrorWarning?: string; graph: WorkflowInfo }>;
+  updateNode(options: { path: string; nodeId: string; field: "title" | "prompt" | "code"; value: string; messageIndex?: number }): Promise<{ ok: boolean; graph: WorkflowInfo }>;
   fileUrl(filePath: string): Promise<string>;
   addNode(options: { path: string; type: string; title?: string; position?: { x: number; y: number }; sourceId?: string | null }): Promise<{ nodeId: string; graph: WorkflowInfo }>;
   removeNode(options: { path: string; nodeId: string }): Promise<{ graph: WorkflowInfo }>;

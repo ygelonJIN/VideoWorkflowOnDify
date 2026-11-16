@@ -72,7 +72,11 @@
         span.className = 'kit-' + (unit === 'words' ? 'word' : 'char');
         span.textContent = part;
         span.style.display = 'inline-block';
-        span.style.whiteSpace = 'pre';
+        /* 2026-11-16：words 用 pre-wrap 不用 pre。
+           中文没有空格，一整行会被拆成一个 span，pre 让它不可断行，
+           420px 的栏里 11 个字 60px 就是 660px，直接冲出栏外压到照片上。
+           pre-wrap 保留空格、允许内部折行，动画目标仍是一个整体。 */
+        span.style.whiteSpace = unit === 'words' ? 'pre-wrap' : 'pre';
         frag.appendChild(span);
         out.push(span);
       });

@@ -55,7 +55,7 @@
 .ui-step{flex:1;position:relative;padding-top:34px;}
 .ui-step::before{ /* 轨道 */
   content:""; position:absolute; left:0; right:0; top:12px; height:2px;
-  background: rgba(255,255,255,.12);
+  background: var(--ui-border);
 }
 .ui-step::after{ /* 进度：由 width 驱动 */
   content:""; position:absolute; left:0; top:12px; height:2px; width:0;
@@ -63,7 +63,7 @@
 }
 .ui-step.is-done::after{width:100%;}
 .ui-step b{display:block;font-size:calc(24px * var(--ui-scale,1));color:var(--ui-ink);font-weight:600;}
-.ui-step span{display:block;margin-top:6px;font-size:calc(20px * var(--ui-scale,1));color:var(--ui-muted);}
+.ui-step span{display:block;margin-top:6px;font-size:calc(22px * var(--ui-scale,1));color:var(--ui-muted);}
 
 /* U03 网格面板 */
 .ui-grid{display:grid;gap:var(--ui-gap);}
@@ -82,10 +82,12 @@
 }
 .ui-chip.is-on{color:var(--ui-accent);border-color:rgba(56,214,255,.45);}
 
-/* U05 数据行 */
+/* U05 数据行
+   2026-11-16：描边改吃 --ui-border。原来写死 rgba(255,255,255,.07)，
+   浅色屏上这条线直接消失，深色屏上又太淡。 */
 .ui-row{display:flex;align-items:baseline;justify-content:space-between;
-  padding:18px 4px;border-bottom:1px solid rgba(255,255,255,.07);}
-.ui-row .k{font-size:var(--ui-row-k, 32px);color:var(--ui-muted);}
+  padding:18px 4px;border-bottom:1px solid var(--ui-border);}
+.ui-row .k{font-size:var(--ui-row-k, 34px);color:var(--ui-muted);}
 .ui-row .v{font-size:var(--ui-row-v, 40px);font-weight:700;color:var(--ui-ink);}
 
 /* U06 便当网格 */

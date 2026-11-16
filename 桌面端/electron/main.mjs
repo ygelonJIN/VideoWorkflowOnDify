@@ -146,9 +146,9 @@ function createWindow() {
           return true;
         };
 
-        const pickButton = await run(`[...document.querySelectorAll("button")].some((button) => button.textContent.trim() === "打开文件…")`);
+        const pickButton = await run(`[...document.querySelectorAll("button")].some((button) => button.textContent.trim() === "打开…")`);
         const panesEarly = await run(`({ panes: [...document.querySelectorAll(".pane")].map((item) => item.className), imageEls: document.querySelectorAll(".image-prompts").length, hasHintText: document.body.innerText.includes("跑完整条链路") })`);
-        const before = await run(`({ zoom: document.querySelector(".canvas-hud .zoom").textContent, nodes: document.querySelectorAll(".node").length, edges: document.querySelectorAll(".canvas-edges path").length, rail: ${rect(".rail")}, railRadius: getComputedStyle(document.querySelector(".rail")).borderTopLeftRadius + " / " + getComputedStyle(document.querySelector(".rail")).borderTopRightRadius, lights: ${rect(".lights")}, topbar: ${rect(".topbar")}, bottom: ${rect("#root .bottom")}, canvas: ${rect(".canvas-wrap")}, inspector: ${rect(".inspector")}, icons: (document.body.innerText.match(/[▶◀✕✖＋−⤢▤▣✎⌘⚙●]/g) || []).length, termBg: getComputedStyle(document.querySelector(".term-output")).backgroundColor, termFg: getComputedStyle(document.querySelector(".term-output")).color, termPrompt: getComputedStyle(document.querySelector(".term-input .prompt")).color })`);
+        const before = await run(`({ zoom: document.querySelector(".canvas-hud .zoom").textContent, nodes: document.querySelectorAll(".node").length, edges: document.querySelectorAll(".canvas-edges path").length, seg: ${rect(".seg")}, dock: ${rect(".canvas-dock")}, topbar: ${rect(".topbar")}, bottom: ${rect("#root .bottom")}, canvas: ${rect(".canvas-wrap")}, inspector: ${rect(".inspector")}, icons: (document.body.innerText.match(/[▶◀✕✖＋−⤢▤▣✎⌘⚙●]/g) || []).length, termBg: getComputedStyle(document.querySelector(".term-output")).backgroundColor, termFg: getComputedStyle(document.querySelector(".term-output")).color, termPrompt: getComputedStyle(document.querySelector(".term-input .prompt")).color })`);
 
         const center = await run(`(() => { const n = document.querySelector(".node"); const r = n.getBoundingClientRect(); return { x: Math.round(r.x + r.width / 2), y: Math.round(r.y + r.height / 2) }; })()`);
         win.webContents.sendInputEvent({ type: "mouseDown", x: center.x, y: center.y, button: "left", clickCount: 1 });
@@ -175,9 +175,9 @@ function createWindow() {
         const afterMin = await run(`document.querySelector(".canvas-hud .zoom").textContent`);
 
         const widthBefore = (await run(rect(".canvas-wrap"))).w;
-        await run(clickText("收起详情"));
+        await run(`document.querySelector(".canvas-dock .insp-toggle").click()`);
         await sleep(150);
-        const collapsed = await run(`({ inspector: !!document.querySelector(".inspector"), canvasWidth: ${rect(".canvas-wrap")}.w, label: [...document.querySelectorAll("button")].map((b) => b.textContent.trim()).includes("展开详情") })`);
+        const collapsed = await run(`({ inspector: !!document.querySelector(".inspector"), canvasWidth: ${rect(".canvas-wrap")}.w, dockOff: !document.querySelector(".canvas-dock .insp-toggle").classList.contains("on") })`);
 
         const bottomBefore = (await run(rect("#root .bottom"))).h;
         await run(clickText("收起"));
@@ -258,7 +258,7 @@ function createWindow() {
         const back = await run(`({ zoom: document.querySelector(".canvas-hud .zoom").textContent, canvas: !!document.querySelector(".canvas-wrap") })`);
 
         // 跑一次 stub（默认停在 a03），验证运行台、节点输出值和「停止」按钮的显隐
-        const reopened = await run(clickText("展开详情"));
+        const reopened = await run(`(() => { const button = document.querySelector(".canvas-dock .insp-toggle"); if (!button) return false; button.click(); return true; })()`);
         // 「运行」现在先开输入抽屉，确认后才跑
         const clickedRun = await run(clickText("运行"));
         await sleep(300);
@@ -466,16 +466,20 @@ function createWindow() {
         await run(clickText("关闭"));
         await sleep(150);
         const settingsClosed = await run(`!document.querySelector(".drawer.settings")`);
-        const railLayout = await run(`(() => {
-          const tool = document.querySelector(".rail .tool");
-          const rail = document.querySelector(".rail");
-          const actions = document.querySelector(".rail-actions");
-          const railRect = rail.getBoundingClientRect();
-          const actionsRect = actions.getBoundingClientRect();
+        const navLayout = await run(`(() => {
+          const seg = document.querySelector(".seg");
+          const dock = document.querySelector(".canvas-dock");
+          const topbar = document.querySelector(".topbar");
+          const segRect = seg.getBoundingClientRect();
+          const barRect = topbar.getBoundingClientRect();
           return {
-            toolJustify: getComputedStyle(tool).justifyContent,
-            actionsToBottom: Math.round(railRect.bottom - actionsRect.bottom),
-            hasSettings: [...document.querySelectorAll(".rail button")].some((button) => button.textContent.trim() === "设置"),
+            views: [...seg.querySelectorAll("button")].map((button) => button.textContent.trim()),
+            segInTopbar: Math.round(segRect.top - barRect.top),
+            segOffsetFromCenter: Math.round((segRect.left + segRect.right - barRect.left - barRect.right) / 2),
+            hasRail: Boolean(document.querySelector(".rail")),
+            hasSettings: [...topbar.querySelectorAll("button")].some((button) => button.textContent.trim() === "设置"),
+            hasUndo: [...topbar.querySelectorAll("button")].some((button) => button.textContent.trim() === "撤销"),
+            dockButtons: dock ? [...dock.querySelectorAll("button")].map((button) => button.textContent.trim()) : [],
             meta: document.querySelector(".tabs .meta")?.textContent?.trim() || ""
           };
         })()`);
@@ -614,7 +618,7 @@ function createWindow() {
           }
         }
 
-        console.log("PROBE", JSON.stringify({ before, afterSelect, afterWheel, clickedZoomIn, afterZoomIn, clickedFit, afterFit, clicked100, after100, afterMin, widthBefore, collapsed, bottomBefore, consoleCollapsed, consoleBack, artifacts, mediaProbe, pickButton, dragTest, menuOpen, menuClosed, probeMockPort, panesEarly, runningStyle, firstLogLine, tabsText, inboxDrop, inboxState, imagesTabHint, makePanel, imagesTabClick, copied, clipboardLength: clipboardText.length, runError, clickedSettings, settingsPanel, settingsClosed, railLayout, artProject, artDir, artFile, artVideo, artBackList, artBackState, artMediaDir, artImageDir, artPng, artImage, back, reopened, clickedRun, runDialog, clickedStart, afterRun, inputDrawer, openedWorkflowMenu, workflowMenu, switched, clickedD01, multiMessage, clickedA01, inputValues, searchTyped, searchResults, searchPicked, afterSearch, externalSync }, null, 2));
+        console.log("PROBE", JSON.stringify({ before, afterSelect, afterWheel, clickedZoomIn, afterZoomIn, clickedFit, afterFit, clicked100, after100, afterMin, widthBefore, collapsed, bottomBefore, consoleCollapsed, consoleBack, artifacts, mediaProbe, pickButton, dragTest, menuOpen, menuClosed, probeMockPort, panesEarly, runningStyle, firstLogLine, tabsText, inboxDrop, inboxState, imagesTabHint, makePanel, imagesTabClick, copied, clipboardLength: clipboardText.length, runError, clickedSettings, settingsPanel, settingsClosed, navLayout, artProject, artDir, artFile, artVideo, artBackList, artBackState, artMediaDir, artImageDir, artPng, artImage, back, reopened, clickedRun, runDialog, clickedStart, afterRun, inputDrawer, openedWorkflowMenu, workflowMenu, switched, clickedD01, multiMessage, clickedA01, inputValues, searchTyped, searchResults, searchPicked, afterSearch, externalSync }, null, 2));
         app.exit(0);
       } catch (error) {
         console.error("PROBE FAILED", error);

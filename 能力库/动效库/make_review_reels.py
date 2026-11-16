@@ -28,21 +28,6 @@ SECONDS = 3.0          # 每张卡时长
 AT = 0.7               # 卡开始的时间点（屏内）
 MAX_DUR = 2.0
 
-# 分批：族 -> reel
-BATCHES = [
-    ("reel-01", "入场 + 字形", ["入场", "字形"]),
-    ("reel-02", "状态与数据", ["状态"]),
-    ("reel-03", "UI 组件", ["UI"]),
-    ("reel-04", "离场与转场", ["离场", "结构"]),
-    ("reel-05", "材质", ["材质"]),
-    ("reel-06", "背景", ["背景"]),
-    ("reel-07", "镜头 · 版面 · 照片", ["镜头", "版面", "绘制", "照片"]),
-    ("reel-08", "交互 · 三维 · 候选", ["交互", "三维"]),
-    ("reel-09", "转场（GT）", ["转场"]),
-]
-
-# 舞台类型：default=文字，ui=卡片行，media=图块，bg=canvas，three=canvas+three
-STAGE = {}
 
 
 SEL_MAP = {
@@ -56,8 +41,23 @@ SEL_MAP = {
 }
 
 
+NEW_SVG = {"U39", "U40", "U41", "U42", "U43", "U45", "U46", "U47"}
+NEW_CODE = {"UA09", "UA10", "UA11", "UA12", "UA13", "UA14", "UA15", "UA16"}
+NEW_PAIR = {"X39", "X40"}
+
+
 def stage_of(card):
     cid, fam = card["id"], card.get("family", "")
+    if card.get("cap") == "component-html":
+        return "component"
+    if card.get("cap") == "page-transition":
+        return "none"
+    if cid in NEW_SVG:
+        return "svgbox"
+    if cid in NEW_CODE:
+        return "code"
+    if cid in NEW_PAIR:
+        return "pair"
     if cid.startswith("GT"):
         return "shot"
     if cid in ("G02",):
@@ -75,6 +75,8 @@ def stage_of(card):
     if cid == "I01":
         return "pointer"
     if cid == "Z01":
+        return "three"
+    if cid in NEEDS_THREE:
         return "three"
     if fam == "背景":
         return "bg"
@@ -272,6 +274,8 @@ CAND_SEL = {
     "U25": "#p1", "U26": '[data-anim="subject"]', "U27": "#shape", "U28": "#mover", "U29": "#mover",
 }
 
+CAND_STAGE["U38"] = '<canvas class="cv" data-anim="subject" width="1080" height="1920"></canvas>'
+CAND_SEL["U38"] = "canvas"
 CAND_STAGE.update(ADV_STAGE)
 CAND_STAGE.update({
     "X32": '<div class="bd" style="position:absolute;inset:0;background:#05070a;opacity:0;z-index:20"></div>'
@@ -379,14 +383,104 @@ CAND_SEL.update({"X32": "#sub", "X33": "#sub", "X34": "#sub", "G10": "#sub", "G1
                  "S20": "#sub", "S21": "#sub", "S22": "#sub", "T22": '[data-anim="subject"]'})
 
 
+
+# ---- 2026-11-15 revideo 批：新舞台（双屏对推 / 文字镂空 / 空盒 / 代码块）
+CAND_STAGE.update({
+    "X39": '<div class="pair out" data-anim="exit"><div class="pfull"></div></div>'
+           '<div class="pair in" data-anim="subject"><div class="pbig">下一屏</div></div>',
+    "X40": '<div class="pair out" data-anim="exit"><div class="pfull"></div></div>'
+           '<div class="pair in" data-anim="subject"><div class="pbig">下一屏</div></div>',
+    "W26": '<div class="masked" data-anim="subject">LEADS</div>'
+           '<img class="mphoto" data-photo src="./photo.png" alt="">',
+    "U44": '<div class="eq" data-anim="subject"><span>x</span> <span>=</span> '
+           '<span>&minus;b &plusmn; &radic;(b&sup2;&minus;4ac)</span> <span>/</span> <span>2a</span></div>',
+    "UA09": '<div class="codebox" data-anim="subject">'
+           '<div data-line>def run(q):</div>'
+           '<div data-line data-old>    leads = search.run(q)</div>'
+           '<div data-line data-new>    leads = search.run(q).enrich()</div>'
+           '<div data-line>    leads = <span data-mark>search.run(q)</span></div>'
+           '<div data-line>    return leads</div>'
+           '<div data-line data-type style="color:#86F0C0"></div>'
+           '</div>',
+    "UA10": '<div class="codebox" data-anim="subject">'
+           '<div data-line>def run(q):</div>'
+           '<div data-line data-old>    leads = search.run(q)</div>'
+           '<div data-line data-new>    leads = search.run(q).enrich()</div>'
+           '<div data-line>    leads = <span data-mark>search.run(q)</span></div>'
+           '<div data-line>    return leads</div>'
+           '<div data-line data-type style="color:#86F0C0"></div>'
+           '</div>',
+    "UA11": '<div class="codebox" data-anim="subject">'
+           '<div data-line>def run(q):</div>'
+           '<div data-line data-old>    leads = search.run(q)</div>'
+           '<div data-line data-new>    leads = search.run(q).enrich()</div>'
+           '<div data-line>    leads = <span data-mark>search.run(q)</span></div>'
+           '<div data-line>    return leads</div>'
+           '<div data-line data-type style="color:#86F0C0"></div>'
+           '</div>',
+    "UA12": '<div class="codebox" data-anim="subject">'
+           '<div data-line>def run(q):</div>'
+           '<div data-line data-old>    leads = search.run(q)</div>'
+           '<div data-line data-new>    leads = search.run(q).enrich()</div>'
+           '<div data-line>    leads = <span data-mark>search.run(q)</span></div>'
+           '<div data-line>    return leads</div>'
+           '<div data-line data-type style="color:#86F0C0"></div>'
+           '</div>',
+    "UA13": '<div class="codebox" data-anim="subject">'
+           '<div data-line>def run(q):</div>'
+           '<div data-line data-old>    leads = search.run(q)</div>'
+           '<div data-line data-new>    leads = search.run(q).enrich()</div>'
+           '<div data-line>    leads = <span data-mark>search.run(q)</span></div>'
+           '<div data-line>    return leads</div>'
+           '<div data-line data-type style="color:#86F0C0"></div>'
+           '</div>',
+    "UA14": '<div class="codebox" data-anim="subject">'
+           '<div data-line>def run(q):</div>'
+           '<div data-line data-old>    leads = search.run(q)</div>'
+           '<div data-line data-new>    leads = search.run(q).enrich()</div>'
+           '<div data-line>    leads = <span data-mark>search.run(q)</span></div>'
+           '<div data-line>    return leads</div>'
+           '<div data-line data-type style="color:#86F0C0"></div>'
+           '</div>',
+    "UA15": '<div class="codebox" data-anim="subject">'
+           '<div data-line>def run(q):</div>'
+           '<div data-line data-old>    leads = search.run(q)</div>'
+           '<div data-line data-new>    leads = search.run(q).enrich()</div>'
+           '<div data-line>    leads = <span data-mark>search.run(q)</span></div>'
+           '<div data-line>    return leads</div>'
+           '<div data-line data-type style="color:#86F0C0"></div>'
+           '</div>',
+    "UA16": '<div class="codebox" data-anim="subject">'
+           '<div data-line>def run(q):</div>'
+           '<div data-line data-old>    leads = search.run(q)</div>'
+           '<div data-line data-new>    leads = search.run(q).enrich()</div>'
+           '<div data-line>    leads = <span data-mark>search.run(q)</span></div>'
+           '<div data-line>    return leads</div>'
+           '<div data-line data-type style="color:#86F0C0"></div>'
+           '</div>',
+})
+for _i in (39, 40, 41, 42, 43, 45, 46, 47):
+    CAND_STAGE["U%02d" % _i] = '<div class="svgbox" data-anim="subject"></div>'
+CAND_SEL.update({"UA09": '[data-anim="subject"]', "UA10": '[data-anim="subject"]',
+                 "UA11": '[data-anim="subject"]', "UA12": '[data-anim="subject"]',
+                 "UA13": '[data-anim="subject"]', "UA14": '[data-anim="subject"]',
+                 "UA15": '[data-type]', "UA16": '[data-anim="subject"]'})
+CAND_SEL2 = {"X39": '[data-anim="exit"]', "X40": '[data-anim="exit"]'}
+
+
 def stage_html(kind, card, sc):
     cid = card["id"]
     if cid in CAND_STAGE:
         return CAND_STAGE[cid]
+    _smp = card.get("sample") or {}
+    if _smp.get("stage"):
+        return _smp["stage"]
     if kind == "text":
-        t = SUBJECT_TEXT.get(cid, ("能力卡", ""))[0]
+        t = _smp.get("text") or SUBJECT_TEXT.get(cid, ("能力卡", ""))[0]
         return ('<div class="paper"><div class="kick">%s</div>'
                 '<div class="h" data-anim="subject">%s</div></div>' % (cid, t or "能力卡"))
+    if kind == "component":
+        return ('<div class="uiwrap" data-anim="subject">%s</div>' % (card.get("code") or ""))
     if kind == "media":
         return ('<div class="media" data-anim="subject">'
                 '<div class="tag">%s</div></div>' % cid)
@@ -435,6 +529,8 @@ def stage_html(kind, card, sc):
                 'viewBox="0 0 32 40" width="72" height="90"><defs><filter id="psh" x="-50%" y="-50%" width="200%" height="200%"><feDropShadow dx="1.2" dy="2.2" stdDeviation="2.4" flood-color="#000" flood-opacity="0.55"/></filter></defs><g filter="url(#psh)"><path d="M2.67 1.78 L2.67 27.30 L9.62 21.24 L13.58 31.40 L18.02 29.46 L14.06 19.36 L23.40 19.36 Z" fill="#ffffff" stroke="#0a0a0a" stroke-width="1.55" stroke-linejoin="round"/></g></svg>')
     if kind == "three":
         return '<canvas class="cv" data-anim="subject" width="1080" height="1920"></canvas>'
+    if kind in ("svgbox", "code", "pair"):
+        return CAND_STAGE.get(cid, "")
     if kind == "bg":
         return '<canvas class="cv" data-anim="bg" width="1080" height="1920"></canvas>'
     if kind == "shot":
@@ -444,13 +540,14 @@ def stage_html(kind, card, sc):
     return ""
 
 
-NEEDS_THREE = {"Z01"}
+NEEDS_THREE = {"Z01", "Z04", "Z05", "Z07", "Z11", "Z13"}
 
 # 2026-11-13：插件卡要在样片工程里带上对应插件（生产由 sync_video 自动注入）
 PLUGINS_FOR = {
     "G09": ["Flip"],
     "K22": ["SplitText"], "K23": ["SplitText"], "K24": ["SplitText"],
     "U30": ["DrawSVGPlugin"], "U31": ["DrawSVGPlugin"],
+    "U45": ["DrawSVGPlugin"], "U46": ["DrawSVGPlugin"],
     "U32": ["MorphSVGPlugin"], "U33": ["MorphSVGPlugin"], "U34": ["MorphSVGPlugin"],
     "U35": ["MotionPathPlugin"], "U36": ["MotionPathPlugin"], "U37": ["MotionPathPlugin"],
     "T14": ["EasePack"], "T15": ["EasePack"], "T16": ["EasePack"],
@@ -474,6 +571,10 @@ PLUGIN_DIR = VENDOR / "gsap-plugins"
 def scene_script(kind, card, sc, sel, sel2, at):
     """返回这段屏要执行的 JS（不含 try/catch，外层包）。"""
     cid = card["id"]
+    if kind == "component":
+        return ("var _k=[].slice.call(document.querySelectorAll('%s > *'));"
+                "timeline.fromTo(_k,{opacity:0,y:30},{opacity:1,y:0,duration:0.5,"
+                "ease:'power2.out',stagger:0.09},%.2f);" % (sel, at))
     if kind == "bg":
         return ("var _c=document.querySelector('%s');if(_c){var _o={t:0};"
                 "timeline.to(_o,{t:6,duration:%s,ease:'none',onUpdate:function(){"
@@ -482,7 +583,11 @@ def scene_script(kind, card, sc, sel, sel2, at):
     return expand(card["code"], v)
 
 
+COMPONENTS_CSS = (VENDOR / "components.css").read_text(encoding="utf-8")
+
 CSS = """
+:root{--ui-ink:#F4F1E9;--ui-muted:#A3ADA7;--ui-surface:rgba(255,255,255,.05);
+  --ui-border:rgba(255,255,255,.12);--ui-radius:18px;--ui-scale:1.45;--ui-accent:#38d6ff}
 *{margin:0;padding:0;box-sizing:border-box}
 html,body{background:#000;font-family:"PingFang SC","Helvetica Neue",sans-serif;-webkit-font-smoothing:antialiased}
 #stage{position:relative;width:1080px;height:1920px;overflow:hidden;background:#0a0b0b;color:#F4F1E9}
@@ -547,6 +652,27 @@ canvas.cv{position:absolute;inset:0;width:1080px;height:1920px;display:block}
   border:1px solid rgba(255,255,255,.07)}
 .shotbox img{width:100%;height:100%;object-fit:cover;display:block}
 .capbox{position:absolute;left:64px;right:64px;top:1320px;height:340px;display:flex;align-items:center;justify-content:center}
+
+.pair{position:absolute;inset:0}
+.pair.in{background:#0d1211}
+.pair .pfull{position:absolute;inset:0;background-image:url("./photo.png");background-size:cover;
+  background-position:52% 40%}
+.pair .pbig{position:absolute;left:64px;right:64px;top:800px;font-size:96px;font-weight:700;
+  line-height:1.16;letter-spacing:-.03em}
+.masked{position:absolute;left:0;right:0;top:620px;text-align:center;font-family:"Helvetica Neue",Arial,sans-serif;
+  font-size:250px;font-weight:800;letter-spacing:-.04em;line-height:1;white-space:nowrap}
+.mphoto{position:absolute;left:64px;top:1330px;width:220px;height:220px;object-fit:cover;border-radius:14px;
+  opacity:.85}
+.svgbox{position:absolute;left:140px;top:640px;width:800px;height:640px}
+.eq{position:absolute;left:0;right:0;top:880px;text-align:center;font-family:Georgia,serif;font-size:74px;
+  letter-spacing:.02em;color:#F4F1E9}
+.codebox{position:absolute;left:64px;right:64px;top:460px;border-radius:20px;padding:40px 36px;
+  background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.09);
+  font-family:"SF Mono",Menlo,monospace;font-size:28px;line-height:1.9;color:#C9D3CC;white-space:pre}
+.codebox>div{white-space:pre}
+.codebox [data-mark]{border-radius:4px}
+.uiwrap{position:absolute;left:72px;right:72px;top:240px;bottom:280px;display:flex;flex-direction:column;justify-content:center;color:var(--ui-ink)}
+""" + COMPONENTS_CSS + """
 .err{position:absolute;left:64px;right:64px;bottom:170px;z-index:40;font-family:"SF Mono",Menlo,monospace;
   font-size:26px;line-height:1.5;color:#ffd9d2;background:rgba(226,84,58,.22);
   border:1px solid rgba(226,84,58,.6);border-radius:10px;padding:16px 20px}
@@ -570,7 +696,9 @@ def build_one(card, out_root: pathlib.Path):
         sel = "canvas"
     if cid in CAND_SEL:
         sel = CAND_SEL[cid]
-    sel2 = ".hit"
+    if (card.get("sample") or {}).get("sel"):
+        sel = card["sample"]["sel"]
+    sel2 = CAND_SEL2.get(cid, ".hit")
     try:
         js = scene_script(kind, card, sc, sel, sel2, AT)
     except Exception as e:
@@ -642,7 +770,8 @@ def main():
     ap.add_argument("--list", action="store_true")
     ap.add_argument("--tsv", action="store_true", help="只打印 族/编号/名字/目录，给渲染脚本用")
     args = ap.parse_args()
-    cards = [c for c in json.loads(PRESETS.read_text(encoding="utf-8"))["presets"] if c.get("status") == "ready"]
+    cards = [c for c in json.loads(PRESETS.read_text(encoding="utf-8"))["presets"]
+             if c.get("status") == "ready" and c.get("cap") != "page-transition"]
     if args.only:
         cards = [c for c in cards if c["id"] == args.only]
         if not cards:

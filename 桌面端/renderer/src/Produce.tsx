@@ -18,7 +18,6 @@ interface Props {
 interface PromptCard {
   scene: string;
   text: string;
-  thumb?: string;
 }
 
 interface StoredProject {
@@ -107,6 +106,7 @@ function Step({
   done,
   open,
   onToggle,
+  actions,
   children,
 }: {
   index: number;
@@ -115,16 +115,34 @@ function Step({
   done: boolean;
   open: boolean;
   onToggle: () => void;
+  /** 折叠状态下也能点的动作（出图提示词的「复制 / 打开文件夹」）。 */
+  actions?: React.ReactNode;
   children: React.ReactNode;
 }) {
   return (
     <li className={`step ${done ? "done" : ""} ${open ? "open" : ""}`}>
-      <button type="button" className="step-head" onClick={onToggle}>
+      {/* 用 div 而不是 button：标题行里要嵌真按钮，button 不能套 button */}
+      <div
+        className="step-head"
+        role="button"
+        tabIndex={0}
+        onClick={onToggle}
+        onKeyDown={(event) => {
+          if (event.key !== "Enter" && event.key !== " ") return;
+          event.preventDefault();
+          onToggle();
+        }}
+      >
         <span className="step-no">{done ? "✓" : index}</span>
         <span className="step-title">{title}</span>
         <span className="step-sum">{summary}</span>
+        {actions && (
+          <span className="step-actions" onClick={(event) => event.stopPropagation()}>
+            {actions}
+          </span>
+        )}
         <span className="step-chev">{open ? "收起" : "展开"}</span>
-      </button>
+      </div>
       {open && <div className="step-body">{children}</div>}
     </li>
   );
@@ -222,33 +240,11 @@ export function Produce({ result, inputs, onRun, onArtifacts, onNotice }: Props)
     const texts = entries.filter(
       (entry) => entry.type === "file" && /\.txt$/i.test(entry.name) && !/^readme/i.test(entry.name) && !/^全部/.test(entry.name),
     );
-    let photos: FileEntry[] = [];
-    try {
-      photos = await api.files(`${dir}/媒体/图片`);
-    } catch {
-      photos = [];
-    }
-    let thumbs: FileEntry[] = [];
-    try {
-      thumbs = await api.files(`${dir}/媒体/图片/_resolved`);
-    } catch {
-      thumbs = [];
-    }
-    const thumbMap = new Map<string, string>();
-    for (const photo of photos) {
-      if (photo.type === "file" && /\.(png|jpe?g|webp)$/i.test(photo.name)) thumbMap.set(stem(photo.name), photo.path);
-    }
-    // _resolved 里的安全文件名副本优先（渲染后用这份）
-    for (const thumb of thumbs) {
-      if (thumb.type === "file" && /\.(png|jpe?g|webp)$/i.test(thumb.name)) thumbMap.set(stem(thumb.name), thumb.path);
-    }
+    // 只留「有多少张、复制哪几段」：逐张全文不再渲染到界面里，要看去文件夹
     const cards: PromptCard[] = [];
     for (const file of texts) {
       const data = await api.readText(file.path);
-      const scene = stem(file.name);
-      const thumbPath = thumbMap.get(scene);
-      const thumb = thumbPath ? await api.fileUrl(thumbPath) : undefined;
-      cards.push({ scene, text: data.text.trim(), ...(thumb ? { thumb } : {}) });
+      cards.push({ scene: stem(file.name), text: data.text.trim() });
     }
     cards.sort((left, right) => left.scene.localeCompare(right.scene));
     setPrompts(cards);
@@ -409,11 +405,18 @@ export function Produce({ result, inputs, onRun, onArtifacts, onNotice }: Props)
   const stepSummary = [
     runDone ? `已完成 · ${result?.nodes.length ?? 0} 节点` : result ? "这次没有 html/口播，先重跑" : "还没运行",
     prepared ? `项目 ${projectName}` : "建项目、写出图提示词",
-    promptsDone ? `${prompts.length} 张提示词` : "准备后才有",
+    promptsDone ? `${prompts.length} 张 · 媒体/出图` : "准备后才有",
     noImages ? "这次没有图片计划" : `${ids.length - cov.missing.length} / ${ids.length} 张已就位`,
     rendered ? "已完成" : "配音 + 字幕 + mp4",
   ];
   const promptBodies = prompts.map((prompt) => splitPrompt(prompt.text));
+  const allZhPrompts = promptBodies.map((body) => body.zh).join("\n\n");
+
+  /** 复制完 / 打开完都接着放图：两步本来就是一口气的事，不用再找一次。 */
+  const goPlaceImages = (message: string) => {
+    setOpenStep(4);
+    onNotice(message);
+  };
 
   return (
     <section className="produce card">
@@ -435,7 +438,7 @@ export function Produce({ result, inputs, onRun, onArtifacts, onNotice }: Props)
         >
           {!result ? (
             <div className="step-row">
-              <span className="hint-text">还没有运行结果。运行会真实调用模型（先在左栏「设置」里配 Key）。</span>
+              <span className="hint-text">还没有运行结果。运行会真实调用模型（先在顶栏「设置」里配 Key）。</span>
               <span className="spacer" />
               <button className="btn primary" onClick={onRun}>去运行</button>
             </div>
@@ -498,36 +501,38 @@ export function Produce({ result, inputs, onRun, onArtifacts, onNotice }: Props)
           done={promptsDone}
           open={openStep === 3}
           onToggle={() => setOpenStep(openStep === 3 ? 0 : 3)}
+          actions={
+            prompts.length > 0 ? (
+              <>
+                <CopyButton
+                  text={allZhPrompts}
+                  label="复制所有提示词"
+                  onCopied={() => goPlaceImages(`已复制 ${prompts.length} 张提示词，接着把图放进「放图」`)}
+                />
+                <button
+                  className="btn sm ghost"
+                  onClick={() => {
+                    void api.open(`${projectDir}/媒体/出图`);
+                    goPlaceImages("已在 Finder 打开 媒体/出图，放完图回到「放图」");
+                  }}
+                >
+                  打开文件夹
+                </button>
+              </>
+            ) : undefined
+          }
         >
           {!prepared ? (
             <div className="hint-text">先完成第 2 步「准备项目」，提示词才会写到项目里。</div>
           ) : prompts.length === 0 ? (
             <div className="hint-text">项目里还没有 <code>媒体/出图/*.txt</code>；重新准备一次项目看看日志。</div>
           ) : (
-            <>
-              <div className="step-row">
-                <span className="hint-text">共 {prompts.length} 张 · 复制中文段落去出图，文件名用卡片上的 id</span>
-                <span className="spacer" />
-                <CopyButton text={promptBodies.map((body) => body.zh).join("\n\n")} label="复制全部中文" />
-                <button className="btn sm ghost" onClick={() => void api.open(`${projectDir}/媒体/出图`)}>打开文件夹</button>
-              </div>
-              <div className="ip-grid">
-                {prompts.map((prompt, index) => {
-                  const body = promptBodies[index] ?? { zh: prompt.text, en: "" };
-                  return (
-                    <section className="ip-card" key={prompt.scene}>
-                      <div className="ip-head">
-                        <span>{prompt.scene}</span>
-                        <CopyButton text={body.zh} label="复制中文" />
-                        {body.en && <CopyButton text={body.en} label="复制英文" />}
-                      </div>
-                      {prompt.thumb && <img className="ip-thumb" src={prompt.thumb} alt="" />}
-                      <pre className="ip-text">{prompt.text}</pre>
-                    </section>
-                  );
-                })}
-              </div>
-            </>
+            <div className="step-row">
+              <span className="hint-text">
+                共 {prompts.length} 张（{prompts.map((prompt) => prompt.scene).join("、")}），已写入 <code>媒体/出图</code>。
+                界面不再逐张摊开提示词：要逐个核对就点上面「打开文件夹」。
+              </span>
+            </div>
           )}
         </Step>
 

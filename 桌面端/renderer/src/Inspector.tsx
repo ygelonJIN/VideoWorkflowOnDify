@@ -129,7 +129,7 @@ export function Inspector({ graph, node, result, status, onUpdate, onDelete, onP
             onChange={(event) => setEditor({ ...editor, value: event.target.value })}
             rows={editor.field === "title" ? 2 : 14}
           />
-          <div className="hint-text">保存会写回原 YAML（注释保留）；04 的提示词/代码同时同步 保留资料/ 镜像。</div>
+          <div className="hint-text">保存会写回原 YAML（注释保留）。提示词与 Code 节点只在 YAML 里，不再有镜像副本。</div>
         </div>
       ) : (
         <>

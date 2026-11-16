@@ -10,6 +10,8 @@ interface Props {
   onEdgeClick: (edgeId: string) => void;
   onMoveNode: (id: string, position: { x: number; y: number }) => void;
   runningNodeId?: string | null;
+  /** 画布浮动工具条（加节点 / 连线 / 详情）：画布局部动作，由 App 决定内容。 */
+  toolbar?: React.ReactNode;
 }
 
 interface View {
@@ -29,7 +31,7 @@ const clamp = (value: number, min: number, max: number) => Math.min(max, Math.ma
 const STATE_TEXT: Record<string, string> = { success: "成功", running: "运行中", error: "失败", stopped: "已停止" };
 const STATE_CLASS: Record<string, string> = { success: "ok", running: "run", error: "err", stopped: "stop" };
 
-export function Canvas({ graph, selectedId, connectSource, statuses, onSelect, onEdgeClick, onMoveNode, runningNodeId }: Props) {
+export function Canvas({ graph, selectedId, connectSource, statuses, onSelect, onEdgeClick, onMoveNode, runningNodeId, toolbar }: Props) {
   const ref = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ width: 900, height: 600 });
   const [view, setView] = useState<View>({ scale: 0.5, x: 40, y: 40 });
@@ -181,7 +183,7 @@ export function Canvas({ graph, selectedId, connectSource, statuses, onSelect, o
   }, []);
 
   function onPointerDown(event: React.PointerEvent) {
-    if ((event.target as HTMLElement).closest(".node, .canvas-tools")) return;
+    if ((event.target as HTMLElement).closest(".node, .canvas-tools, .canvas-dock")) return;
     drag.current = { startX: event.clientX, startY: event.clientY, originX: view.x, originY: view.y };
     (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
     (event.currentTarget as HTMLElement).classList.add("panning");
@@ -211,7 +213,9 @@ export function Canvas({ graph, selectedId, connectSource, statuses, onSelect, o
       onPointerUp={onPointerUp}
       onPointerCancel={onPointerUp}
     >
-      <div className="canvas-hud">
+      {toolbar && <div className="canvas-dock">{toolbar}</div>}
+      {/* 顶部只留浮动条和搜索：这条挪到左下，滚动提示收进 title，不再跟中间的工具条抢位置 */}
+      <div className="canvas-hud" title="滚轮缩放 · 拖空白平移 · 点节点看详情">
         <span>{graph.nodes.length} 节点 · {graph.edges.length} 连线</span>
         {runningNodeId && (
           <span className="run-live">
@@ -222,7 +226,6 @@ export function Canvas({ graph, selectedId, connectSource, statuses, onSelect, o
           </span>
         )}
         <span className="zoom">{Math.round(view.scale * 100)}%</span>
-        <span className="hint">滚轮缩放 · 拖空白平移 · 点节点看详情</span>
       </div>
       <div className="canvas-search">
         <input

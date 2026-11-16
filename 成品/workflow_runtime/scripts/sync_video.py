@@ -732,10 +732,19 @@ def align_scenes_to_caption_cues(document: str, cues: list[dict], duration: floa
                                           if isinstance(item, dict)))
     asr_charset = set(asr_text)
     coverage = (sum(1 for ch in script_text if ch in asr_charset) / max(1, len(script_text))) if asr_text else 0.0
-    use_char_axis = bool(char_times) and len(char_times) == cursor_chars and coverage >= 0.85
+    # 字符轴只认"真的比句子更细"的时间码。
+    # 2026-11-16 踩过：字幕/口播时间码.json 是句级的（6 条），被当成词级塞进字符轴，
+    # 一句话里每个字都映射到句首 → 屏内切点全部塌到"上一屏 +0.12 秒"，
+    # 成片里 s02/s06/s08 只剩零点几秒、其余屏被拉长（scene_too_short 就是它报的）。
+    fine_grained = bool(word_entries) and len(word_entries) >= 2 * max(1, len(windows))
+    use_char_axis = bool(char_times) and fine_grained and len(char_times) == cursor_chars and coverage >= 0.85
     if char_times and not use_char_axis:
-        print("char_axis=disabled coverage=%.3f chars=%d/%d：识别文本与字幕文本对不上，改用句内插值"
-              % (coverage, len(char_times), cursor_chars), flush=True)
+        if not fine_grained:
+            print("char_axis=disabled：时间码只有 %d 条、和句子一样粗，按句内比例插值（不影响对齐精度）"
+                  % len(word_entries), flush=True)
+        else:
+            print("char_axis=disabled coverage=%.3f chars=%d/%d：识别文本与字幕文本对不上，改用句内插值"
+                  % (coverage, len(char_times), cursor_chars), flush=True)
 
     def find_in_sentence(sid: str, voiced: str):
         _start, _end, text = windows[sid]
@@ -960,6 +969,13 @@ def set_role_duration(document: str, media_type: str, role: str, duration: float
     pattern = re.compile(rf'<{media_type}\b[^>]*\b{role_attr}="{re.escape(role)}"[^>]*>', re.I)
     match = pattern.search(document)
     if not match:
+        # 骨架被截断/重建时占位会丢：先补一份再找，别直接判死。
+        document = ensure_media_placeholders(document)
+        match = pattern.search(document)
+        if match:
+            tag = set_attribute(match.group(0), "data-start", "0")
+            tag = set_attribute(tag, "data-duration", f"{duration:.3f}")
+            return document[:match.start()] + tag + document[match.end():]
         if allow_missing:
             return document
         return set_media_duration(document, {
@@ -1056,7 +1072,11 @@ def enforce_production_layout(document: str, avatar_required: bool = True) -> st
         )
     else:
         if not re.search(r'</head\s*>', document, re.I):
-            raise SystemExit("HTML 缺少 </head>，无法注入生产排版约束")
+            if "<body" in document:
+                document = document.replace("<body", "</head>\n<body", 1)
+            else:
+                document = "</head>\n" + document
+            print("警告：HTML 缺少 </head>，已补齐后注入生产排版约束")
         document = re.sub(r'</head\s*>', PRODUCTION_LAYOUT_CSS + '\n</head>', document, count=1, flags=re.I)
     if 'function fitRootToViewport' not in document:
         document = re.sub(r'</head\s*>', FIT_ROOT_RUNTIME_SCRIPT + '\n</head>', document, count=1, flags=re.I)
@@ -1288,9 +1308,12 @@ SCENE_OFFSET_SCRIPT = """
   // 就会盖掉这一屏自己的入场。2026-11-12：31.27s 的"图片先闪一下再入场"
   // 就是这么来的。转场只许动离场屏。
   function watchIncomingWrite(args){
-    // 2026-11-15：转场模型改成"进入屏提前 0.45s 可见 + 整屏滑入"，切点前写动作是设计要求，
-    // 这条违规不再成立（保留函数体方便以后回滚）。
-    if (document.querySelector('.scene[data-cue-start]')) { return; }
+    // 2026-11-16：以前这里是 `if (document.querySelector('.scene[data-cue-start]')) { return; }`，
+    // 而所有屏都带 data-cue-start，等于永远短路——这条门禁从头到尾没生效过。
+    // 真正该判的是"页面有没有装页间转场运行时"：装了，进入屏在切点写动作就是设计要求。
+    // 判 __ptFlush 而不是 __pt：占位 shim 会在 <head> 最前就定义 __pt，用 __pt 判断
+    // 会让这条检查重新变成永久短路。
+    if (window.__ptFlush) { return; }
     var vars = varsOf(args);
     if (!vars) { return; }
     var touches = ('opacity' in vars) || ('clipPath' in vars) || ('scale' in vars) ||
@@ -1375,12 +1398,34 @@ SCENE_OFFSET_SCRIPT = """
   function patchTimeline(timeline){
     if (!timeline || patched.indexOf(timeline) >= 0) { return; }
     patched.push(timeline);
+    // 物理卡（T20/T21）的位移由 velocity + acceleration 推出来，模型抄默认参数就往画外冲
+    // （T21 默认 180/600/1.8s = 1296px）。这里按"最多推 240px"等比压缩，卡的手感还在，
+    // 元素不会再离开画布。只看数值，不量布局。
+    function clampPhysics(vars){
+      var p = vars && vars.physics2D;
+      if (!p) { return; }
+      var dur = Number(vars.duration || 0);
+      if (!(dur > 0)) { return; }
+      var ang = (Number(p.angle) || 0) * Math.PI / 180;
+      var accAng = (p.accelerationAngle == null ? Number(p.angle) || 0 : Number(p.accelerationAngle)) * Math.PI / 180;
+      var v = Number(p.velocity) || 0;
+      var a = Number(p.acceleration) || 0;
+      var dx = v * Math.cos(ang) * dur + 0.5 * a * Math.cos(accAng) * dur * dur;
+      var dy = v * Math.sin(ang) * dur + 0.5 * a * Math.sin(accAng) * dur * dur;
+      var travel = Math.max(Math.abs(dx), Math.abs(dy));
+      var LIMIT = 80;
+      if (travel <= LIMIT || !isFinite(travel)) { return; }
+      var k = LIMIT / travel;
+      p.velocity = v * k;
+      p.acceleration = a * k;
+    }
     ['from', 'to', 'fromTo', 'set'].forEach(function(method){
       var original = timeline[method];
       if (typeof original !== 'function') { return; }
       timeline[method] = function(){
         var args = Array.prototype.slice.call(arguments);
         args[0] = resolveTarget(args[0]);
+        clampPhysics(varsOf(args));
         // 转场脚本写的是绝对秒：在 builder 里设 timeline.__absolutePositions = true，
         // 这里就不再叠加场景起点，也不把位置夹到场景尾。旧转场用 cue 相对秒直接
         // 当绝对秒传进来，被这里加了场景起点，结果淡入落到场景尾部，图片消失 0.3 秒。
@@ -1390,6 +1435,7 @@ SCENE_OFFSET_SCRIPT = """
         }
         var start = sceneStartOf(args[0]);
         if (start !== null && start > 0) {
+          timeline.__lastSceneStart = start;
           var position = null;
           for (var index = args.length - 1; index >= 1; index -= 1) {
             if (typeof args[index] === 'number') { position = index; break; }
@@ -1420,12 +1466,34 @@ SCENE_OFFSET_SCRIPT = """
         return original.apply(timeline, args);
       };
     });
+    // timeline.call(fn, params, 位置) 不在上面补的名单里，所以 T05 打字机这类卡片
+    // 用 call 写的相对秒会被当成绝对秒（0.279s…），整段动画跑到前面的屏里去了，
+    // 本屏只剩终态、没有入场（2026-11-16 s05 实测：标题在第 1 页期间就打完了）。
+    // 这里用"这个 builder 最近一次解析到的场景起点"把位置补回去。
+    var originalCall = timeline.call;
+    if (typeof originalCall === 'function') {
+      timeline.call = function(){
+        var args = Array.prototype.slice.call(arguments);
+        if (!timeline.__absolutePositions && timeline.__lastSceneStart > 0) {
+          var position = null;
+          for (var index = args.length - 1; index >= 1; index -= 1) {
+            if (typeof args[index] === 'number') { position = index; break; }
+          }
+          if (position !== null && args[position] >= 0 && args[position] < 2 &&
+              args[position] < timeline.__lastSceneStart) {
+            args[position] = args[position] + timeline.__lastSceneStart;
+          }
+        }
+        return originalCall.apply(timeline, args);
+      };
+    }
   }
   list.push = function(builder){
     if (typeof builder !== 'function') { return originalPush.call(list, builder); }
     return originalPush.call(list, function(timeline, at){
       patchTimeline(timeline);
       var priorAbsolute = timeline.__absolutePositions;
+      timeline.__lastSceneStart = null;
       var result = builder(timeline, at);
       timeline.__absolutePositions = priorAbsolute;
       return result;
@@ -1458,6 +1526,16 @@ PAGE_GT_JS = r"""
     if (!el || !window.glt) { return; }
     var prev = prevId(el);
     if (!prev) { return; }
+    // 自己挂 onUpdate：页面的显隐驱动是骨架自带的，不一定会叫 __ptTick
+    // （sync 末尾还会把自己注入的 scene-window-runtime 删掉，靠驱动等于没挂）。
+    if (!timeline.__ptBound && typeof timeline.eventCallback === 'function') {
+      timeline.__ptBound = true;
+      var priorUpdate = timeline.eventCallback('onUpdate');
+      timeline.eventCallback('onUpdate', function(){
+        if (typeof priorUpdate === 'function') { priorUpdate(); }
+        if (typeof window.__ptTick === 'function') { window.__ptTick(timeline.time()); }
+      });
+    }
     var canvas = document.createElement('canvas');
     canvas.width = 1080;
     canvas.height = 1920;
@@ -1551,9 +1629,31 @@ def install_gt_runtime(document: str) -> str:
     return document + block
 
 
+# 转场函数的占位实现：必须比页面里任何一个 <script> 更早存在。
+# 原因见 install_page_transitions 的注释——渲染器会把 body 里的内联脚本
+# 改成"字体就绪后再重放"的类型，重放发生在 DOMContentLoaded 里，那时
+# document.readyState 已经是 'interactive'，页面自己的 boot 会立刻执行，
+# 而定义在 body 尾部的 __pt 还没被重放出来，转场 builder 直接抛
+# "window.__pt is not a function"，整条页间转场丢失（2026-11-16 实测）。
+# shim 只入队，等真正的运行时执行时一次性 flush。
+PAGE_TRANSITIONS_SHIM = r"""
+(function(){
+  window.__ptQueue = window.__ptQueue || [];
+  if (typeof window.__pt === 'function' && window.__pt.__ptShim) { return; }
+  var shim = function(timeline, kind, id, at, dur){
+    window.__ptQueue.push([timeline, kind, id, at, dur]);
+    if (typeof window.__ptFlush === 'function') {
+      try { window.__ptFlush(); } catch (error) { console.warn('page transition flush failed', error); }
+    }
+  };
+  shim.__ptShim = true;
+  window.__pt = shim;
+})();
+"""
+
 PAGE_TRANSITIONS_JS = r"""
 (function(){
-  if (window.__pt) { return; }
+  if (window.__ptFlush) { return; }
   function sceneEl(id){
     return document.querySelector('.scene[data-scene="' + id + '"]') || document.querySelector('#' + id);
   }
@@ -1563,20 +1663,24 @@ PAGE_TRANSITIONS_JS = r"""
     return i > 0 ? all[i - 1] : null;
   }
   /**
-   * 页间转场：只动 DOM，不依赖纹理，逐帧 seek 可复现。
-   * 用法：__pt(timeline, 'iris', 's02', window.__sceneStart('s02') - 0.45, 0.45)
+   * 页间转场：只动 DOM，逐帧 seek 可复现。
+   * 起点一律钉在切点——进入屏在切点之前是 visibility:hidden，写在切点前等于没写。
    */
-  window.__pt = function(timeline, kind, id, at, dur){
+  function applyPt(timeline, kind, id, at, dur){
     var el = sceneEl(id);
     if (!el || !timeline) { return; }
     var d = (typeof dur === 'number' && dur > 0) ? dur : 0.45;
-    var base = { duration: d };
+    var cut = 0;
+    try { cut = Number(window.__sceneStart(id)) || 0; } catch (e) { cut = 0; }
+    if (typeof at !== 'number' || !isFinite(at) || at < cut) { at = cut; }
     function fromTo(from, to){
       to.duration = d;
       timeline.fromTo(el, from, to, at);
     }
     if (kind === 'iris') {
-      fromTo({clipPath: 'circle(0% at 50% 50%)'}, {clipPath: 'circle(78% at 50% 50%)', ease: 'power2.inOut'});
+      // 78% 的圆半径覆盖不到 1080×1920 的四角（对角半长 ≈ 100%），转场结束后四角一直缺一块。
+      // 100% 刚好到角，取 120% 留余量。
+      fromTo({clipPath: 'circle(0% at 50% 50%)'}, {clipPath: 'circle(120% at 50% 50%)', ease: 'power2.inOut'});
       return;
     }
     if (kind === 'wipe-diag') {
@@ -1589,16 +1693,32 @@ PAGE_TRANSITIONS_JS = r"""
       return;
     }
     if (kind === 'blinds') {
-      el.style.webkitMaskImage = 'repeating-linear-gradient(0deg, #000 0 8%, transparent 8% 16%)';
-      el.style.maskImage = 'repeating-linear-gradient(0deg, #000 0 8%, transparent 8% 16%)';
-      el.style.webkitMaskSize = '100% 0%';
-      el.style.maskSize = '100% 0%';
-      timeline.fromTo(el, {webkitMaskSize: '100% 0%', maskSize: '100% 0%'},
-        {webkitMaskSize: '100% 100%', maskSize: '100% 100%', duration: d, ease: 'power2.inOut'}, at);
+      // 2026-11-16：旧实现把 repeating-linear-gradient（8% 黑 / 8% 透明）当 mask，
+      // 只 tween maskSize 从 0% 到 100%。条纹本身永远在，于是转场“结束”之后这一屏
+      // 一直是横条——s03 整段 9.7 秒被切成条带，条带缝隙直接透出页面底色。
+      // 正解是逐条揭示：8 块遮挡各自 scaleY 1→0，收缩完就没了，不留任何残留。
+      var LINES = 8;
+      var veil = el.querySelector(':scope > .pt-blinds');
+      if (!veil) {
+        veil = document.createElement('div');
+        veil.className = 'pt-blinds';
+        veil.style.cssText = 'position:absolute;inset:0;z-index:60;pointer-events:none;overflow:hidden;';
+        for (var bi = 0; bi < LINES; bi += 1) {
+          var strip = document.createElement('i');
+          strip.style.cssText = 'position:absolute;left:0;width:100%;display:block;' +
+            'top:' + (bi * 100 / LINES) + '%;height:' + (100 / LINES + 0.3) + '%;' +
+            'background:var(--scene-base,#0b0f18);transform-origin:50% 0%;will-change:transform;';
+          veil.appendChild(strip);
+        }
+        el.appendChild(veil);
+      }
+      timeline.fromTo(veil.children, {scaleY: 1},
+        {scaleY: 0, duration: d * 0.85, ease: 'power2.inOut', stagger: d * 0.02}, at);
       return;
     }
     if (kind === 'zoom-cover') {
-      fromTo({scale: 1.28}, {scale: 1, ease: 'power2.out'});
+      // 进入屏自带不透明底色：只改 scale 等于硬切，加一层透明度交叉才有过渡感。
+      fromTo({scale: 1.18, opacity: 0}, {scale: 1, opacity: 1, ease: 'power2.out'});
       return;
     }
     if (kind === 'push-both') {
@@ -1610,7 +1730,7 @@ PAGE_TRANSITIONS_JS = r"""
     if (kind === 'flip3d') {
       el.style.transformOrigin = '0% 50%';
       el.style.perspective = '1600px';
-      fromTo({rotationY: 82, opacity: 1, transformOrigin: '0% 50%'},
+      fromTo({rotationY: 82, opacity: 0, transformOrigin: '0% 50%'},
              {rotationY: 0, opacity: 1, ease: 'power2.inOut'});
       return;
     }
@@ -1623,20 +1743,91 @@ PAGE_TRANSITIONS_JS = r"""
       timeline.set(el, {opacity: 1}, at + d * 0.3);
       return;
     }
-    // 兜底：右侧滑入
+    if (kind === 'whip') {
+      // 右侧带斜切与模糊甩入：只有进入屏动，上一屏原地等被盖住。
+      fromTo({xPercent: 100, skewX: 8, filter: 'blur(10px)', opacity: 0.4},
+             {xPercent: 0, skewX: 0, filter: 'blur(0px)', opacity: 1, ease: 'power3.out'});
+      return;
+    }
+    if (kind === 'fade-through') {
+      // 压黑一帧再亮起来：入屏先暗、中段最黑、落定提亮，不用 from/to 双图。
+      var dip = document.createElement('div');
+      dip.style.cssText = 'position:absolute;inset:0;background:#05070a;z-index:62;pointer-events:none;opacity:0;';
+      el.appendChild(dip);
+      timeline.fromTo(dip, {opacity: 0.9}, {opacity: 0, duration: d, ease: 'power1.inOut'}, at);
+      timeline.fromTo(el, {opacity: 0.2}, {opacity: 1, duration: d, ease: 'power1.in'}, at);
+      return;
+    }
+    if (kind === 'squeeze') {
+      // 横向压扁再展开：像一道门缝被撑开。
+      el.style.transformOrigin = '50% 50%';
+      fromTo({scaleX: 0.35, opacity: 0}, {scaleX: 1, opacity: 1, ease: 'power3.out'});
+      return;
+    }
+    if (kind === 'wipe-up') {
+      fromTo({clipPath: 'inset(100% 0% 0% 0%)'}, {clipPath: 'inset(0% 0% 0% 0%)', ease: 'power2.inOut'});
+      return;
+    }
+    if (kind === 'corner-reveal') {
+      fromTo({clipPath: 'polygon(0% 0%, 0% 0%, 0% 0%)'},
+             {clipPath: 'polygon(0% 0%, 240% 0%, 0% 240%)', ease: 'power2.inOut'});
+      return;
+    }
+    if (kind === 'slide-down') {
+      fromTo({yPercent: -100, opacity: 0.6}, {yPercent: 0, opacity: 1, ease: 'power2.out'});
+      return;
+    }
+    if (kind === 'blur-in') {
+      fromTo({filter: 'blur(18px)', opacity: 0.2, scale: 1.06},
+             {filter: 'blur(0px)', opacity: 1, scale: 1, ease: 'power2.out'});
+      return;
+    }
     fromTo({xPercent: 100}, {xPercent: 0, ease: 'power2.inOut'});
   };
-  window.__ptList = ['iris', 'wipe-diag', 'curtain', 'blinds', 'zoom-cover', 'push-both', 'flip3d', 'flash-cut'];
+  window.__pt = function(){
+    return applyPt.apply(null, arguments);
+  };
+  // 把 shim 期间入队的转场补建出来；之后再有 builder 调 __pt 也走同一条路。
+  window.__ptFlush = function(){
+    var queue = window.__ptQueue || (window.__ptQueue = []);
+    while (queue.length) {
+      var args = queue.shift();
+      try { applyPt.apply(null, args); } catch (error) { console.warn('page transition failed', error); }
+    }
+  };
+  window.__ptFlush();
+  window.__ptList = ['iris', 'wipe-diag', 'curtain', 'blinds', 'zoom-cover', 'push-both', 'flip3d', 'flash-cut',
+    'whip', 'fade-through', 'squeeze', 'wipe-up', 'corner-reveal', 'slide-down', 'blur-in'];
 })();
 """
 
 
 def install_page_transitions(document: str) -> str:
+    """转场运行时必须进 <head>。
+
+    HyperFrames 编译期会把 body 里的内联 <script> 改成"字体就绪后再重放"的
+    特殊 type，重放发生在 DOMContentLoaded 回调里；那一刻 document.readyState
+    是 'interactive'，页面自己的 boot（`readyState === 'loading' ? 监听 : 立即执行`）
+    于是立即跑完，而排在 body 后面的 __pt 还没被重放出来 —— 转场 builder 抛
+    `window.__pt is not a function`，成片里每一刀都是硬切（2026-11-16 定）。
+    head 里的内联脚本按原顺序解析，不放特殊 type，所以放这里一定早于所有 builder。
+    """
     document = re.sub(r'<script id="page-transition-runtime">[\s\S]*?</script>\s*', '', document)
+    document = re.sub(r'<script id="page-transition-shim">[\s\S]*?</script>\s*', '', document)
+    shim = '<script id="page-transition-shim">' + PAGE_TRANSITIONS_SHIM + '</script>\n'
     block = '<script id="page-transition-runtime">' + PAGE_TRANSITIONS_JS + '</script>\n'
+    if "</head>" in document:
+        document = document.replace("</head>", block + "</head>", 1)
+        head_index = document.find("<head>")
+        if head_index >= 0:
+            insert_at = head_index + len("<head>")
+            document = document[:insert_at] + shim + document[insert_at:]
+        else:
+            document = shim + document
+        return document
     if "</body>" in document:
-        return document.replace("</body>", block + "</body>", 1)
-    return document + block
+        return document.replace("</body>", shim + block + "</body>", 1)
+    return document + shim + block
 
 
 def apply_scene_overlap(document: str, overlap: float = 0.45, tail: float = 0.9) -> str:
@@ -1705,6 +1896,7 @@ def install_scene_window(document: str, overlap: float = 0.0) -> str:
         '    }\n'
         '    if (!any && scenes.length) { scenes[0].style.visibility = "visible"; }\n'
         '    if (typeof window.__gtTick === "function") { window.__gtTick(t); }\n'
+        '    if (typeof window.__ptTick === "function") { window.__ptTick(t); }\n'
         '  }\n'
         '  function currentTimeline(){\n'
         '    return (window.__timelines && Object.values(window.__timelines)[0]) || null;\n'
@@ -1875,43 +2067,87 @@ def inject_layout_composer(document: str) -> str:
     root_tone = re.search(r'data-bg-tone="([^"]+)"', document)
     root_tone = root_tone.group(1) if root_tone else "dark"
     def _media_rect(sid):
-        """量这一屏照片的矩形：从 scene 里 media 元素的 class 反查它在 <style> 里的定位。"""
+        """量这一屏照片的矩形：从 scene 里 media 元素的 class 反查它在 <style> 里的定位。
+
+        2026-11-16 修三处：
+        1) 只看场景自己写的 <style>，跳过 layout-composer 里注入的
+           `section[...]{left:...;width:...}` 修正——否则第二次重跑量到的是
+           上一轮的产物，越跑越偏（s01 的 930×1280 就是这么被越压越窄的）。
+        2) 规则里"第一条匹配"可能是 `left:auto` 这种没有 width 的补丁，
+           所以取"第一条带 width 的规则"，不是第一条匹配。
+        3) 模型常写 `left: 0` / `right: 0`（无单位），旧正则要求 `数字+px`，
+           解析失败 → 版面以为没有照片 → 文字直接压在照片上（s08/s09 实测）。
+        """
         sec = re.search(r'<section[^>]*data-scene="%s"[^>]*>(.*?)</section>' % re.escape(sid), document, re.S)
         if not sec:
             return None
         media_tag = re.search(r'<[^>]*data-anim="media"[^>]*>', sec.group(1))
         if not media_tag:
             return None
-        cls = re.search(r'class="([^"]+)"', media_tag.group(0))
+        tag = media_tag.group(0)
+        # 2026-11-16：新版渲染器把照片框写成行内 style + data-media-slot，
+        # 不再有 CSS 类规则可反查。先认这两种，别让版面以为"没有照片"。
+        slot = re.search(r'data-media-slot="(top|bottom|left|right|full|texture)"', tag)
+        if slot:
+            return {"slot": slot.group(1), "cls": None,
+                    "left": None, "right": None, "top": None, "bottom": None}
+        inline = re.search(r'style="([^"]*)"', tag)
+        if inline:
+            style = inline.group(1)
+            def num_attr(name):
+                m = re.search(r'(?<![-\w])' + name + r'\s*:\s*(-?\d+(?:\.\d+)?)\s*(?:px)?', style)
+                return float(m.group(1)) if m else None
+            left, top = num_attr("left"), num_attr("top")
+            w, h = num_attr("width"), num_attr("height")
+            if None not in (left, top, w, h):
+                return {"cls": None, "left": left, "right": left + w,
+                        "top": top, "bottom": top + h, "slot": None}
+        cls = re.search(r'class="([^"]+)"', tag)
         if not cls:
             return None
         name = next((c for c in cls.group(1).split() if c not in ("media", "media--inset")), None)
         if not name:
             return None
-        rule = re.search(r'\[data-scene="%s"\]\s*\.%s\s*\{([^}]*)\}' % (re.escape(sid), re.escape(name)), document)
-        if not rule:
+        body = None
+        for rule in re.finditer(r'([^{}]*)\{([^{}]*)\}', document):
+            selector, block = rule.group(1), rule.group(2)
+            if ".%s" % name not in selector:
+                continue
+            if 'data-scene="%s"' % sid not in selector:
+                continue
+            if selector.strip().startswith("section"):
+                continue
+            if not re.search(r'(?:^|[;\s])width\s*:', block):
+                continue
+            body = block
+            break
+        if body is None:
             return None
-        body = rule.group(1)
-        top_m = re.search(r'top:\s*(-?\d+)px', body)
-        left = re.search(r'left:\s*(-?\d+)px', body)
-        right = re.search(r'right:\s*(-?\d+)px', body)
-        width = re.search(r'width:\s*(\d+)px', body)
+        num = r'(-?\d+(?:\.\d+)?)\s*(?:px)?'
+        def prop(name):
+            return re.search(r'(?<![-\w])' + name + r'\s*:\s*' + num, body)
+        top_m = prop("top")
+        left = prop("left")
+        right = prop("right")
+        width = prop("width")
+        height = prop("height")
         if not width:
             return None
-        w = int(width.group(1))
+        w = int(round(float(width.group(1))))
         auto_left = False
         if left:
-            l = int(left.group(1))
+            l = int(round(float(left.group(1))))
         elif right:
             # 2026-11-15：inset 照片的常见写法是只给 right/width（靠右一块）。
             # 以前只认 left，这里返回 None，文字区就不知道要避让，直接压在照片上。
-            l = 1080 - int(right.group(1)) - w
+            l = 1080 - int(round(float(right.group(1)))) - w
             auto_left = True
         else:
             return None
-        top_px = int(top_m.group(1)) if top_m else None
+        top_px = int(round(float(top_m.group(1)))) if top_m else None
+        h_px = int(round(float(height.group(1)))) if height else None
         return {"left": l, "right": l + w, "cls": name, "auto_left": auto_left,
-                "top": top_px, "bottom": (top_px + int(re.search(r'height:\s*(\d+)px', body).group(1))) if top_px is not None and re.search(r'height:\s*(\d+)px', body) else None}
+                "top": top_px, "bottom": (top_px + h_px) if (top_px is not None and h_px is not None) else None}
 
     scenes = []
     for match in re.finditer(r'<section\b[^>]*\bclass="[^"]*\bscene\b[^"]*"[^>]*>', document, re.I):
@@ -1922,6 +2158,7 @@ def inject_layout_composer(document: str) -> str:
         zone = re.search(r'data-composition-zone="([^"]+)"', tag)
         align = re.search(r'data-composition-align="([^"]+)"', tag)
         scale = re.search(r'data-composition-scale="([^"]+)"', tag)
+        family_attr = re.search(r'data-bg-family="([^"]*)"', tag)
         if not (sid and zone):
             continue
         _sid = sid.group(1)
@@ -1945,7 +2182,23 @@ def inject_layout_composer(document: str) -> str:
             "chars": _chars,
             "line_chars": _line_chars,
             "media": _media_rect(_sid),
+            "bg_family": (family_attr.group(1) if family_attr else ""),
         })
+    # 根节点的 data-bg-tone 必须和每屏的 tone 是同一套判断。
+    # 2026-11-16 踩过：模型把根写成 light、九屏全写 dark，背景卡是近黑 #0B0F18，
+    # components.css 按根节点取到浅底配色 → 组件是深墨压黑底，整行看不见。
+    tones = [s.get("tone") for s in scenes if s.get("tone")]
+    if tones:
+        majority = max(set(tones), key=tones.count)
+        root_re = re.compile(r'<div\b[^>]*\bid="stage"[^>]*>', re.I)
+        root_hit = root_re.search(document)
+        if root_hit:
+            before = re.search(r'data-bg-tone="([^"]*)"', root_hit.group(0))
+            before = before.group(1) if before else "(无)"
+            if before != majority:
+                document = document[:root_hit.start()] + set_attribute(
+                    root_hit.group(0), "data-bg-tone", majority) + document[root_hit.end():]
+                print("根节点 data-bg-tone：%s → %s（与各屏实际色调对齐）" % (before, majority))
     # 字号由版面档位决定；data-fit 的 auto-fit 会把它改掉，一律清掉
     document = re.sub(r'\s+data-fit="[^"]*"', '', document)
     document = re.sub(r'<style id="layout-composer">[\s\S]*?</style>\s*', '', document, count=1)
@@ -1969,17 +2222,23 @@ def inject_layout_composer(document: str) -> str:
 
 
 def install_state_controller(document: str) -> str:
-    # 老版本注入了旧控制器时先移除，保证 seek 修复能生效（否则老项目永远用旧版）。
+    """字幕与画面状态的时钟控制器。
+
+    2026-11-16：以前是把这段 JS 塞进最后一个 <script> 里，而 GT/转场运行时会整段
+    重写那个 script，控制器被顺手删掉——表现就是"字幕一条都不显示"。
+    改成独立 <script> 元素，插在 </body> 前，谁重写别人的 script 都碰不到它。
+    """
     marker = "/* ---------- deterministic media-clock state controller ---------- */"
+    document = re.sub(r'<script id="media-clock-state">[\s\S]*?</script>\s*', '', document)
     pos = document.find(marker)
     if pos >= 0:
         end = document.find("})();", pos)
         if end >= 0:
             document = document[:pos] + document[end + len("})();"):]
-    script_end = document.lower().rfind("</script>")
-    if script_end < 0:
-        raise SystemExit("HTML 缺少 script 结尾，无法安装媒体主时钟状态控制器")
-    return document[:script_end] + STATE_CONTROLLER_JS + "\n" + document[script_end:]
+    block = '<script id="media-clock-state">' + STATE_CONTROLLER_JS + '</script>\n'
+    if "</body>" in document:
+        return document.replace("</body>", block + "</body>", 1)
+    return document + block
 
 
 
@@ -2088,6 +2347,30 @@ def ensure_background_fallback(document: str) -> str:
     return document
 
 
+def promote_media_templates(document: str) -> str:
+    """<template data-media-*> 升格成真正的 <audio>/<video>。
+
+    有些生成结果只留了 template 占位；后面的时长设置是按 "元素 + role" 找的，
+    template 永远找不到。这里就地升格，别让缺一个标签变成整片停摆。
+    """
+    def repl(match):
+        tag = match.group(0)
+        kind = re.search(r'data-media-type="([^"]+)"', tag)
+        role = re.search(r'data-(?:audio|video)-role="([^"]+)"', tag)
+        if not kind or not role:
+            return tag
+        kind, role = kind.group(1).lower(), role.group(1)
+        if kind == "audio":
+            element_id = {"voiceover": "voiceover-track", "background-music": "bgm-track"}.get(role, role)
+            src = {"voiceover": "media/voice.mp3", "background-music": "media/bgm.mp3"}.get(role, "")
+            return ('<audio id="%s" src="%s" data-audio-role="%s" data-start="0" data-duration="30"></audio>'
+                    % (element_id, src, role))
+        element_id = {"avatar": "avatar-video"}.get(role, role)
+        return ('<video id="%s" data-video-role="%s" data-start="0" data-duration="30"></video>' % (element_id, role))
+
+    return re.sub(r'<template\b[^>]*data-media-type="(?:audio|video)"[^>]*>\s*</template>', repl, document, flags=re.I)
+
+
 def ensure_media_placeholders(document: str) -> str:
     """Inject voiceover/BGM placeholders when the generated HTML forgot them."""
     voice = ('<template data-media-type="audio" data-media-id="voiceover-track" '
@@ -2102,11 +2385,11 @@ def ensure_media_placeholders(document: str) -> str:
     if 'data-audio-role="background-music"' not in document:
         additions.append(music)
     if not additions:
-        return document
+        return promote_media_templates(document)
     block = "\n    " + "\n    ".join(additions) + "\n    "
     if CAPTION_START in document:
-        return document.replace(CAPTION_START, block + CAPTION_START, 1)
-    return document.replace("</body>", block + "</body>", 1)
+        return promote_media_templates(document.replace(CAPTION_START, block + CAPTION_START, 1))
+    return promote_media_templates(document.replace("</body>", block + "</body>", 1))
 
 
 def ensure_caption_container(document: str) -> str:
@@ -2284,7 +2567,9 @@ def rewrite_html(path: Path, cues: list[dict], target_duration: float, transcrip
     if CAPTION_START in document and CAPTION_END in document:
         document = re.sub(re.escape(CAPTION_START) + r".*?" + re.escape(CAPTION_END), lambda _: caption_block(cues), document, count=1, flags=re.S)
     else:
-        raise SystemExit("HTML 缺少字幕容器，且本地注入失败")
+        block = ('<div class="caption-layer" id="captions"></div>')
+        document = document.replace("</body>", block + "\n</body>", 1) if "</body>" in document else document + block
+        print("警告：字幕容器注入失败，已直接插入空容器")
     authoring_match = re.search(r'\bdata-authoring-duration="([0-9.]+)"', document)
     declared_authoring_duration = float(authoring_match.group(1)) if authoring_match else 30.0
     scene_span = scene_timeline_span(document)
@@ -2330,12 +2615,12 @@ def rewrite_html(path: Path, cues: list[dict], target_duration: float, transcrip
     root_tag = set_attribute(root_tag, "data-caption-source", transcript_path.name)
     document = document[:root_match.start()] + root_tag + document[root_match.end():]
     document = enforce_production_layout(document, avatar_required=avatar_required)
-    document = install_state_controller(document)
     document = apply_chrome_overrides(document)
     document = apply_scene_overlap(document)
     document = install_scene_window(document)
     document = install_gt_runtime(document)
     document = install_page_transitions(document)
+    document = install_state_controller(document)
     document = normalize_scene_layers(document)
     document = install_scene_backdrop(document)
     document = inject_layout_composer(document)

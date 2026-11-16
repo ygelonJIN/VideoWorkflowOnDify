@@ -227,12 +227,13 @@ def cmd_keep(args) -> None:
             else:
                 bits.append('"%s": {{%s}}' % (k, k))
         data["presets"].append({
-            "id": cid, "name": cn, "family": args.family, "layer": "media",
-            "status": "ready", "cap": "gl-transition", "src": "gltrans:" + shader,
+            "id": cid, "name": cn, "family": args.family, "role": args.role,
+            "layer": "media", "status": args.status, "cap": "gl-transition",
+            "src": "gltrans:" + shader, "note": (meta["meta"].get("description", "") or shader)[:80],
             "group": "待归类", "origin": "gltrans",
             "params": dict({"dur": 2.2, "p0": 0.0, "p1": 1.0, "ease": "none", "from": "#0a0b0b"}, **params),
             "use": (meta["meta"].get("description", "") or shader)[:80],
-            "avoid": "一屏最多一张；不与 C01/C02 同屏",
+            "avoid": "一屏最多一张；不要和页间转场抢同一次交接",
             "code": """(function () {
   var _el = document.querySelector('{{sel}}');
   if (!_el || !window.glt || !glt.has('%s')) return;
@@ -257,9 +258,11 @@ def cmd_keep(args) -> None:
         return
     PRESETS.write_text(json.dumps(data, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
     print("✓ presets：+%d 张 %s" % (len(added), " ".join(added)))
+    subprocess.run([sys.executable, str(HERE / "gen_catalog.py")], cwd=str(WORK))
     subprocess.run([sys.executable, str(HERE / "sync_expander.py")], cwd=str(WORK))
-    subprocess.run([sys.executable, str(WORK / "成品/workflow_runtime/tools/sync_prompts_to_yaml.py")], cwd=str(WORK))
-    print("\n还要手工补两处：能力卡.md 加行、已达能力一览.md 记一笔（promote 不替你写文案）")
+    print("\n剩两件事：")
+    print("  1. 在 能力库/动效库/来源台账.md 记一行这批的结论")
+    print("  2. 走 `check_catalog_sync.py`；文案（use / avoid / note）脚本不替你写")
 
 
 def cmd_drop(args) -> None:
@@ -305,6 +308,8 @@ def main() -> None:
     k.add_argument("--family", default="转场")
     k.add_argument("--start", type=int, default=69)
     k.add_argument("--names", default="")
+    k.add_argument("--role", default="archive", help="选择层归属；gl-transition 默认 archive（不接生产）")
+    k.add_argument("--status", default="archived", help="ready 才会进展开器；素材默认 archived")
     k.add_argument("--src", type=pathlib.Path, default=pathlib.Path.home() / "Downloads" / "gl-transitions-master")
     k.add_argument("--dry-run", action="store_true")
     k.set_defaults(fn=cmd_keep)

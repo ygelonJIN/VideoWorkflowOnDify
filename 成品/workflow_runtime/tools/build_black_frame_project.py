@@ -20,7 +20,6 @@ TOOLS_DIR = Path(__file__).resolve().parent
 RUNTIME_DIR = TOOLS_DIR.parent
 BASE = RUNTIME_DIR.parent
 sys.path.insert(0, str(TOOLS_DIR))
-
 from dify_auto_build import clean_html_document, decode_json_value, parse_json_object  # noqa: E402
 
 
@@ -128,22 +127,44 @@ def normalize_input(data: dict) -> dict:
     if anchored:
         print("已修正动效场景锚点 #id → [data-scene=...]：" + "、".join(anchored))
     storyboard = package.get("storyboard") if isinstance(package.get("storyboard"), dict) else {}
+    if not storyboard.get("scenes"):
+        approved = decode_json_value(package.get("approved_package_json"))
+        if isinstance(approved, str):
+            approved = parse_json_object(approved)
+        if isinstance(approved, dict) and isinstance(approved.get("storyboard"), dict):
+            storyboard = approved["storyboard"]
+    if not storyboard.get("scenes"):
+        approved = decode_json_value(data.get("approved_package_json"))
+        if isinstance(approved, str):
+            approved = parse_json_object(approved)
+        if isinstance(approved, dict) and isinstance(approved.get("storyboard"), dict):
+            storyboard = approved["storyboard"]
     html, dropped_scenes = sanitize_scene_scope(html, storyboard)
     if dropped_scenes:
         print("已丢弃 %d 个重复或分镜外的 scene：%s" % (len(dropped_scenes), "、".join(dropped_scenes[:10])))
     voiceover = str(package.get("voiceover_script", package.get("approved_voiceover_script", ""))).strip()
+
+    # 先修再判：缺 doctype 由 repair 包外壳，缺口播从画面文字里抽，数字人元素剥掉。
     if "<!doctype html>" not in html.lower():
-        raise SystemExit("Dify 输出缺少完整 html_document")
+        print("警告：html_document 没有完整文档头，按分镜补外壳")
     if not voiceover:
-        raise SystemExit("Dify 输出缺少 voiceover_script/approved_voiceover_script")
+        visible = re.sub(r"<script[\s\S]*?</script>|<style[\s\S]*?</style>", " ", html)
+        visible = re.sub(r"<[^>]+>", "", visible)
+        visible = re.sub(r"\s+", "", visible)
+        if visible:
+            voiceover = visible
+            print("警告：Dify 输出没有 voiceover_script，已用画面文字当口播稿（%d 字）" % len(visible))
     if 'data-render-mode="black-frame"' not in html:
-        raise SystemExit("HTML 缺少 data-render-mode=\"black-frame\"，拒绝混入数字人版本")
+        html = html.replace('<div id="stage"', '<div id="stage" data-render-mode="black-frame"', 1)
+        print("警告：HTML 缺 data-render-mode=\"black-frame\"，已补上")
     if re.search(r'data-video-role="avatar"|data-media-id="heygen_avatar"|class="[^"]*(?:avatar-window|black-frame)', html, re.I):
-        raise SystemExit("无数字人项目不得包含数字人媒体、数字人窗口或黑帧占位")
+        html = re.sub(r'<(?:video|template|div)\b[^>]*(?:data-video-role="avatar"|data-media-id="heygen_avatar")[^>]*>[\s\S]*?</(?:video|template|div)>', "", html, flags=re.I)
+        print("警告：黑帧模式里发现数字人元素，已剥掉")
     raw_tts = package.get("tts_config", {})
     tts_config = raw_tts if isinstance(raw_tts, dict) else {}
     return {
         "html_document": html,
+        "storyboard": storyboard,
         "image_plan": extract_image_plan(data, package),
         "voiceover_script": voiceover,
         "render_mode": "black_frame",

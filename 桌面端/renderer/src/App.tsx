@@ -339,7 +339,7 @@ export function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [graph?.path, result, running, review]);
 
-  // 别的脚本（sync_prompts_to_yaml.py 等）改了 YAML 时，窗口重新获得焦点就同步一次
+  // 别的脚本改了 YAML 时，窗口重新获得焦点就比对 sha1 并同步一次
   const syncExternal = useCallback(async () => {
     if (!graph || running) return;
     try {
@@ -364,6 +364,11 @@ export function App() {
 
   const selected = useMemo(() => graph?.nodes.find((node) => node.id === selectedId) ?? null, [graph, selectedId]);
 
+  /** 有可出片结果时顶栏「出片」亮一个点。数量在步骤条里，这里只回答「有没有东西可做」。 */
+  const produced = Boolean(
+    result && typeof result.outputs.html_document === "string" && typeof result.outputs.voiceover_script === "string",
+  );
+
   useEffect(() => {
     const prevent = (event: DragEvent) => event.preventDefault();
     window.addEventListener("dragover", prevent);
@@ -376,12 +381,11 @@ export function App() {
 
   const fail = (cause: unknown) => setError((cause as Error).message);
 
-  function applyUpdate(result: { graph: WorkflowInfo; canUndo?: boolean; canRedo?: boolean; mirrorWarning?: string }) {
+  function applyUpdate(result: { graph: WorkflowInfo; canUndo?: boolean; canRedo?: boolean }) {
     setGraph(result.graph);
     if (typeof result.canUndo === "boolean") setCanUndo(result.canUndo);
     if (typeof result.canRedo === "boolean") setCanRedo(result.canRedo);
     setError(null);
-    if (result.mirrorWarning) setNotice(result.mirrorWarning);
   }
 
   async function undo() {
@@ -508,9 +512,14 @@ export function App() {
   return (
     <div className="app">
       <header className="topbar card">
+        <div className="brand">
+          <span className="name">视频工作流</span>
+          <span className="sub">Studio</span>
+        </div>
+        <span className="vline" />
         <Select
           value={graph?.path ?? ""}
-          width={260}
+          width={240}
           options={[
             ...workflows.map((workflow) => ({ value: workflow.path, label: workflow.name })),
             ...(graph && !workflows.some((workflow) => workflow.path === graph.path)
@@ -520,24 +529,72 @@ export function App() {
           onChange={(path) => void open(path)}
           placeholder="选择工作流"
         />
-        <button className="btn" onClick={() => void pickWorkflow()}>打开文件…</button>
+        <button className="btn sm ghost" onClick={() => void pickWorkflow()}>打开…</button>
+
         <span className="spacer" />
-        <Select value={addType} width={150} options={ADD_TYPE_OPTIONS} onChange={setAddType} />
-        <button className="btn" onClick={() => void addNode()} disabled={!graph}>添加节点</button>
+
+        <div className="seg" role="tablist" aria-label="视图">
+          <button
+            role="tab"
+            aria-selected={view === "canvas"}
+            className={view === "canvas" ? "on" : ""}
+            onClick={() => setView("canvas")}
+          >
+            画布
+          </button>
+          <button
+            role="tab"
+            aria-selected={view === "produce"}
+            className={view === "produce" ? "on" : ""}
+            onClick={() => setView("produce")}
+            title="运行完成后：准备项目 → 出图提示词 → 放图 → 渲染成片"
+          >
+            出片{produced && view !== "produce" && <span className="dot" />}
+          </button>
+          <button
+            role="tab"
+            aria-selected={view === "artifacts"}
+            className={view === "artifacts" ? "on" : ""}
+            onClick={() => setView("artifacts")}
+          >
+            产物
+          </button>
+        </div>
+
+        <span className="spacer" />
+
+        <span className="topbar-meta" title={graph?.path ?? ""}>
+          {graph ? `${graph.nodes.length} 节点` : "未载入"}
+          {env ? ` · ${env.model}` : ""}
+          {env?.hasKey ? " · key 已配置" : " · 无 key"}
+        </span>
         <button
-          className={`btn ${connecting ? "primary" : ""}`}
-          onClick={() => {
-            setConnecting((value) => !value);
-            setConnectFrom(null);
-          }}
-          disabled={!graph}
+          className="btn sm ghost"
+          onClick={() => void undo()}
+          disabled={!canUndo || view !== "canvas"}
+          title="撤销（⌘Z）"
         >
-          {connecting ? (connectFrom ? "选目标…" : "选起点…") : "连线"}
+          撤销
         </button>
-        <button className="btn" onClick={() => setShowInput(true)}>输入</button>
+        <button
+          className="btn sm ghost"
+          onClick={() => void redo()}
+          disabled={!canRedo || view !== "canvas"}
+          title="重做（⇧⌘Z）"
+        >
+          重做
+        </button>
+        <span className="vline" />
+        <button className="btn sm" onClick={() => setShowInput(true)}>输入</button>
+        {running ? (
+          <button className="btn sm danger" onClick={() => void stop()}>停止</button>
+        ) : (
+          <button className="btn sm primary" onClick={() => setShowInput(true)} disabled={!graph}>运行</button>
+        )}
+        <button className="btn sm ghost" onClick={() => setShowSettings(true)}>设置</button>
         {review && !reviewOpen && (
           <button
-            className="btn pending"
+            className="btn sm pending"
             onClick={() => {
               setReviewOpen(true);
               setNotice(null);
@@ -547,44 +604,7 @@ export function App() {
             文案待审阅 · 点开
           </button>
         )}
-        {running ? (
-          <button className="btn danger" onClick={() => void stop()}>停止</button>
-        ) : (
-          <button className="btn primary" onClick={() => setShowInput(true)} disabled={!graph}>运行</button>
-        )}
-        <button
-          className="btn ghost"
-          onClick={() => setInspectorOpen((value) => !value)}
-          disabled={view !== "canvas"}
-        >
-          {inspectorOpen ? "收起详情" : "展开详情"}
-        </button>
       </header>
-
-      <aside className="rail card">
-        <div className="brand">
-          <span className="name">视频工作流</span>
-          <span className="sub">Studio</span>
-        </div>
-        <nav className="nav">
-          <button className={`tool ${view === "canvas" ? "on" : ""}`} onClick={() => setView("canvas")}>画布</button>
-          <button
-            className={`tool ${view === "produce" ? "on" : ""}`}
-            onClick={() => setView("produce")}
-            title="运行完成后：准备项目 → 出图提示词 → 放图 → 渲染成片"
-          >
-            出片
-          </button>
-          <button className={`tool ${view === "artifacts" ? "on" : ""}`} onClick={() => setView("artifacts")}>产物</button>
-        </nav>
-        <div className="rail-foot">
-          <button className="btn sm rail-settings" onClick={() => setShowSettings(true)}>设置</button>
-          <div className="rail-actions">
-            <button className="btn sm" onClick={() => void undo()} disabled={!canUndo}>撤销</button>
-            <button className="btn sm" onClick={() => void redo()} disabled={!canRedo}>重做</button>
-          </div>
-        </div>
-      </aside>
 
       <div className="work">
         <div className={`main ${!inspectorOpen || view !== "canvas" ? "no-inspector" : ""}`}>
@@ -601,6 +621,29 @@ export function App() {
                 onEdgeClick={(edgeId) => void handleEdgeClick(edgeId)}
                 onMoveNode={(nodeId, position) => void moveNode(nodeId, position)}
                 runningNodeId={runningNodeId}
+                toolbar={
+                  <>
+                    <Select value={addType} width={124} options={ADD_TYPE_OPTIONS} onChange={setAddType} />
+                    <button className="btn sm" onClick={() => void addNode()}>添加节点</button>
+                    <button
+                      className={`btn sm ${connecting ? "primary" : ""}`}
+                      onClick={() => {
+                        setConnecting((value) => !value);
+                        setConnectFrom(null);
+                      }}
+                    >
+                      {connecting ? (connectFrom ? "选目标…" : "选起点…") : "连线"}
+                    </button>
+                    <span className="dock-sep" />
+                    <button
+                      className={`btn sm insp-toggle ${inspectorOpen ? "on" : ""}`}
+                      onClick={() => setInspectorOpen((value) => !value)}
+                      title={inspectorOpen ? "收起右侧节点详情" : "展开右侧节点详情"}
+                    >
+                      详情
+                    </button>
+                  </>
+                }
               />
             ) : (
               <section className="canvas-wrap card">
@@ -677,7 +720,7 @@ export function App() {
                   {event.error && <span className="err">{event.error}</span>}
                 </div>
               ))}
-              {events.length === 0 && !result && <div className="dim">点右上「运行」开始；会真实调用模型（先在左栏「设置」里配 Key）。</div>}
+              {events.length === 0 && !result && <div className="dim">点右上「运行」开始；会真实调用模型（先在顶栏「设置」里配 Key）。</div>}
               {events.length === 0 && result && <div className="dim">逐节点事件没有保留（应用重启过）；End 输出已恢复，可直接去「出片」。</div>}
               {result && Object.keys(result.outputs).length > 0 && (
                 <div className="dim">产物：{Object.keys(result.outputs).join("、")}</div>

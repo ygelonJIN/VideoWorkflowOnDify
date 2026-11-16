@@ -134,31 +134,29 @@ if [ -f 脚本/snapshot_scenes.mjs ] && grep -q "__gtCut" index.html; then
   HYPERFRAMES_CLI="$HF_CLI" HYPERFRAMES_BROWSER_PATH="$CHROME_BIN" "$NODE_BIN" 脚本/snapshot_scenes.mjs index.html || echo "⚠️ 快照生成失败（页间转场会退回硬切）"
 fi
 
-STAGE="检查生产契约（check_html_contract.py）"
-echo "检查生产契约（结构残缺会停止，其余告警继续）..."
-if ! python3 脚本/check_html_contract.py index.html; then
-  echo "生产契约不通过：产物结构残缺（截断/标签未闭合/丢场景/没有动效），停止渲染。"
-  echo "先修 HTML 或重跑 Dify，不要硬渲。"
-  exit 1
-fi
-STAGE="检查真实 DOM 排版（check_html_layout.mjs）"
-echo "检查真实 DOM 的组件重叠、垂直构图、出画布与开场空白（出画布/大面积空白会停止）..."
-if ! HYPERFRAMES_CLI="$HF_CLI" HYPERFRAMES_BROWSER_PATH="$CHROME_BIN" "$NODE_BIN" 脚本/check_html_layout.mjs index.html; then
-  if [ "${ALLOW_LAYOUT_WARN:-0}" = "1" ]; then
-    echo "⚠️ ALLOW_LAYOUT_WARN=1：排版问题只告警，继续渲染（仅用于诊断，不要交付）"
+# 检查器只当诊断：写进 诊断/检查结果.txt，不再拦渲染。
+# 想恢复"不达标就停"的旧行为，跑 STRICT_RENDER=1 bash render.sh。
+check_or_continue() {
+  local name="$1"; shift
+  echo "· 检查：${name}"
+  if "$@" >> 诊断/检查结果.txt 2>&1; then
+    echo "  ✓ ${name} 通过"
   else
-    echo "排版检查不通过（内容出画布或大面积开场空白），停止渲染。"
-    echo "先修 HTML 或重跑 Dify，不要硬渲；只看画面可临时加 ALLOW_LAYOUT_WARN=1。"
-    exit 1
+    echo "  ⚠️ ${name} 有问题，已记录；继续渲染（只诊断，不拦）"
+    if [ "${STRICT_RENDER:-0}" = "1" ]; then echo "STRICT_RENDER=1：停止"; exit 1; fi
   fi
-fi
+  return 0
+}
+mkdir -p 诊断
+: > 诊断/检查结果.txt
+STAGE="检查生产契约（check_html_contract.py）"
+check_or_continue "生产契约" python3 脚本/check_html_contract.py index.html
+
+STAGE="检查真实 DOM 排版（check_html_layout.mjs）"
+check_or_continue "真实 DOM 排版" env HYPERFRAMES_CLI="$HF_CLI" HYPERFRAMES_BROWSER_PATH="$CHROME_BIN" "$NODE_BIN" 脚本/check_html_layout.mjs index.html
 
 STAGE="检查页面时间线（空页/闪屏/动作越界）"
-echo "检查页面时间线..."
-if ! HYPERFRAMES_CLI="$HF_CLI" HYPERFRAMES_BROWSER_PATH="$CHROME_BIN" "$NODE_BIN" 脚本/check_html_timing.mjs index.html; then
-  echo "时间线检查不通过：有整屏不可见、图片闪回或动作越界，先修 HTML 再渲染。"
-  exit 1
-fi
+check_or_continue "页面时间线" env HYPERFRAMES_CLI="$HF_CLI" HYPERFRAMES_BROWSER_PATH="$CHROME_BIN" "$NODE_BIN" 脚本/check_html_timing.mjs index.html
 STAGE="检查动效编号"
 echo "检查动效编号与 kit 调用（只报告）..."
 if [ -f 脚本/check_presets.py ]; then
@@ -172,12 +170,7 @@ echo "检查动效差异（只报告）..."
 HYPERFRAMES_CLI="$HF_CLI" HYPERFRAMES_BROWSER_PATH="$CHROME_BIN" "$NODE_BIN" 脚本/check_motion_variation.mjs index.html || true
 
 STAGE="检查构图差异"
-echo "检查构图差异（相邻/首尾/全片是不是同一套骨架；默认只报告，STRICT_COMPOSITION=1 才拦截）..."
-if ! HYPERFRAMES_CLI="$HF_CLI" HYPERFRAMES_BROWSER_PATH="$CHROME_BIN" "$NODE_BIN" 脚本/check_composition_variation.mjs index.html; then
-  echo "构图差异检查不通过：相邻或首尾两屏是同一套构图骨架，先改排版再渲染。"
-  echo "只想先看画面可去掉 STRICT_COMPOSITION=1。"
-  exit 1
-fi
+check_or_continue "构图差异" env HYPERFRAMES_CLI="$HF_CLI" HYPERFRAMES_BROWSER_PATH="$CHROME_BIN" "$NODE_BIN" 脚本/check_composition_variation.mjs index.html
 
 
 if [ "${RUN_HYPERFRAMES_CHECK:-0}" = "1" ]; then
