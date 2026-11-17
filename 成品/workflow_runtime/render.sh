@@ -7,7 +7,8 @@ trap 'code=$?; if [ "$code" -ne 0 ]; then echo ""; echo "❌ 失败关卡：${ST
 PROJECT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$PROJECT_DIR"
 # 渲染锁默认放在项目内，避免 ~/.cache 在多账号/沙箱下不可写导致渲染排队失败。
-export HYPERFRAMES_CACHE_DIR="${HYPERFRAMES_CACHE_DIR:-$PROJECT_DIR/.hyperframes/cache}"
+# 缓存放全局一份：whisper 模型 465M，跟着项目走会每个项目各存一份（2026-11-17 改）。
+export HYPERFRAMES_CACHE_DIR="${HYPERFRAMES_CACHE_DIR:-$HOME/.cache/hyperframes}"
 mkdir -p "$HYPERFRAMES_CACHE_DIR" "$HYPERFRAMES_CACHE_DIR/locks"
 
 NODE_BIN="${NODE_BIN:-/tmp/node22-runtime/bin/node}"

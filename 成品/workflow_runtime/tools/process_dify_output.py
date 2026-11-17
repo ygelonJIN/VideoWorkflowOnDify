@@ -260,18 +260,20 @@ def main() -> None:
                 package["voiceover_script"] = lifted
                 print(f"已从 approved_script 提取口播 {len(lifted)} 字符")
     response = get_response(package)
+    # 图像计划：01（数字人版）与 04（黑帧）都要它。字段可能在包里，也可能只在报告末尾的裸 JSON 里。
+    if isinstance(package, dict) and not package.get("image_plan_json"):
+        if isinstance(parsed, dict) and parsed.get("image_plan_json"):
+            package["image_plan_json"] = parsed["image_plan_json"]
+        else:
+            plan = find_image_plan(text)
+            if plan:
+                package["image_plan_json"] = json.dumps(plan, ensure_ascii=False)
+                print("已从报告里提取图像计划：%d 张" % len(plan.get("images") or []))
 
     tts_args = (args.voice_file, args.tts_provider, args.tts_base_url, args.tts_model, args.tts_voice)
     if any(tts_args) and not is_black_frame_output(package, response):
         raise SystemExit("TTS/音色参数只能用于黑帧口播输出")
     if is_black_frame_output(package, response):
-        if isinstance(parsed, dict) and not package.get("image_plan_json") and parsed.get("image_plan_json"):
-            package["image_plan_json"] = parsed.get("image_plan_json")
-        if not package.get("image_plan_json"):
-            plan = find_image_plan(text)
-            if plan:
-                package["image_plan_json"] = json.dumps(plan, ensure_ascii=False)
-                print("已从报告里提取图像计划：%d 张" % len(plan.get("images") or []))
         normalized_input = {
             "build_package_json": {
                 **package,

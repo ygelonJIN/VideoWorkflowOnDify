@@ -48,6 +48,23 @@ SCALES = {
 }
 
 
+# 每个 zone 的文字框"估算顶边"。只有它落在数字人小窗的竖直范围内（< 小窗底边）时，
+# 才需要横向让位；居中/下半区的 zone 天然在小窗下方，不动。
+CANVAS_H = 1920
+ZONE_TOP = {
+    "top": 200,
+    "upper-left": int(CANVAS_H * 0.22),
+    "upper-right": int(CANVAS_H * 0.22),
+    "full-bleed-edge": int(CANVAS_H * 0.20),
+    "left-middle": int(CANVAS_H * 0.5),
+    "right-middle": int(CANVAS_H * 0.5),
+    "center": int(CANVAS_H * 0.5),
+    "lower-left": CANVAS_H - int(CANVAS_H * 0.28),
+    "lower-right": CANVAS_H - int(CANVAS_H * 0.28),
+    "bottom-band": CANVAS_H - int(CANVAS_H * 0.22),
+}
+
+
 def normalise_tone(tone: str | None) -> str:
     value = str(tone or "").strip().lower()
     return "light" if value in ("light", "浅", "浅色", "亮") else "dark"
@@ -155,7 +172,11 @@ def _downgrade(fs: dict, chars: int, width: int = 780, line_chars: int = 0) -> d
     rest = ("lead", "body", "note", "label", "num")
     guard = 0
     # 目标：标题 2 行以内。按"每行字数 = 宽 / 字号"反推，只缩字号，不缩行高。
-    while _lines(out, chars, width) > 2 and guard < 16 and shrink(rest, 0.94, 0.96):
+    # 2026-11-17：窄栏（<620）放宽到 3 行。482 的竖栏里 18 个字硬压 2 行要 ≤53px，
+    # 一压就撞地板 60 反而更差——3 行 76px 才读得清（s07 实测：60px 三行 vs 76px 三行）。
+    # 宽栏（≥620）仍然守 2 行，因为按行数拆出来的版式更好看。
+    max_lines = 3 if width < 620 else 2
+    while _lines(out, chars, width) > max_lines and guard < 16 and shrink(rest, 0.94, 0.96):
         guard += 1
     while _height(out, chars, width) > MAX_H and guard < 24 and shrink((), 0.94, 1.0):
         guard += 1
@@ -174,8 +195,13 @@ def center_y_of(top, bottom):
     return (float(top) + float(bottom)) / 2.0
 
 
-def build_scene_css(scene_id: str, zone: str, align: str, scale: str, tone: str, chars: int = 0, media: dict | None = None, line_chars: int = 0, bg_family: str = "") -> str:
-    """返回一段挂在 [data-scene="xx"] 下的 CSS。"""
+def build_scene_css(scene_id: str, zone: str, align: str, scale: str, tone: str, chars: int = 0, media: dict | None = None, line_chars: int = 0, bg_family: str = "", avoid: dict | None = None) -> str:
+    """返回一段挂在 [data-scene="xx"] 下的 CSS。
+
+    `avoid` 是数字人小窗的矩形（left/right/top/bottom）。有它时，顶部区的文字框
+    必须让开右上角那块常驻视频窗：横向收得开就收右边界，收不开就把整块文字挪到小窗下方。
+    04 黑帧线没有小窗，`avoid` 为 None，这条分支一行都不跑。
+    """
     sid = str(scene_id or "").strip()
     if not sid:
         return ""
@@ -225,7 +251,11 @@ def build_scene_css(scene_id: str, zone: str, align: str, scale: str, tone: str,
     # "照片抢满整宽"，文字被压成 480 窄栏——这是"图片位置放不好"的另一半原因。
     space_above = space_below = 0
     band_split = False
-    if None not in (m_left, m_right, m_top, m_bottom) and (m_right - m_left) >= CANVAS_W * 0.95:
+    has_media = None not in (m_left, m_right, m_top, m_bottom)
+    # 2026-11-17：横带判据从 95% 画幅放宽到 80%。照片档位改成小尺寸后，
+    # 通栏横带是 900 宽（83%），按 95% 判就不再算"分带"，文字被推进旁边一条窄栏——
+    # 图变小了、字反而更挤，正好反着。
+    if has_media and (m_right - m_left) >= CANVAS_W * 0.80:
         space_above = m_top - COPY_TOP
         space_below = COPY_BOTTOM - m_bottom
         band_split = max(space_above, space_below) >= MIN_TEXT_BAND
@@ -238,19 +268,66 @@ def build_scene_css(scene_id: str, zone: str, align: str, scale: str, tone: str,
         else:                                             # 照片在右 → 文字在左
             right_edge = max(m_left - GAP, SAFE + MIN_TEXT)
     avail_w = right_edge - left_edge
-    width = min(max(width, min(MIN_TEXT, avail_w)), avail_w)
+    # 2026-11-17：无图屏用满安全宽度。以前无图屏也吃 zone 的 780/760，
+    # 右侧（左对齐）或左侧（右对齐）整条留白空着，字还在窄栏里自己折行——
+    # 画面里没有任何东西要避让，凭什么收窄。有图的屏才按让位后的宽度收。
+    width = avail_w if not has_media else min(max(width, min(MIN_TEXT, avail_w)), avail_w)
     if texts_left:
         copy_left, copy_right = left_edge, left_edge + width
     else:
         copy_left, copy_right = right_edge - width, right_edge
 
+    # ---- 数字人小窗（右上角常驻视频窗）----
+    # 小窗在所有场景层之上，压上去就是把字遮掉。这里只有一个目标：文字框右边界不进小窗。
+    # 收得开就收右边界；收不开就把整块文字挪到小窗下方（只有顶部区会走到这一步）。
+    pip_rect = None
+    if avoid and None not in (avoid.get("left"), avoid.get("right"), avoid.get("top"), avoid.get("bottom")):
+        pip_rect = (int(avoid["left"]), int(avoid["bottom"]))
+
+    def narrow_for_pip() -> bool:
+        """把小窗那一侧收进来；收得开返回 True，收不开（剩余不足 MIN_TEXT）返回 False。"""
+        nonlocal width, copy_left, copy_right, texts_left
+        if not pip_rect:
+            return False
+        pip_left = pip_rect[0]
+        if not (copy_left < pip_left < copy_right):
+            return True          # 本来就不在小窗这一侧
+        narrowed = pip_left - GAP - copy_left
+        if narrowed < MIN_TEXT and not texts_left:
+            # 右对齐、整条贴在小窗那一侧：改成贴左再算一次
+            texts_left = True
+            copy_left = left_edge
+            narrowed = pip_left - GAP - copy_left
+        if narrowed < MIN_TEXT:
+            return False
+        width = narrowed
+        copy_right = copy_left + width
+        return True
+
+    def est_text_top() -> int:
+        """文字块顶边估算：居中区的块高度按字数推，长文案会把整块往上撑。"""
+        base_top = ZONE_TOP.get(z, COPY_TOP)
+        if z in ("center", "left-middle", "right-middle"):
+            base_top -= min(300, max(0, int(chars or 0) - 16) // 8 * 90)
+        return base_top
+
+    pip_push_top = None
+    if pip_rect and est_text_top() < pip_rect[1] and not narrow_for_pip():
+        pip_push_top = pip_rect[1] + GAP
+
     copy_top, copy_bottom = "%dpx" % COPY_TOP, "%dpx" % (CANVAS_H - COPY_BOTTOM)
+    anchor = "center"
 
     # 照片和文字真的抢同一块地时：**等比缩小照片**（保比例、保外沿），
     # 不再把它压成一条窄边——2026-11-16 s01 的 930×1280 就是被压成了 397 宽。
     media_fix = ""
     align_next_to_photo = ""
-    if (rect.get("cls") and not band_split
+    # 2026-11-17：新版照片框是行内 style + data-media-slot，没有 cls。
+    # 以前判据写成 `rect.get("cls")`，这条"宁可缩照片也不压字"的分支对新页面全是死代码——
+    # 照片挤过来时没人让，字被压成窄栏。现在 cls 和 slot 都能落选择器。
+    media_target = ("." + rect["cls"]) if rect.get("cls") else (
+        '[data-media-slot="%s"]' % slot if slot else "")
+    if (media_target and not band_split
             and None not in (m_left, m_right, m_top, m_bottom)
             and copy_right > m_left and copy_left < m_right):
         photo_w = max(1, m_right - m_left)
@@ -271,11 +348,13 @@ def build_scene_css(scene_id: str, zone: str, align: str, scale: str, tone: str,
             if center_y_of(m_top, m_bottom) < CANVAS_H / 2.0:
                 top_new = max(COPY_TOP, 200)
                 copy_top = "%dpx" % (top_new + band_h + GAP)
+                anchor = "top"
             else:
                 top_new = COPY_BOTTOM - band_h
                 copy_bottom = "%dpx" % max(300, CANVAS_H - (top_new - GAP))
-            media_fix = ('section[data-scene="%s"] .%s{left:%dpx;top:%dpx;width:%dpx;height:%dpx;}\n'
-                         % (sid, rect["cls"], SAFE, top_new, CANVAS_W - SAFE * 2, band_h))
+                anchor = "bottom"
+            media_fix = ('section[data-scene="%s"] %s{left:%dpx;top:%dpx;width:%dpx;height:%dpx;}\n'
+                         % (sid, media_target, SAFE, top_new, CANVAS_W - SAFE * 2, band_h))
         if avail >= 240:
             scale = min(1.0, avail / float(photo_w))
             w_new = int(round(photo_w * scale))
@@ -286,8 +365,8 @@ def build_scene_css(scene_id: str, zone: str, align: str, scale: str, tone: str,
             left_new = inner_edge if texts_left else inner_edge - w_new
             left_new = max(SAFE, min(left_new, CANVAS_W - SAFE - w_new))
             # 用 section[...] 抬一级优先级：场景自己的 <style> 在后面，同权重会把它盖掉
-            media_fix = ('section[data-scene="%s"] .%s{left:%dpx;top:%dpx;width:%dpx;height:%dpx;}\n'
-                         % (sid, rect["cls"], left_new, top_new, w_new, h_new))
+            media_fix = ('section[data-scene="%s"] %s{left:%dpx;top:%dpx;width:%dpx;height:%dpx;}\n'
+                         % (sid, media_target, left_new, top_new, w_new, h_new))
 
     # 照片占了下半屏/上半屏时，文字区跟着让到另一半，别在中间和照片对着压。
     # 让位之后还要把这一半的"内容中心"留在构图舒适区内（700–1100）。
@@ -307,10 +386,34 @@ def build_scene_css(scene_id: str, zone: str, align: str, scale: str, tone: str,
             top_px = max(COPY_TOP, m_bottom + GAP)
             bottom_px = CANVAS_H - COPY_BOTTOM
         copy_top, copy_bottom = "%dpx" % top_px, "%dpx" % bottom_px
+        # 数字人小窗：文字带在上方（照片在下带）时，右上角同样要让开。
+        if pip_rect and space_above >= space_below:
+            narrow_for_pip()
         # 文字块贴着自己那张照片，留白放在画面外侧（2026-11-17）：
         # 居中放的时候，照片在上带的屏文字会一路掉到底、贴住字幕（s07 实测中心 1284），
         # 照片在下带的屏文字又悬在上方。贴图排之后两行字和图片是一组，外沿留白更像版式。
         align_next_to_photo = "flex-end" if space_above >= space_below else "flex-start"
+        anchor = "bottom" if space_above >= space_below else "top"
+
+    # 2026-11-17：文字容器不再撑满整条带。以前 top/bottom 同时钉死，容器永远是
+    # 780×1420（或 760×1420），柔光底衬照着容器画，就成了"占屏 80%、字只占中间一小条"
+    # 的大暗块。现在 height:auto，容器内容多高就多高，anchor 只决定贴哪一端：
+    #   top    → 贴在文字带上沿（照片在上半，字贴着照片）
+    #   bottom → 贴在文字带下沿（照片在下半，字贴着照片）
+    #   center → 居中在 200–1620 这条带的正中（无图屏 / 侧边照片）
+    if pip_push_top is not None and band_split is False:
+        # 横向让不开时，文字整块落在小窗下方（顶部区退化成上起排）
+        copy_top = "%dpx" % pip_push_top
+        anchor = "top"
+    band_top = int(str(copy_top).replace("px", ""))
+    band_bottom = int(str(copy_bottom).replace("px", ""))
+    if anchor == "top":
+        copy_vpos = "  top:%dpx;" % band_top
+    elif anchor == "bottom":
+        copy_vpos = "  bottom:%dpx;" % band_bottom
+    else:
+        band_center = (band_top + (CANVAS_H - band_bottom)) / 2.0
+        copy_vpos = "  top:%dpx;transform:translateY(-50%%);" % int(round(band_center))
 
     # 组件的调色板跟着"这一屏"的 tone 走。
     # components.css 的同一套变量挂在 :root / #stage[data-bg-tone] 上，
@@ -324,7 +427,7 @@ def build_scene_css(scene_id: str, zone: str, align: str, scale: str, tone: str,
     ) % (sid, ui["ink"], ui["muted"], ui["accent"], ui["border"], ui["surface"], ui["surface2"]))
 
     parts.append('[data-scene="%s"] .scene-copy{position:absolute;z-index:5;' % sid)
-    parts.append("  top:%s;bottom:%s;" % (copy_top, copy_bottom))
+    parts.append(copy_vpos)
     parts.append("  left:%dpx;" % copy_left if texts_left else "  right:%dpx;" % (CANVAS_W - copy_right))
     parts.append("  width:%dpx;" % width)
 
@@ -333,6 +436,10 @@ def build_scene_css(scene_id: str, zone: str, align: str, scale: str, tone: str,
     parts.append("  display:flex;flex-direction:column;justify-content:%s;gap:26px;"
                  % (align_next_to_photo or "center"))
     parts.append("  text-align:%s;" % a)
+    # 2026-11-17：给文字区一个跟随本屏明暗的继承色。组件里没显式上色的元素
+    # （.ui-table 的 td、.ui-toast 这类）以前继承到文档默认黑，深底上整行看不见——
+    # 第六屏的表格行就是这么"空"的。--ui-ink 本来就是按 tone 发的，这里让继承链也对上。
+    parts.append("  color:var(--ui-ink);")
     parts.append("  --ui-scale:%s;" % {"hero": "1.8", "large": "1.5", "medium": "1.3", "small": "1.15"}[s])
     if s == "small" and re.search(r"竖排", str(scale or "")):
         parts.append("  writing-mode:vertical-rl;")
@@ -436,14 +543,14 @@ def build_scene_css(scene_id: str, zone: str, align: str, scale: str, tone: str,
     return "".join(parts)
 
 
-def build_document_css(scenes) -> str:
-    """scenes: [{"id","zone","align","scale","tone"}, ...]"""
+def build_document_css(scenes, avoid: dict | None = None) -> str:
+    """scenes: [{"id","zone","align","scale","tone","media"}, ...]；avoid 见 build_scene_css。"""
     blocks = []
     for item in scenes:
         css = build_scene_css(item.get("id"), item.get("zone"), item.get("align"),
                               item.get("scale"), item.get("tone"), item.get("chars") or 0,
                               item.get("media"), item.get("line_chars") or 0,
-                              item.get("bg_family") or "")
+                              item.get("bg_family") or "", avoid)
         if css:
             blocks.append(css)
     return "".join(blocks)

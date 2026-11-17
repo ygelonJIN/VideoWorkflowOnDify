@@ -18,6 +18,9 @@ node_modules/
 成品/*
 成品/Dify输出/
 !成品/workflow_runtime/
+# 成品目录只提交"说明与索引"，项目和产物一律不提交
+!成品/README.md
+!成品/项目状态.md
 
 # 本地私密材料，永不提交
 不推送/

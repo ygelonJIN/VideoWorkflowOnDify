@@ -308,7 +308,7 @@ def main() -> None:
     k.add_argument("--family", default="转场")
     k.add_argument("--start", type=int, default=69)
     k.add_argument("--names", default="")
-    k.add_argument("--role", default="archive", help="选择层归属；gl-transition 默认 archive（不接生产）")
+    k.add_argument("--role", required=True, help="选择层归属，必须是可选 role（没有 archive/none 了）")
     k.add_argument("--status", default="archived", help="ready 才会进展开器；素材默认 archived")
     k.add_argument("--src", type=pathlib.Path, default=pathlib.Path.home() / "Downloads" / "gl-transitions-master")
     k.add_argument("--dry-run", action="store_true")

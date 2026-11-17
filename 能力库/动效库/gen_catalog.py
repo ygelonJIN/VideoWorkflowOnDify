@@ -13,9 +13,8 @@
     component_motion 组件动效
     decoration      只能给装饰元素
     page_transition 页间转场（catalog.page_transition，由 H01T/H02T 用）
-    special_dom     要额外 DOM，本链路不可选（catalog.special_dom 只作说明）
-    archive         有实现有样片但不接生产（catalog 里不出现）
-    none            不进目录（catalog 里不出现）
+
+表里没有"选了也用不上"的卡：每张 ready 卡都必须落进上面某一格。
 
 用法：
     python3 能力库/动效库/gen_catalog.py            # 写入 YAML 与两份 md
@@ -39,6 +38,9 @@ HERE = pathlib.Path(__file__).resolve().parent
 REPO = HERE.parent.parent
 PRESETS = HERE / "presets.json"
 YAML = REPO / "Dify工作流" / "04_黑帧口播_分组生成.yml"
+# 01 = 04 + 数字人小窗，两份共用能力层：H00 目录 / H02S 组件段 / A10 编号清单都要一起写，
+# 只写 04 会让 01 的目录停在加卡之前（2026-11-17 发现：01 里还留着已删的 special_dom）。
+YAMLS = [YAML, REPO / "Dify工作流" / "01_有数字人完整视频工作流.yml"]
 CARDS_MD = HERE / "能力卡.md"
 COMP_MD = HERE / "组件卡.md"
 
@@ -61,7 +63,7 @@ HEADER = """# 动效能力卡（自动生成）
 > 本文件由 `能力库/动效库/gen_catalog.py` 从 `presets.json` 生成，**不要手改**。
 > 改内容 → 改 `presets.json` → 跑 `python3 能力库/动效库/gen_catalog.py`。
 > 组件结构见 [`组件卡.md`](组件卡.md)；来源与归档见 [`来源台账.md`](来源台账.md)。
-> 选择层只认每张卡的 `role`：`none` / `archive` / `special_dom` 不进模型目录。
+> 选择层只认每张卡的 `role`；表里每张 ready 卡都在目录里。
 
 """
 
@@ -71,10 +73,10 @@ def load():
 
 
 def catalog_of(cards):
-    bg, comp, pt, special = {}, {}, {}, {}
+    bg, comp, pt = {}, {}, {}
     motion = collections.OrderedDict((r, []) for r in MOTION_ROLES)
     for c in sorted(cards, key=lambda x: x["id"]):
-        role = c.get("role") or "none"
+        role = c.get("role") or ""
         cid = c["id"]
         if role == "bg":
             bg[cid] = {"name": c.get("name", ""), "note": c.get("note", ""),
@@ -84,8 +86,6 @@ def catalog_of(cards):
         elif role == "page_transition":
             pt[cid] = {"name": c.get("name", ""), "note": c.get("note", ""),
                        "kind": c.get("kind", "")}
-        elif role == "special_dom":
-            special[cid] = c.get("note", "")
         elif role in motion:
             motion[role].append(cid)
     return {
@@ -93,10 +93,6 @@ def catalog_of(cards):
         "component": comp,
         "motion": {k: v for k, v in motion.items()},
         "page_transition": pt,
-        "special_dom": special,
-        "not_available": ("三维 / 照片形变 / 注入式图形 / 材质叠加 / 整屏镜头 / 指针交互 / "
-                          "版面重排 / 状态改写 / 代码块 / 笔刷标注：都要 canvas、three 或额外 DOM，"
-                          "本链路不展开，别选。这些卡的编号只在 来源台账.md 里查。"),
     }
 
 
@@ -110,7 +106,7 @@ def render_cards_md(cards):
     out = [HEADER, HARD_RULES]
     by_family = collections.defaultdict(list)
     for c in cards:
-        if c.get("role") in (None, "none", "archive", "special_dom"):
+        if not c.get("role"):
             continue
         by_family[c.get("family", "未分类")].append(c)
 
@@ -173,24 +169,6 @@ def render_cards_md(cards):
                 _fmt_params(c.get("params")), c.get("use", ""), c.get("avoid", "")))
         out.append("")
 
-    special = sorted((c for c in cards if c.get("role") == "special_dom"), key=lambda x: x["id"])
-    if special:
-        out.append("## 要额外 DOM：不可选，只作说明\n")
-        out.append("| 编号 | 名字 | 前提 |")
-        out.append("|---|---|---|")
-        for c in special:
-            out.append("| %s | %s | %s |" % (c["id"], c.get("name", ""), c.get("note", "")))
-        out.append("")
-
-    archived = sorted((c for c in cards if c.get("role") == "archive"), key=lambda x: x["id"])
-    if archived:
-        out.append("## 已归档：有实现、有样片、不接生产\n")
-        fams = collections.Counter(c.get("family") for c in archived)
-        out.append("%s 共 %d 张（%s）。原因与来源见 [`来源台账.md`](来源台账.md)。" % (
-            "、".join(fams.keys()), len(archived),
-            "、".join("%s %d" % (k, v) for k, v in fams.items())))
-        out.append("")
-
     return "\n".join(out).rstrip() + "\n"
 
 
@@ -238,12 +216,12 @@ def splice_h00(code: str, blob: str) -> str:
     return code
 
 
-def h00_code():
-    return yaml_nodes.get_code("h00")
+def h00_code(path=None):
+    return yaml_nodes.get_code("h00", path)
 
 
-def write_h00(new_code: str) -> None:
-    yaml_nodes.set_code("h00", new_code)
+def write_h00(new_code: str, path=None) -> None:
+    yaml_nodes.set_code("h00", new_code, path)
 
 
 INV_START = "<!-- CATALOG:INVENTORY:START -->"
@@ -263,7 +241,7 @@ def render_inventory_prompt(cards):
     out = [INV_START]
     by_role = collections.defaultdict(list)
     for c in cards:
-        if c.get("role") not in (None, "none", "archive", "special_dom"):
+        if c.get("role"):
             by_role[c["role"]].append(c)
     for role in ("entrance_text", "entrance_block", "state_text", "state_block",
                  "component", "component_motion", "decoration", "page_transition", "bg"):
@@ -327,51 +305,53 @@ def main() -> int:
     if '"""' in blob:
         raise SystemExit("目录里出现三引号，无法安全嵌入 H00")
 
-    code = h00_code()
-    new_code = splice_h00(code, blob)
-    compile(new_code, "h00", "exec")
-
+    prompt_block = render_components_prompt(cards)
+    inv_block = render_inventory_prompt(cards)
     md_cards = render_cards_md(cards)
     md_comp = render_comp_md(cards)
-    prompt_block = render_components_prompt(cards)
-    h02s_text = yaml_nodes.get_prompt_text("h02s")
-    h02s_new = splice_components_prompt(h02s_text, prompt_block)
-    inv_block = render_inventory_prompt(cards)
-    a10_text = yaml_nodes.get_prompt_text("a10")
-    a10_new = splice_inventory_prompt(a10_text, inv_block)
 
-    diffs = []
-    if new_code != code:
-        diffs.append("04 YAML 的 H00 目录")
+    diffs, plans = [], []
+    for path in YAMLS:
+        code = h00_code(path)
+        new_code = splice_h00(code, blob)
+        compile(new_code, "h00", "exec")
+        h02s_text = yaml_nodes.get_prompt_text("h02s", path)
+        h02s_new = splice_components_prompt(h02s_text, prompt_block)
+        a10_text = yaml_nodes.get_prompt_text("a10", path)
+        a10_new = splice_inventory_prompt(a10_text, inv_block)
+        plans.append((path, code, new_code, h02s_text, h02s_new, a10_text, a10_new))
+        if new_code != code:
+            diffs.append("%s 的 H00 目录" % path.name)
+        if h02s_new != h02s_text:
+            diffs.append("%s 的 H02S 组件段" % path.name)
+        if a10_new != a10_text:
+            diffs.append("%s 的 A10 编号清单" % path.name)
+
     if not CARDS_MD.exists() or CARDS_MD.read_text(encoding="utf-8") != md_cards:
         diffs.append("能力卡.md")
     if not COMP_MD.exists() or COMP_MD.read_text(encoding="utf-8") != md_comp:
         diffs.append("组件卡.md")
-    if h02s_new != h02s_text:
-        diffs.append("H02S 的组件段")
-    if a10_new != a10_text:
-        diffs.append("A10 的编号清单")
+
+    n_sel = (len(cat["background"]) + len(cat["component"])
+             + len(cat["page_transition"]) + sum(len(v) for v in cat["motion"].values()))
 
     if args.check:
         if diffs:
             print("未同步：" + "、".join(diffs) + "；请运行 gen_catalog.py")
             return 1
-        n_sel = (len(cat["background"]) + len(cat["component"])
-                 + len(cat["page_transition"]) + sum(len(v) for v in cat["motion"].values()))
-        print("已同步：%d 张卡，可选 %d 张" % (len(cards), n_sel))
+        print("已同步：%d 张卡，可选 %d 张（两份 YAML 一致）" % (len(cards), n_sel))
         return 0
 
-    if new_code != code:
-        write_h00(new_code)
+    for path, code, new_code, h02s_text, h02s_new, a10_text, a10_new in plans:
+        if new_code != code:
+            write_h00(new_code, path)
+        if h02s_new != h02s_text:
+            yaml_nodes.set_prompt_text("h02s", h02s_new, path)
+        if a10_new != a10_text:
+            yaml_nodes.set_prompt_text("a10", a10_new, path)
     CARDS_MD.write_text(md_cards, encoding="utf-8")
     COMP_MD.write_text(md_comp, encoding="utf-8")
-    if h02s_new != h02s_text:
-        yaml_nodes.set_prompt_text("h02s", h02s_new)
-    if a10_new != a10_text:
-        yaml_nodes.set_prompt_text("a10", a10_new)
-    n_sel = len(cat["background"]) + len(cat["component"]) + len(cat["page_transition"]) + \
-        sum(len(v) for v in cat["motion"].values())
-    print("已写入：能力卡.md / 组件卡.md / H00 目录；可选 %d 张（背景 %d / 组件 %d / 转场 %d / 动效 %d）"
+    print("已写入：能力卡.md / 组件卡.md / H00 目录（两份 YAML）；可选 %d 张（背景 %d / 组件 %d / 转场 %d / 动效 %d）"
           % (n_sel, len(cat["background"]), len(cat["component"]), len(cat["page_transition"]),
              sum(len(v) for v in cat["motion"].values())))
     return 0

@@ -2153,6 +2153,28 @@ def inject_layout_composer(document: str) -> str:
         return {"left": l, "right": l + w, "cls": name, "auto_left": auto_left,
                 "top": top_px, "bottom": (top_px + h_px) if (top_px is not None and h_px is not None) else None}
 
+    # 数字人小窗：位置与尺寸的唯一定义是 H01Z 写进 #stage 的 --pip-* 变量。
+    # 没有 avatar 占位就没有小窗，04 黑帧线一律拿到 None（版面逻辑一行都不变）。
+    def _avatar_avoid() -> dict | None:
+        if not re.search(r'data-video-role="avatar"', document, re.I):
+            return None
+
+        def read(name: str, default: int) -> int:
+            hit = re.search(r'--%s\s*:\s*(-?\d+(?:\.\d+)?)\s*px' % name, document)
+            return int(round(float(hit.group(1)))) if hit else default
+
+        width, height = read("pip-width", 270), read("pip-height", 480)
+        top, right = read("pip-top", 120), read("pip-right", 44)
+        if width <= 0 or height <= 0:
+            return None
+        return {"left": 1080 - right - width, "right": 1080 - right,
+                "top": top, "bottom": top + height}
+
+    pip_avoid = _avatar_avoid()
+    if pip_avoid:
+        print("数字人小窗避让区：x %d–%d / y %d–%d"
+              % (pip_avoid["left"], pip_avoid["right"], pip_avoid["top"], pip_avoid["bottom"]))
+
     scenes = []
     for match in re.finditer(r'<section\b[^>]*\bclass="[^"]*\bscene\b[^"]*"[^>]*>', document, re.I):
         tag = match.group(0)
@@ -2173,7 +2195,12 @@ def inject_layout_composer(document: str) -> str:
             # 和真实行对不上，124px 的 8 字行会直接顶出卡片（2026-11-15 s01 实测）。
             _raw = re.split(r'<br\s*/?>', _title.group(1), flags=re.I)
             _chars = sum(len(re.sub(r'<[^>]+>|\s', '', part)) for part in _raw)
-            _line_chars = max(len(re.sub(r'<[^>]+>|\s', '', part)) for part in _raw) if _raw else 0
+            # 2026-11-17：line_chars 只在**真的写了 <br>** 时才有意义。
+            # 以前没有 <br> 时它等于整句长度（17 个字的标题 → line_chars=17），
+            # _downgrade 的硬换行保护按"17 个字不许折行"去缩字号，一路缩到地板 60px——
+            # 第一页标题 60px、"字太小"就是这么来的。没有 <br> 交给 text-wrap:balance 折行。
+            _line_chars = (max(len(re.sub(r'<[^>]+>|\s', '', part)) for part in _raw)
+                           if len(_raw) > 1 else 0)
         else:
             _chars = 0
             _line_chars = 0
@@ -2206,7 +2233,7 @@ def inject_layout_composer(document: str) -> str:
     # 字号由版面档位决定；data-fit 的 auto-fit 会把它改掉，一律清掉
     document = re.sub(r'\s+data-fit="[^"]*"', '', document)
     document = re.sub(r'<style id="layout-composer">[\s\S]*?</style>\s*', '', document, count=1)
-    css = layout_composer.build_document_css(scenes)
+    css = layout_composer.build_document_css(scenes, pip_avoid)
     if not css:
         return document
     # 基础类 .media 是 inset:0（四边都钉住），场景只写 right 时浏览器按 left+width 布局，

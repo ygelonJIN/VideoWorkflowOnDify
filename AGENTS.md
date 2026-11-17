@@ -5,7 +5,7 @@
 - 分不清"编号 / 能力卡 / 样片 / 源码"在哪 → 先读根目录 `动效能力总览.md`。
 - 动 Workflow、提示词、Code 节点 → `经验文档/使用说明.md` 和 `能力库/README.md`。
 - 动视频质量、字幕、布局、渲染规则 → `能力库/项目文档/视频需求与质量标准.md`。
-- 选题、去重、对外内容合规 → `能力库/项目文档/内容选题与去重规则.md`、`用户输入事实与合规规则.md`。
+- 选题、去重、对外内容合规 → `能力库/项目文档/用户输入事实与合规规则.md`。
 - 导入 Dify、节点报错、变量对不上 → `Dify工作流/使用说明.md`。
 - 跑完不对：黑屏、静帧、音画不同步、字幕错位、整屏空白、输出残缺 → `经验文档/事故排查.md`。
 - 外部包渲出来的候选片全黑/静止/零时长 → 同上「进件候选片渲染」一节。
@@ -19,13 +19,26 @@
 ## 是什么
 - Dify 视频工作流仓库：可导入的 Dify Workflow + HTML 视频运行时。**提示词与 Code 节点只在 YAML 里，不留镜像副本。**
 - 仓库根就是工作区根，会话在这一层开；本文件会被 AI 对话自动读取。
-- `04_黑帧口播` 是唯一的编号化生产线；`01_有数字人` 是旧线（自由写 HTML，不认编号），只维护不扩展。
+- `04_黑帧口播` 是默认生产线；`01_有数字人` = 04 + 右上角数字人小窗（同一套编号与逐屏生成，只是多一个 `H01Z` 注入小窗、出口换 HeyGen）。两份共用能力层，改卡两层一起变。
 
 统一处理入口：
 
 ```bash
 bash /Volumes/TUF ESD-T1A Media/视频工作流/成品/workflow_runtime/tools/run_dify_output.sh 项目名
 ```
+
+## 口径（唯一真值，其他文档只写指路）
+
+这几条以代码为准，文档里不再各写一套。改之前先 `git grep` 一下，别再抄进第二处。
+
+| 事实 | 真值 | 真值在哪 |
+|---|---|---|
+| 页间转场几张 | **15 张（`PT01–PT15`）**，`kind` 全在 `__ptList` 里 | `presets.json` + `sync_video.py` 的 `window.__ptList` |
+| 照片 `role` 取值 | **`band` / `inset` / `portrait` / `thumb` / `texture` / `html`**；`large` 等同 `band`；`full`、`cover`、`background`、`photo` 一律降级成 `band` 并告警 | `H01P` 的 `allowed_roles` |
+| `full` / `black-frame` / `html-only` | 是**渲染模式名**，不是 `role`；`full` 指数字人线，不是"照片铺满" | `视频需求与质量标准.md` §3 |
+| 时长 | **没有目标时长**，文案写多长成片就多长，以真实口播为唯一主时钟 | `视频需求与质量标准.md` §5 |
+| 去重 | 只有 `script_hash` 一个指纹在跑 | `A07_整理口播` 的 Code 节点 |
+| 界面元素 | 只能取编号组件（`U*`），不手写图形 | `H02S` 落版 + `components.css` |
 
 ## 目录与职责（唯一一份目录表）
 
@@ -36,13 +49,18 @@ bash /Volumes/TUF ESD-T1A Media/视频工作流/成品/workflow_runtime/tools/ru
 | `能力库/动效库/presets.json` | **唯一源**：编号、名字、`role`、参数、代码、来源 |
 | `能力库/动效库/能力卡.md`、`组件卡.md` | **生成物**，由 `gen_catalog.py` 从 presets 生成，不要手改 |
 | `能力库/动效库/来源台账.md` | 来源、结论、删过的编号、当前缺口、许可、`src` 标注规范 |
-| `能力库/动效库/样片/全卡审阅/` | 每张卡一个 3 秒确认片（按族分目录） |
+| `能力库/动效库/样片/全卡审阅/` | 每张卡一个 3 秒确认片（按族分目录）；进件候选只在 `样片/待筛/<批次>/` |
+| `能力库/动效库/oneshot/` | 一次性搬运脚本（revideo / gl-transitions / 旧 intake）。复现某一批才用，日常进件不走这里 |
 | `能力库/项目文档/` | 任意主题通用的输入事实、内容规则、视频质量标准；不保存固定产品故事 |
 | `经验文档/` | 怎么做、怎么排查、踩过的坑。一个领域一篇，新经验先并入已有文件 |
-| `成品/<项目>/` | 各项目成品与项目内运行脚本，不作为新项目模板直接修改 |
-| `成品/workflow_runtime/` | 可复用模板、脚本、GSAP 运行时、工具，钉死的 HyperFrames CLI（`vendor/`，`node_modules` 不进仓库）。只读，不往里写运行结果 |
+| `成品/<项目>/` | 正式项目：成品与项目内运行脚本，不作为新项目模板直接修改 |
+| `成品/试验/<项目>/` | 没上线的试验、`-check` / `-rebuild` 副本、结构/图片链路的测试项目 |
+| `成品/失败项目/`、`成品/项目备份/` | 渲染失败与 `--replace` 的自动备份，各自带 README 写保留策略 |
+| `成品/workflow_runtime/` | 可复用模板、脚本、GSAP 运行时、工具，钉死的 HyperFrames CLI（`vendor/`，`node_modules` 不进仓库）。只读，不往里写运行结果，也不放任何私人配置 |
 | `成品/Dify输出/` | Dify 原始 TXT / JSON / HTML 和 HeyGen 响应 |
-| `成品/项目状态.md` | 在跑、待重跑、已归档的项目清单 |
+| `成品/HTML预览/` | 只有 `html_document` 的输出（浏览器预览，不渲染 MP4） |
+| `成品/项目状态.md` | 在跑、待重跑、已归档的项目清单（只列正式项目） |
+| `桌面端/` | 本地跑 Dify DSL 的 Electron 应用（独立 npm 工程，`node_modules` 不进仓库）；YAML 仍是唯一真源 |
 
 ## 铁律
 
@@ -58,9 +76,21 @@ python3 能力库/动效库/check_catalog_sync.py         # 四层一致性门�
 
 `add_card.py` 会拒绝这些情况：`role` 不合法、`code` 里的 `{{x}}` 在 `params` 里没有默认值、
 背景卡缺 `bg_family`/`keywords`/`note`、组件卡用了 `components.css` 里没有的类、PT 卡的 `kind` 不在 `__ptList`、
-以及**没有样片的卡**（规则：没样片不入表，`--render` 可现场渲一张）。
+以及**没有样片的卡**（规则：没样片不入表；`--render` 只是先把候选片渲到 `样片/待筛/` 再停，不转正）。
 
 各层谁生成谁，见 `经验文档/能力层架构.md`。
+
+**一批卡（整批外部来源）走「出候选片 → 人审 → 转正」三步，别一张张等**：
+
+```bash
+bash 能力库/动效库/render_candidates.sh <批次> 本批.json   # 只落 样片/待筛/<批次>/
+#   ↑ 人看片、点名通过后，写 样片/待筛/<批次>/通过.tsv（编号 + 名字）
+python3 能力库/动效库/add_card.py 本批.json --batch <批次>  # 写表 + 把审过的片搬进全卡审阅
+```
+
+候选片**不许**直接落 `全卡审阅/`。`add_card.py` 拿不到 `通过.tsv` 点名就拒收，且表不动
+（`render_candidates.sh` 只写待筛，`add_card.py` 才是唯一能往 `全卡审阅/` 放片的入口）。
+已在表里的卡重渲仍写 `全卡审阅/`：`bash 能力库/动效库/render_cards.sh B49 B51`。
 
 ### 加卡顺序：先待审，审过才转正
 
@@ -89,6 +119,7 @@ python3 能力库/动效库/check_catalog_sync.py         # 四层一致性门�
 | `presets.json` 的字段、`role`、参数 | 跑 `add_card.py` / `remove_card.py` / `gen_catalog.py`，再跑 `check_catalog_sync.py` |
 | 能力目录、选择层、`H00` 的 catalog | `gen_catalog.py` 生成，不要手改 YAML 里的 CATALOG 块 |
 | 输出变量、字段或 JSON 结构 | `Dify工作流/使用说明.md`、`经验文档/使用说明.md`、`workflow_runtime/tools/` |
+| 04 的链路节点（骨架 / 单屏规格 / 落版 / 检查） | `Dify工作流/01_有数字人完整视频工作流.yml` 的对应差异块，清单在 `经验文档/能力层架构.md` §七 |
 | 媒体、字幕、布局或渲染规则 | `workflow_runtime/`、`能力库/项目文档/视频需求与质量标准.md` |
 | 图像计划、生图 prompt 规则、图片契约 | `workflow_runtime/scripts/generate_images.py`、`workflow_runtime/tools/build_black_frame_project.py`、`能力库/项目文档/视频需求与质量标准.md` |
 | 新增或重命名节点 | `能力库/README.md` 和相关说明 |
@@ -99,8 +130,9 @@ python3 能力库/动效库/check_catalog_sync.py         # 四层一致性门�
 
 ### 视频制作（v2，2026-11-13 生效）
 
-- 整片至少一张真实照片；无照片的屏靠排版撑住（`role=html` + `data-visual="html"`）。图像计划逐屏决定 `role`：full / inset / portrait / texture / html。
+- 整片至少一张真实照片；无照片的屏靠排版撑住（`role=html` + `data-visual="html"`）。图像计划逐屏决定 `role`，六个取值见本文件「口径」表。
 - **每屏一个主运动**，其余是次级；相邻两屏的主运动不能是同一张卡。切点前 0.3–0.5 秒要有收束（离场或自带回位），**不强制用 X 卡**。
+- **数字人小窗（full 线）固定在右上角**：270×480、距顶 120、距右 44，几何写在 `H01Z` 的 `--pip-*` 里，版面按它自动避让；提示词不许另写一套位置。黑帧线零占位。
 - **字由 HTML 承载**：canvas / 三维里不放文字。
 - **动效由时间线驱动**，任意一帧可 seek 复现；禁 `requestAnimationFrame`、`performance.now`、`Math.random`、`yoyo`/`repeat` 无限循环（按 `t` 的周期函数不算循环）。
 - 静态图不能当动效镜头，每屏必须有语义相关的元素级动画；产品 UI 用编号模板组件，示例数据标"场景演示"，不得冒充真实产品截图。
@@ -135,7 +167,7 @@ python3 能力库/动效库/check_catalog_sync.py         # 四层一致性门�
 
 ### 经验文档/能力层架构.md
 - 什么时候读：加 / 删 / 改卡、改选择层、想动 `presets.json` 的字段、怀疑"卡加了不生效"、要重造某一层之前
-- 包含：定义层 / 选择层 / 展开层 / 样片层四层各自由谁生成、`role` 的全部取值、一条命令加删卡、四层门禁查什么、`H00` / `H01XJ` / `H02SX` 各自读哪个字段、01 与 04 的关系、进件流水线 `admit.py`（scan/build/render/keep/drop、适配器、编号分配、筛完即清）、审阅的三条（样片才是审阅物 / scan 判不能提就别 build / 外观片不留文件）、来源标注只认 `src` 且必须带前缀
+- 包含：定义层 / 选择层 / 展开层 / 样片层四层各自由谁生成、`role` 的全部取值、一条命令加删卡、四层门禁查什么、`H00` / `H01XJ` / `H02SX` 各自读哪个字段、01 = 04 + 小窗（含两边的同步清单）、进件流水线 `admit.py`（scan/build/render/keep/drop、适配器、编号分配、筛完即清）、审阅的三条（样片才是审阅物 / scan 判不能提就别 build / 外观片不留文件）、来源标注只认 `src` 且必须带前缀
 - 不用读：只是对某张卡的参数不满意
 
 ### 经验文档/使用说明.md
@@ -145,7 +177,7 @@ python3 能力库/动效库/check_catalog_sync.py         # 四层一致性门�
 
 ### 经验文档/事故排查.md
 - 什么时候读：渲染失败、黑屏或静帧、音画不同步、字幕错位、整屏空白、Dify 输出残缺、页面只剩零点几秒
-- 包含：生成端结构保证与诊断清单、Dify 无输出、场景没识别、输出超限、失败定位与续跑、动效/黑屏/音画不同步的五种症状、空页与闪回、时间码缺失、render slot、**进件候选片渲染的五种成因（CDN 依赖 / paused 时间轴 / composition-id 不匹配 / template 片段 / scan 判「没有可 seek 的时间轴」）**、canvas 与三维、页面节奏锚定、`window.__cue`、成片复核工具、跑外部检查器的两条前提（Node ≥ 22 / Chrome `--no-sandbox`）、文字对比度的量测口径、已知未修
+- 包含：生成端结构保证与诊断清单、Dify 无输出、场景没识别、输出超限、失败定位与续跑、动效/黑屏/音画不同步的五种症状、空页与闪回、时间码缺失、render slot、**进件候选片渲染的五种成因（CDN 依赖 / paused 时间轴 / composition-id 不匹配 / template 片段 / scan 判「没有可 seek 的时间轴」）**、canvas 与三维、页面节奏锚定、`window.__cue`、成片复核工具、跑外部检查器的两条前提（Node ≥ 22 / Chrome `--no-sandbox`）、**数字人版（01）小窗与图片的三条症状**、文字对比度的量测口径、已知未修
 - 不用读：流程本身跑得通、只是想跑一遍
 
 ### 经验文档/生图与图片链路.md
@@ -155,7 +187,7 @@ python3 能力库/动效库/check_catalog_sync.py         # 四层一致性门�
 
 ### 经验文档/动效与能力卡.md
 - 什么时候读：改 `motion-kit.js`、`bg-kit.js`、`components.css`、`auto-fit.js` 之后；成片动效不对、卡片没生效、渲染黑屏或静止
-- 包含：运行时契约（空 tween、hf-seek、blend、workers、选择器作用域、组件逐条、`kt.split`、img 子节点、z-index、Illegal invocation、容器 `color:transparent` 连带子元素）、WebGL/shader 卡契约、ping-pong seek 重放、竖屏算尺寸公式、`__pt` 页间转场、样张验证、已知问题、GSAP 插件写法、不能落在文字上的卡（`text_safe`）与动效空转的两种原因
+- 包含：运行时契约（空 tween、hf-seek、blend、workers、选择器作用域、组件逐条、`kt.split`、img 子节点、z-index、Illegal invocation、容器 `color:transparent` 连带子元素）、WebGL/shader 卡契约、`kit.anno` 手绘标注（类型表 / 逐行 Range / dashoffset 揭示 / 与旧 `kit.rough` 并存）、ping-pong seek 重放、竖屏算尺寸公式、`__pt` 页间转场、样张验证、已知问题、GSAP 插件写法、不能落在文字上的卡（`text_safe`）与动效空转的两种原因
 - 不用读：加卡流程本身（那在 `能力层架构.md`）
 
 ## 文档不留过时信息（2026-11-15 定）

@@ -15,6 +15,7 @@ import argparse
 import json
 import pathlib
 import re
+import os
 import shutil
 
 ROOT = pathlib.Path(__file__).resolve().parent
@@ -46,12 +47,26 @@ NEW_CODE = {"UA09", "UA10", "UA11", "UA12", "UA13", "UA14", "UA15", "UA16"}
 NEW_PAIR = {"X39", "X40"}
 
 
+def _link_or_copy(src, dst):
+    """同一个文件被多个工程引用时用硬链接，省空间；跨卷/不支持时退回复制。"""
+    try:
+        if dst.exists():
+            dst.unlink()
+        os.link(src, dst)
+    except OSError:
+        shutil.copy(src, dst)
+
+
 def stage_of(card):
     cid, fam = card["id"], card.get("family", "")
     if card.get("cap") == "component-html":
         return "component"
     if card.get("cap") == "page-transition":
         return "none"
+    # 背景 role 一律走 bg 舞台：族名只决定样片目录，不决定画法。
+    # （Z17 点阵地球族属三维但 role=bg，族判定会把它当成 three 舞台，画不出东西）
+    if card.get("role") == "bg":
+        return "bg"
     if cid in NEW_SVG:
         return "svgbox"
     if cid in NEW_CODE:
@@ -564,6 +579,7 @@ PLUGINS_FOR = {
     "U27": ["MorphSVGPlugin"],
     "U28": ["MotionPathPlugin"],
     "U29": ["MotionPathPlugin"],
+    "UA43": ["DrawSVGPlugin"],
 }
 PLUGIN_DIR = VENDOR / "gsap-plugins"
 
@@ -756,7 +772,7 @@ def build_one(card, out_root: pathlib.Path):
         for _p in PLUGINS_FOR[cid]:
             shutil.copy(PLUGIN_DIR / (_p + ".min.js"), d / "plugins" / (_p + ".min.js"))
     if "photo.png" in html:
-        shutil.copy(PHOTO, d / "photo.png")
+        _link_or_copy(PHOTO, d / "photo.png")
     (d / "hyperframes.json").write_text(json.dumps({
         "name": "card-" + cid.lower(), "version": 1, "composition": "index.html",
         "width": 1080, "height": 1920, "fps": 30, "duration": SECONDS
@@ -767,11 +783,19 @@ def build_one(card, out_root: pathlib.Path):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--only", help="只生成某一张（编号）")
+    ap.add_argument("--cards-json", help="从卡定义 JSON 生成（候选：不进 presets 也能出片）")
+    ap.add_argument("--out", help="产物根目录，默认 样片/全卡审阅；候选传 样片/待筛/<批次>")
     ap.add_argument("--list", action="store_true")
     ap.add_argument("--tsv", action="store_true", help="只打印 族/编号/名字/目录，给渲染脚本用")
     args = ap.parse_args()
-    cards = [c for c in json.loads(PRESETS.read_text(encoding="utf-8"))["presets"]
-             if c.get("status") == "ready" and c.get("cap") != "page-transition"]
+    if args.cards_json:
+        raw = json.loads(pathlib.Path(args.cards_json).read_text(encoding="utf-8"))
+        cards = [c for c in (raw if isinstance(raw, list) else [raw])
+                 if c.get("cap") != "page-transition"]
+    else:
+        cards = [c for c in json.loads(PRESETS.read_text(encoding="utf-8"))["presets"]
+                 if c.get("status") == "ready" and c.get("cap") != "page-transition"]
+    out_root = pathlib.Path(args.out).resolve() if args.out else OUT
     if args.only:
         cards = [c for c in cards if c["id"] == args.only]
         if not cards:
@@ -782,14 +806,14 @@ def main():
         return
     rows = []
     for c in cards:
-        d = build_one(c, OUT)
+        d = build_one(c, out_root)
         rows.append("\t".join([c.get("family", "其他"), c["id"], c["name"], str(d)]))
         if args.tsv:
             print("\t".join([c.get("family", "其他"), c["id"], c["name"], str(d)]))
         else:
             print("%s %-10s -> %s" % (c["id"], c["name"], d.relative_to(WORKSPACE)))
     if not args.only:
-        (OUT / "渲染清单.tsv").write_text("\n".join(rows) + "\n", encoding="utf-8")
+        (out_root / "渲染清单.tsv").write_text("\n".join(rows) + "\n", encoding="utf-8")
     if not args.tsv:
         print("共 %d 张" % len(cards))
 

@@ -1,7 +1,7 @@
 {
  "version": 2,
  "updated": "2026-11-17",
- "note": "每行 = 一个动作预设。status: ready=可直接用 / archived=有实现有样片但不接生产 / needs-work=先改成确定性 / skip=不入管线。role: bg|component|entrance_text|entrance_block|state_text|state_block|component_motion|decoration|special_dom|page_transition|archive|none —— 选择层只认 role，不再手写目录。",
+ "note": "每行 = 一个动作预设。status: ready=可直接用 / archived=有实现有样片但不接生产 / needs-work=先改成确定性 / skip=不入管线。role: bg|component|entrance_text|entrance_block|state_text|state_block|component_motion|decoration|page_transition —— 选择层只认 role。出处只认 src（必须带前缀，规范见 来源台账.md §六）；origin 字段已废弃，不要再写。",
  "presets": [
   {
    "id": "T01",
@@ -73,29 +73,6 @@
    "role": "entrance_text"
   },
   {
-   "id": "T04",
-   "name": "描边写字",
-   "family": "绘制",
-   "status": "ready",
-   "cap": "stroke",
-   "src": "#3 StrokeText",
-   "params": {
-    "strokeWidth": 1.4,
-    "color": "#38d6ff",
-    "fillDelay": 0.4,
-    "dur": 0.4
-   },
-   "use": "关键词强调；一句里只做一个词",
-   "avoid": "整段描边；细字重描边会糊",
-   "code": "var _t = document.querySelector('{{sel}}');\n_t.style.webkitTextStroke = '{{strokeWidth}}px currentColor';\n_t.style.color = 'transparent';\ntimeline.to(_t, {color:'{{color}}', duration:{{dur}}, ease:'power1.out'}, {{at}} + {{fillDelay}});",
-   "origin": "reactbits",
-   "needs": [
-    "text"
-   ],
-   "role": "none",
-   "note": "注入式图形/描边：要额外 SVG 或 plugin，本链路不展开"
-  },
-  {
    "id": "T05",
    "name": "打字机（裁剪揭示）",
    "family": "入场",
@@ -117,28 +94,6 @@
    "role": "entrance_text"
   },
   {
-   "id": "T06",
-   "name": "数字递增",
-   "family": "状态",
-   "status": "ready",
-   "cap": "counter",
-   "src": "#10 CountUp",
-   "params": {
-    "from": 0,
-    "to": 100,
-    "dur": 1.2
-   },
-   "use": "数据、金额、百分比；必须有语义",
-   "avoid": "无意义装饰数字；同一屏两个以上",
-   "code": "var _n = document.querySelector('{{sel}}');\nvar _o = {'v':{{from}}};\ntimeline.to(_o, {'v':{{to}}, 'duration':{{dur}}, 'ease':'power2.out',\n  'onUpdate':function(){ _n.textContent = Math.round(_o.v); }}, {{at}});",
-   "origin": "reactbits",
-   "needs": [
-    "text"
-   ],
-   "role": "none",
-   "note": "状态改写：要预先存在的文本块，本链路不展开"
-  },
-  {
    "id": "T09",
    "name": "翻牌落字",
    "family": "入场",
@@ -157,26 +112,6 @@
     "text"
    ],
    "role": "entrance_text"
-  },
-  {
-   "id": "W01",
-   "name": "照片包裹",
-   "family": "结构",
-   "status": "ready",
-   "cap": "frame",
-   "src": "自建:样张二",
-   "params": {
-    "r": 26,
-    "dur": 0.6
-   },
-   "use": "给照片块加圆角 + 轻微落定；不新增图形",
-   "avoid": "每屏都包；照片本身已满幅时",
-   "code": "timeline.fromTo('{{sel}}', {'borderRadius':'0px', 'scale':1.03, 'overflow':'hidden'},\n  {'borderRadius':'{{r}}px', 'scale':1, 'duration':{{dur}}, 'ease':'power2.out'}, {{at}});",
-   "needs": [
-    "img"
-   ],
-   "role": "none",
-   "note": "结构改写：要额外 DOM，本链路不展开"
   },
   {
    "id": "X01",
@@ -816,61 +751,6 @@
    ]
   },
   {
-   "id": "C01",
-   "name": "缓推",
-   "family": "镜头",
-   "layer": "media",
-   "status": "ready",
-   "cap": "camera",
-   "src": "自建:camera-push",
-   "params": {
-    "to": 1.06,
-    "dur": 4.0
-   },
-   "use": "整屏缓推；照片、满屏图层、图块都行",
-   "avoid": "纯色屏；单次推近超过 20% 会露边",
-   "code": "timeline.fromTo('{{sel}}', {'scale':1}, {'scale':{{to}}, 'duration':{{dur}}, 'ease':'none'}, {{at}});",
-   "role": "none",
-   "note": "整屏镜头：与页间转场抢 transform，本链路不展开"
-  },
-  {
-   "id": "C02",
-   "name": "缓拉",
-   "family": "镜头",
-   "layer": "media",
-   "status": "ready",
-   "cap": "camera",
-   "src": "自建:camera-pull",
-   "params": {
-    "from": 1.08,
-    "dur": 4.0
-   },
-   "use": "开场收束、结尾释放",
-   "avoid": "满屏照片拉太小会露出底色",
-   "code": "timeline.fromTo('{{sel}}', {'scale':{{from}}}, {'scale':1, 'duration':{{dur}}, 'ease':'none'}, {{at}});",
-   "role": "none",
-   "note": "整屏镜头：与页间转场抢 transform，本链路不展开"
-  },
-  {
-   "id": "C03",
-   "name": "横移",
-   "family": "镜头",
-   "layer": "media",
-   "status": "ready",
-   "cap": "camera",
-   "src": "自建:camera-pan",
-   "params": {
-    "from": -3,
-    "to": 3,
-    "dur": 4.0
-   },
-   "use": "左右取景，配合文字固定",
-   "avoid": "移动幅度超过 6% 会露边",
-   "code": "timeline.fromTo('{{sel}}', {'xPercent':{{from}}}, {'xPercent':{{to}}, 'duration':{{dur}}, 'ease':'sine.inOut'}, {{at}});",
-   "role": "none",
-   "note": "整屏镜头：与页间转场抢 transform，本链路不展开"
-  },
-  {
    "id": "K03",
    "name": "逐字错位",
    "family": "字形",
@@ -891,29 +771,6 @@
     "text"
    ],
    "role": "entrance_text"
-  },
-  {
-   "id": "G02",
-   "name": "网格重排",
-   "family": "版面",
-   "layer": "element",
-   "status": "ready",
-   "cap": "flip",
-   "src": "ported:filter-gallery",
-   "params": {
-    "dur": 0.85,
-    "ease": "power3.inOut",
-    "stagger": 0.03,
-    "outOp": 0.12
-   },
-   "use": "同一屏里换格：每张卡按 data-flip-from / data-flip-to 的两个坐标平移；同容器里标 data-flip-out 的元素同时淡到 outOp。起点由 HTML 摆好，卡不测量",
-   "avoid": "元素尺寸不一致（只会平移，不会变形）；超过 8 个元素；和 C01 镜头推拉同屏抢焦点",
-   "code": "(function () {\n  var _els = [].slice.call(document.querySelectorAll('{{sel}}'));\n  var _boxes = [];\n  _els.forEach(function (n, i) {\n    var _f = (n.getAttribute('data-flip-from') || '').split(',');\n    var _t = (n.getAttribute('data-flip-to') || '').split(',');\n    if (_f.length < 2 || _t.length < 2) return;\n    var _dx = parseFloat(_t[0]) - parseFloat(_f[0]);\n    var _dy = parseFloat(_t[1]) - parseFloat(_f[1]);\n    timeline.fromTo(n, {'x':0, 'y':0},\n      {'x':_dx, 'y':_dy, 'duration':{{dur}}, 'ease':'{{ease}}'}, {{at}} + i * {{stagger}});\n    var _b = n.parentElement;\n    while (_b && !_b.hasAttribute('data-flip-container')) _b = _b.parentElement;\n    if (_b && _boxes.indexOf(_b) < 0) _boxes.push(_b);\n  });\n  _boxes.forEach(function (_b) {\n    var _o = _b.querySelectorAll('[data-flip-out]');\n    if (!_o.length) return;\n    timeline.to(_o, {'opacity':{{outOp}}, 'duration':{{dur}} * 0.7, 'ease':'power2.out'}, {{at}});\n  });\n})();",
-   "needs": [
-    "ui"
-   ],
-   "role": "none",
-   "note": "版面重排：要真实布局锚点，本链路不展开"
   },
   {
    "id": "X03",
@@ -992,93 +849,6 @@
     "text"
    ],
    "role": "entrance_text"
-  },
-  {
-   "id": "K07",
-   "name": "手绘下划线",
-   "family": "字形",
-   "layer": "element",
-   "status": "ready",
-   "cap": "inject+draw",
-   "src": "自建:type-underline",
-   "params": {
-    "h": 6,
-    "color": "#D8452C",
-    "dur": 0.6,
-    "ease": "power2.out"
-   },
-   "use": "单行词/句被划上重点；比加粗自然",
-   "avoid": "body/title 这类多行块（逐行下划线需要靠背景片段，别指整段）；深底不换色会脏",
-   "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t) return;\n  // 下划线用背景片段画：inline 元素每一行片段各自铺一条，天然跟着折行走，\n  // 不用测量文字盒，也不会像绝对定位那样在换行后错位（2026-11-16 s02 实测）。\n  _t.style.backgroundImage = 'linear-gradient({{color}},{{color}})';\n  _t.style.backgroundRepeat = 'no-repeat';\n  _t.style.backgroundSize = '0% {{h}}px';\n  _t.style.backgroundPosition = '0 100%';\n  _t.style.webkitBoxDecorationBreak = 'clone';\n  _t.style.boxDecorationBreak = 'clone';\n  _t.style.paddingBottom = '8px';\n  timeline.to(_t, {'backgroundSize': '100% {{h}}px', 'duration': {{dur}}, 'ease': '{{ease}}'}, {{at}});\n})();",
-   "needs": [
-    "text"
-   ],
-   "role": "none",
-   "note": "笔刷标注：要额外 plugin，本链路不展开"
-  },
-  {
-   "id": "K08",
-   "name": "手绘圈",
-   "family": "字形",
-   "layer": "element",
-   "status": "ready",
-   "cap": "inject+draw",
-   "src": "自建:type-circle",
-   "params": {
-    "w": 3,
-    "color": "#D8452C",
-    "dur": 0.55
-   },
-   "use": "圈住一个数字或短词",
-   "avoid": "整句；圆比字大太多",
-   "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t) return;\n  if (getComputedStyle(_t).position === 'static') { _t.style.position = 'relative'; }\n  var _c = document.createElement('i');\n  _c.style.cssText = 'position:absolute;left:-.16em;right:-.16em;top:-.12em;bottom:-.16em;border:{{w}}px solid {{color}};border-radius:50%;transform:scale(.6);opacity:0;z-index:0;';\n  _t.appendChild(_c);\n  timeline.to(_c, {'scale':1, 'opacity':1, 'duration':{{dur}}, 'ease':'back.out'}, {{at}});\n})();",
-   "needs": [
-    "text"
-   ],
-   "role": "none",
-   "note": "笔刷标注：要额外 plugin，本链路不展开"
-  },
-  {
-   "id": "K10",
-   "name": "竖排",
-   "family": "字形",
-   "layer": "element",
-   "status": "ready",
-   "cap": "vertical+mask",
-   "src": "自建:type-vertical",
-   "params": {
-    "dur": 0.8
-   },
-   "use": "四到八个字的标题；竖屏天生适合",
-   "avoid": "长句；标点会和字挤在一起",
-   "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t) return;\n  _t.style.writingMode = 'vertical-rl';\n  _t.style.display = 'inline-block';\n  _t.style.letterSpacing = '.1em';\n  timeline.fromTo(_t, {'clipPath':'inset(0% 0% 100% 0%)'},\n    {'clipPath':'inset(0% 0% 0% 0%)', 'duration':{{dur}}, 'ease':'power3.inOut'}, {{at}});\n})();",
-   "needs": [
-    "text"
-   ],
-   "role": "none",
-   "note": "笔刷标注：要额外 plugin，本链路不展开"
-  },
-  {
-   "id": "K12",
-   "name": "删除线",
-   "family": "字形",
-   "layer": "element",
-   "status": "ready",
-   "cap": "inject+draw",
-   "src": "自建:type-strike",
-   "params": {
-    "h": 5,
-    "color": "#D8452C",
-    "dur": 0.45
-   },
-   "use": "否定一个旧说法，再给新的",
-   "avoid": "和 K07 同时用在同一行",
-   "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t) return;\n  if (getComputedStyle(_t).position === 'static') { _t.style.position = 'relative'; }\n  var _l = document.createElement('i');\n  _l.style.cssText = 'position:absolute;left:-.02em;right:-.02em;top:.54em;height:{{h}}px;background:{{color}};transform:scaleX(0);transform-origin:0 50%;z-index:0;';\n  _t.appendChild(_l);\n  timeline.to(_l, {'scaleX':1, 'duration':{{dur}}, 'ease':'power2.inOut'}, {{at}});\n})();",
-   "needs": [
-    "text"
-   ],
-   "role": "none",
-   "note": "笔刷标注：要额外 plugin，本链路不展开"
   },
   {
    "id": "S02",
@@ -1233,44 +1003,6 @@
    "role": "component_motion"
   },
   {
-   "id": "M04",
-   "name": "暗角",
-   "family": "材质",
-   "layer": "overlay",
-   "status": "ready",
-   "cap": "gradient-overlay",
-   "src": "remotion:vignette",
-   "params": {
-    "op": 1,
-    "dur": 1.2,
-    "z": 25
-   },
-   "use": "每一屏都能加；把注意力压回中心",
-   "avoid": "和 M05 同时全开会闷",
-   "code": "(function () {\n  var _b = document.querySelector('{{sel}}');\n  if (!_b) return;\n  var _d = document.createElement('i');\n  _d.style.cssText = 'position:absolute;inset:0;pointer-events:none;z-index:{{z}};opacity:0;background:radial-gradient(120% 92% at 50% 45%,transparent 38%,rgba(0,0,0,.62) 100%);';\n  _b.appendChild(_d);\n  timeline.to(_d, {'opacity':{{op}}, 'duration':{{dur}}, 'ease':'none'}, {{at}});\n})();",
-   "role": "none",
-   "note": "材质叠加：与背景卡抢同一层，本链路不展开"
-  },
-  {
-   "id": "M05",
-   "name": "辉光",
-   "family": "材质",
-   "layer": "overlay",
-   "status": "ready",
-   "cap": "gradient-overlay",
-   "src": "remotion:glow",
-   "params": {
-    "op": 1,
-    "dur": 1.2,
-    "z": 25
-   },
-   "use": "片头、片尾、关键结论",
-   "avoid": "和暗角叠满",
-   "code": "(function () {\n  var _b = document.querySelector('{{sel}}');\n  if (!_b) return;\n  var _d = document.createElement('i');\n  _d.style.cssText = 'position:absolute;inset:0;pointer-events:none;z-index:{{z}};opacity:0;background:radial-gradient(680px 680px at 50% 30%,rgba(255,240,210,.20),transparent 68%);';\n  _b.appendChild(_d);\n  timeline.to(_d, {'opacity':{{op}}, 'duration':{{dur}}, 'ease':'none'}, {{at}});\n})();",
-   "role": "none",
-   "note": "材质叠加：与背景卡抢同一层，本链路不展开"
-  },
-  {
    "id": "X11",
    "name": "左擦除",
    "family": "离场",
@@ -1415,186 +1147,6 @@
    "role": "state_text"
   },
   {
-   "id": "M12",
-   "name": "光扫",
-   "family": "材质",
-   "layer": "overlay",
-   "status": "ready",
-   "cap": "sweep",
-   "src": "remotion:shine",
-   "params": {
-    "op": 1,
-    "dur": 1.4,
-    "z": 26
-   },
-   "use": "一道高光横着扫过画面；片头片尾",
-   "avoid": "一屏两次",
-   "code": "(function () {\n  var _b = document.querySelector('{{sel}}');\n  if (!_b) return;\n  var _d = document.createElement('i');\n  _d.style.cssText = 'position:absolute;inset:0;pointer-events:none;z-index:{{z}};opacity:0;background:linear-gradient(100deg,transparent 42%,rgba(255,255,255,.16) 50%,transparent 58%);background-size:220% 220%;background-position:0% 50%;';\n  _b.appendChild(_d);\n  timeline.to(_d, {'opacity':{{op}}, 'duration':.3, 'ease':'none'}, {{at}});\n  timeline.to(_d, {'backgroundPosition':'100% 50%', 'duration':{{dur}}, 'ease':'none'}, {{at}});\n})();",
-   "role": "none",
-   "note": "材质叠加：与背景卡抢同一层，本链路不展开"
-  },
-  {
-   "id": "M16",
-   "name": "网点重",
-   "family": "材质",
-   "layer": "overlay",
-   "status": "ready",
-   "cap": "pattern-overlay",
-   "src": "remotion:halftone",
-   "params": {
-    "op": 0.55,
-    "dur": 1.0,
-    "z": 25
-   },
-   "use": "粗网点，报章印刷感",
-   "avoid": "小字区域",
-   "code": "(function () {\n  var _b = document.querySelector('{{sel}}');\n  if (!_b) return;\n  var _d = document.createElement('i');\n  _d.style.cssText = 'position:absolute;inset:0;pointer-events:none;z-index:{{z}};opacity:0;background-image:radial-gradient(circle at 50% 50%,rgba(10,12,12,.68) 1.6px,transparent 2.2px);background-size:14px 14px;';\n  _b.appendChild(_d);\n  timeline.to(_d, {'opacity':{{op}}, 'duration':{{dur}}, 'ease':'none'}, {{at}});\n})();",
-   "role": "none",
-   "note": "材质叠加：与背景卡抢同一层，本链路不展开"
-  },
-  {
-   "id": "M20",
-   "name": "光晕",
-   "family": "材质",
-   "layer": "overlay",
-   "status": "ready",
-   "cap": "glow",
-   "src": "remotion:glow",
-   "params": {
-    "op": 1,
-    "dur": 1.2,
-    "z": 26
-   },
-   "use": "暖光晕，片头片尾",
-   "avoid": "压在正文上",
-   "code": "(function () {\n  var _b = document.querySelector('{{sel}}');\n  if (!_b) return;\n  var _d = document.createElement('i');\n  _d.style.cssText = 'position:absolute;inset:0;pointer-events:none;z-index:{{z}};opacity:0;background:radial-gradient(520px 520px at 50% 26%,rgba(255,226,180,.40),transparent 70%);';\n  _b.appendChild(_d);\n  timeline.to(_d, {'opacity':{{op}}, 'duration':{{dur}}, 'ease':'none'}, {{at}});\n})();",
-   "role": "none",
-   "note": "材质叠加：与背景卡抢同一层，本链路不展开"
-  },
-  {
-   "id": "M21",
-   "name": "色带",
-   "family": "材质",
-   "layer": "overlay",
-   "status": "ready",
-   "cap": "bands",
-   "src": "remotion:bands",
-   "params": {
-    "op": 0.45,
-    "dur": 1.0,
-    "z": 25
-   },
-   "use": "横向色阶带，做复古/印刷",
-   "avoid": "浅底",
-   "code": "(function () {\n  var _b = document.querySelector('{{sel}}');\n  if (!_b) return;\n  var _d = document.createElement('i');\n  _d.style.cssText = 'position:absolute;inset:0;pointer-events:none;z-index:{{z}};opacity:0;background:repeating-linear-gradient(180deg,rgba(255,255,255,.10) 0 40px,rgba(0,0,0,.16) 40px 80px);';\n  _b.appendChild(_d);\n  timeline.to(_d, {'opacity':{{op}}, 'duration':{{dur}}, 'ease':'none'}, {{at}});\n})();",
-   "role": "none",
-   "note": "材质叠加：与背景卡抢同一层，本链路不展开"
-  },
-  {
-   "id": "DA02",
-   "name": "条形换值",
-   "family": "状态",
-   "layer": "element",
-   "status": "ready",
-   "cap": "data-bars",
-   "src": "自建:data-bars",
-   "params": {
-    "heights": "24,86,52,100",
-    "dur": 0.55,
-    "stagger": 0.08
-   },
-   "use": "柱状图数据刷新：柱子长到新高度",
-   "avoid": "超过 8 根",
-   "code": "(function () {\n  var _els = document.querySelectorAll('{{sel}}');\n  var _hs = '{{heights}}'.split(',');\n  for (var i = 0; i < _els.length; i++) {\n    var _h = (_hs[i % _hs.length] || '50').replace('%','') + '%';\n    timeline.to(_els[i], {'height':_h, 'duration':{{dur}}, 'ease':'power2.inOut'}, {{at}} + i * {{stagger}});\n  }\n})();",
-   "needs": [
-    "text"
-   ],
-   "role": "special_dom",
-   "note": "数据图表组件"
-  },
-  {
-   "id": "DA03",
-   "name": "行新增",
-   "family": "状态",
-   "layer": "element",
-   "status": "ready",
-   "cap": "row-add",
-   "src": "自建:data-rows",
-   "params": {
-    "dur": 0.45,
-    "ease": "power3.out"
-   },
-   "use": "列表里多出一行；配 S04 勾选",
-   "avoid": "一次加三行以上",
-   "code": "timeline.fromTo('{{sel}}', {'scaleY':0, 'opacity':0, 'transformOrigin':'50% 0%'},\n  {'scaleY':1, 'opacity':1, 'duration':{{dur}}, 'ease':'{{ease}}'}, {{at}});",
-   "needs": [
-    "text"
-   ],
-   "role": "special_dom",
-   "note": "数据图表组件"
-  },
-  {
-   "id": "DA04",
-   "name": "状态翻转",
-   "family": "状态",
-   "layer": "element",
-   "status": "ready",
-   "cap": "swap",
-   "src": "自建:data-swap",
-   "params": {
-    "text": "已成交",
-    "dur": 0.5
-   },
-   "use": "标签从“跟进中”变成“已成交”",
-   "avoid": "翻成超过 6 个字",
-   "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t) return;\n  timeline.to(_t, {'opacity':0, 'scale':.92, 'duration':{{dur}} * .45, 'ease':'power2.in'}, {{at}});\n  timeline.set(_t, {'textContent':'{{text}}'}, {{at}} + {{dur}} * .45);\n  timeline.to(_t, {'opacity':1, 'scale':1, 'duration':{{dur}} * .55, 'ease':'power2.out'}, {{at}} + {{dur}} * .45);\n})();",
-   "needs": [
-    "text"
-   ],
-   "role": "special_dom",
-   "note": "数据图表组件"
-  },
-  {
-   "id": "I01",
-   "name": "指针点击",
-   "family": "交互",
-   "layer": "overlay",
-   "status": "ready",
-   "cap": "pointer",
-   "src": "ported:now-playing/modal-open",
-   "params": {
-    "move": 0.8,
-    "hold": 0.3,
-    "press": 0.42,
-    "hit": "rgba(134,240,192,.42)"
-   },
-   "use": "指针移到目标元素中心（按真实位置量，不写坐标）、切手型、悬停高亮、按下回弹；目标元素加 data-anim 即可",
-   "avoid": "一屏点三次以上；指针压住正文；目标元素被 display:none 挡住（卡会临时显示出来量一次）",
-   "code": "(function () {\n  var _p = document.querySelector('{{sel}}'), _t = document.querySelector('{{sel2}}');\n  if (!_p || !_t) return;\n  var _sc = _p.closest('.scene');\n  var _st = _sc ? _sc.getAttribute('style') : null;\n  if (_sc && getComputedStyle(_sc).display === 'none') {\n    _sc.style.display = 'block';\n    _sc.style.visibility = 'hidden';\n  }\n  var _pr = _p.getBoundingClientRect(), _tr = _t.getBoundingClientRect();\n  if (_st !== null) _sc.setAttribute('style', _st || '');\n  var _dx = (_tr.left + _tr.width / 2) - (_pr.left + 6);\n  var _dy = (_tr.top + _tr.height / 2) - (_pr.top + 4);\n  timeline.to(_p, {'x':_dx, 'y':_dy, 'duration':{{move}}, 'ease':'power2.inOut'}, {{at}});\n  timeline.call(function () { _p.classList.add('is-hand'); }, null, {{at}} + {{move}});\n  timeline.to(_t, {'borderColor':'{{hit}}', 'backgroundColor':'rgba(134,240,192,.10)', 'duration':{{hold}}, 'ease':'power2.out'}, {{at}} + {{move}});\n  timeline.fromTo(_p, {'scale':1}, {'scale':0.86, 'duration':0.1, 'ease':'power2.in'}, {{at}} + {{move}} + {{hold}});\n  timeline.to(_p, {'scale':1, 'duration':{{press}}, 'ease':'back.out'}, {{at}} + {{move}} + {{hold}} + 0.12);\n})();",
-   "role": "none",
-   "note": "指针演示：没有真实交互对象，本链路不展开"
-  },
-  {
-   "id": "Z01",
-   "name": "三维面板墙",
-   "family": "三维",
-   "layer": "camera",
-   "status": "ready",
-   "cap": "three-scene",
-   "src": "ported:three-animate",
-   "params": {
-    "dur": 4.2,
-    "camZ": 8.6,
-    "fogNear": 12,
-    "fogFar": 30
-   },
-   "use": "场景里放一块 1080×1920 的 canvas，卡进去建 three 场景、按时间线 t 重绘；整组转向 + 相机推进",
-   "avoid": "和照片同屏（canvas 与照片二选一）；没有引入 three.global.js 的场景",
-   "code": "(function () {\n  var _cv = document.querySelector('{{sel}}');\n  if (!_cv || !window.THREE) return;\n  var _w = _cv.width || 1080, _h = _cv.height || 1920;\n  var _r = new THREE.WebGLRenderer({canvas:_cv, antialias:true});\n  _r.setSize(_w, _h, false);\n  _r.setPixelRatio(1);\n  var _s = new THREE.Scene();\n  _s.background = new THREE.Color(0x0a0b0b);\n  _s.fog = new THREE.Fog(0x0a0b0b, {{fogNear}}, {{fogFar}});\n  var _c = new THREE.PerspectiveCamera(38, _w / _h, 0.1, 120);\n  _c.position.set(0, 0, {{camZ}});\n  var _g = new THREE.Group();\n  _s.add(_g);\n  var _geo = new THREE.PlaneGeometry(1.2, 0.76);\n  var _pal = [0x2f4a44,0x33425a,0x1f6f5c,0x46586b,0x1b5d52,0x3c4a6b,0x2b3a44,0x2a5548,0x35405a];\n  var _ps = [];\n  for (var i = 0; i < 9; i++) {\n    var m = new THREE.Mesh(_geo, new THREE.MeshBasicMaterial({color:_pal[i], transparent:true, opacity:0.92, side:THREE.DoubleSide}));\n    m.position.set(((i % 3) - 1) * 1.35, (Math.floor(i / 3) - 1) * 1.02, 0);\n    _g.add(m);\n    _ps.push(m);\n  }\n  var _o = {'p': 0};\n  timeline.to(_o, {'p': 1, 'duration':{{dur}}, 'ease':'none', 'onUpdate': function () {\n    var p = _o.p;\n    _g.rotation.y = -0.3 + p * 0.6;\n    _g.rotation.x = 0.18 - p * 0.32;\n    _c.position.z = {{camZ}} - p * 1.6;\n    for (var k = 0; k < _ps.length; k++) {\n      _ps[k].position.z = Math.sin(p * Math.PI * 2 + k * 0.5) * 0.34;\n      _ps[k].rotation.z = Math.sin(p * 3 + k) * 0.05;\n    }\n    _r.render(_s, _c);\n  }}, {{at}});\n})();",
-   "role": "none",
-   "note": "三维：要 three.js 与 canvas，本链路不展开"
-  },
-  {
    "id": "G03",
    "name": "共享元素放大",
    "family": "版面",
@@ -1615,50 +1167,6 @@
     "ui"
    ],
    "role": "entrance_block"
-  },
-  {
-   "id": "I02",
-   "name": "指针多步",
-   "family": "交互",
-   "layer": "overlay",
-   "status": "ready",
-   "cap": "pointer-steps",
-   "src": "ported:now-playing/modal-open",
-   "params": {
-    "move": 0.55,
-    "hold": 0.28,
-    "press": 0.4,
-    "gap": 0.28,
-    "hit": "rgba(134,240,192,.42)"
-   },
-   "use": "指针按 data-pointer-path 里列的 data-anim 名依次走位、悬停高亮、点击回弹；落点在建表时按元素中心量，不写坐标",
-   "avoid": "一屏点三次以上；目标元素不存在；指针压住正文",
-   "code": "(function () {\n  var _p = document.querySelector('{{sel}}');\n  if (!_p) return;\n  var _sc = _p.closest('.scene');\n  var _st = _sc ? _sc.getAttribute('style') : null;\n  if (_sc && getComputedStyle(_sc).display === 'none') {\n    _sc.style.display = 'block';\n    _sc.style.visibility = 'hidden';\n  }\n  var _pr = _p.getBoundingClientRect();\n  var _path = (_p.getAttribute('data-pointer-path') || '').split(',');\n  var _t = {{at}};\n  _path.forEach(function (name) {\n    name = (name || '').trim();\n    if (!name) return;\n    var _el = document.querySelector('[data-anim=\"' + name + '\"]') || document.querySelector(name);\n    if (!_el) return;\n    var _r = _el.getBoundingClientRect();\n    timeline.to(_p, {'x': (_r.left + _r.width / 2) - (_pr.left + 6),\n                     'y': (_r.top + _r.height / 2) - (_pr.top + 4),\n                     'duration': {{move}}, 'ease': 'power2.inOut'}, _t);\n    timeline.to(_el, {'borderColor': '{{hit}}', 'backgroundColor': 'rgba(134,240,192,.10)',\n                      'duration': {{hold}}, 'ease': 'power2.out'}, _t + {{move}});\n    timeline.fromTo(_p, {'scale': 1}, {'scale': 0.86, 'duration': 0.1, 'ease': 'power2.in'}, _t + {{move}} + {{hold}});\n    timeline.to(_p, {'scale': 1, 'duration': {{press}}, 'ease': 'back.out'}, _t + {{move}} + {{hold}} + 0.12);\n    _t = _t + {{move}} + {{hold}} + {{gap}};\n  });\n  if (_st !== null) _sc.setAttribute('style', _st || '');\n})();",
-   "role": "none",
-   "note": "指针演示：没有真实交互对象，本链路不展开"
-  },
-  {
-   "id": "Z02",
-   "name": "三维点阵波",
-   "family": "三维",
-   "layer": "camera",
-   "status": "ready",
-   "cap": "three-scene",
-   "src": "ported:three-effects",
-   "params": {
-    "dur": 3.4,
-    "grid": 38,
-    "size": 0.06,
-    "camY": 3.4,
-    "camZ": 11.5,
-    "fogNear": 14,
-    "fogFar": 34
-   },
-   "use": "canvas 里铺一层点阵，按时间线 t 用双正弦起伏；场景里放 1080×1920 的 canvas，页面引 three.global.js",
-   "avoid": "和照片同屏；正文压在点阵上（先加遮罩）",
-   "code": "(function () {\n  var _cv = document.querySelector('{{sel}}');\n  if (!_cv || !window.THREE) return;\n  var _w = _cv.width || 1080, _h = _cv.height || 1920;\n  var _r = new THREE.WebGLRenderer({canvas: _cv, antialias: true});\n  _r.setSize(_w, _h, false);\n  _r.setPixelRatio(1);\n  var _s = new THREE.Scene();\n  _s.background = new THREE.Color(0x0a0b0b);\n  _s.fog = new THREE.Fog(0x0a0b0b, {{fogNear}}, {{fogFar}});\n  var _c = new THREE.PerspectiveCamera(46, _w / _h, 0.1, 120);\n  _c.position.set(0, {{camY}}, {{camZ}});\n  _c.lookAt(0, 0, 0);\n  var N = {{grid}};\n  var _g = new THREE.BufferGeometry();\n  var _pos = new Float32Array(N * N * 3);\n  var _base = [];\n  for (var i = 0; i < N; i++) {\n    for (var j = 0; j < N; j++) {\n      var k = (i * N + j) * 3;\n      var bx = (i / (N - 1) - 0.5) * 13;\n      var bz = (j / (N - 1) - 0.5) * 13;\n      _pos[k] = bx; _pos[k + 1] = 0; _pos[k + 2] = bz;\n      _base.push([bx, bz]);\n    }\n  }\n  _g.setAttribute('position', new THREE.BufferAttribute(_pos, 3));\n  var _m = new THREE.PointsMaterial({color: 0x86f0c0, size: {{size}}, transparent: true, opacity: 0.8});\n  var _pts = new THREE.Points(_g, _m);\n  _pts.position.y = -1.4;\n  _s.add(_pts);\n  var _o = {'p': 0};\n  timeline.to(_o, {'p': 1, 'duration': {{dur}}, 'ease': 'none', 'onUpdate': function () {\n    var p = _o.p, arr = _g.attributes.position.array;\n    for (var idx = 0; idx < _base.length; idx++) {\n      var bx = _base[idx][0], bz = _base[idx][1];\n      arr[idx * 3 + 1] = Math.sin(bx * 0.5 + p * 5.4) * 0.55 + Math.cos(bz * 0.44 - p * 3.6) * 0.45;\n    }\n    _g.attributes.position.needsUpdate = true;\n    _pts.rotation.y = -0.18 + p * 0.3;\n    _r.render(_s, _c);\n  }}, {{at}});\n})();",
-   "role": "none",
-   "note": "三维：要 three.js 与 canvas，本链路不展开"
   },
   {
    "id": "S12",
@@ -1841,440 +1349,6 @@
    ]
   },
   {
-   "id": "W11",
-   "name": "照片波动",
-   "family": "照片",
-   "layer": "media",
-   "status": "ready",
-   "cap": "整幅正弦推移，按进度从 0 到满",
-   "src": "remotion:effects/wave",
-   "params": {
-    "mode": 0,
-    "amount": 1,
-    "dur": 1.2,
-    "ease": "power2.inOut"
-   },
-   "use": "照片是主体、要「液体感」时",
-   "avoid": "人像脸部特写（会扭曲五官）",
-   "code": "(function () {\n  var _el = document.querySelector('{{sel}}');\n  if (!_el || !window.kit || !kit.deform) return;\n  var _img = null;\n  if (_el.tagName === 'IMG') { _img = _el; }\n  else {\n    var _bg = getComputedStyle(_el).backgroundImage || '';\n    var _m = _bg.match(/url\\([\"']?(.*?)[\"']?\\)/);\n    if (_m) { _img = new Image(); _img.src = _m[1]; }\n  }\n  if (!_img) return;\n  var _host = _el.tagName === 'IMG' ? _el.parentNode : _el;\n  if (!_host) return;\n  if (getComputedStyle(_host).position === 'static') _host.style.position = 'relative';\n  var _r = _el.getBoundingClientRect(), _hr = _host.getBoundingClientRect();\n  var _cv = document.createElement('canvas');\n  _cv.width = 1080; _cv.height = 1920;\n  _cv.style.cssText = 'position:absolute;pointer-events:none;display:block;z-index:3;'\n    + 'left:' + (_r.left - _hr.left) + 'px;top:' + (_r.top - _hr.top) + 'px;'\n    + 'width:' + _r.width + 'px;height:' + _r.height + 'px;';\n  var _fx = kit.deform(_cv, _img, {{mode}});\n  if (!_fx) return;\n  _host.appendChild(_cv);\n  var _drv = { p: 0 };\n  timeline.to(_drv, { 'p': {{amount}}, 'duration': {{dur}}, 'ease': '{{ease}}', 'onUpdate': function () {\n    _fx.draw(_drv.p, timeline.time());\n  } }, {{at}});\n})();",
-   "needs": [
-    "img"
-   ],
-   "role": "none",
-   "note": "照片形变：要 WebGL 纹理，本链路不展开"
-  },
-  {
-   "id": "W12",
-   "name": "照片湍流",
-   "family": "照片",
-   "layer": "media",
-   "status": "ready",
-   "cap": "双通道噪声位移，像隔着热空气",
-   "src": "remotion:effects/turbulent-displace",
-   "params": {
-    "mode": 1,
-    "amount": 1,
-    "dur": 1.2,
-    "ease": "power2.inOut"
-   },
-   "use": "表现失真、信号不稳、回忆感",
-   "avoid": "需要看清细节的产品图",
-   "code": "(function () {\n  var _el = document.querySelector('{{sel}}');\n  if (!_el || !window.kit || !kit.deform) return;\n  var _img = null;\n  if (_el.tagName === 'IMG') { _img = _el; }\n  else {\n    var _bg = getComputedStyle(_el).backgroundImage || '';\n    var _m = _bg.match(/url\\([\"']?(.*?)[\"']?\\)/);\n    if (_m) { _img = new Image(); _img.src = _m[1]; }\n  }\n  if (!_img) return;\n  var _host = _el.tagName === 'IMG' ? _el.parentNode : _el;\n  if (!_host) return;\n  if (getComputedStyle(_host).position === 'static') _host.style.position = 'relative';\n  var _r = _el.getBoundingClientRect(), _hr = _host.getBoundingClientRect();\n  var _cv = document.createElement('canvas');\n  _cv.width = 1080; _cv.height = 1920;\n  _cv.style.cssText = 'position:absolute;pointer-events:none;display:block;z-index:3;'\n    + 'left:' + (_r.left - _hr.left) + 'px;top:' + (_r.top - _hr.top) + 'px;'\n    + 'width:' + _r.width + 'px;height:' + _r.height + 'px;';\n  var _fx = kit.deform(_cv, _img, {{mode}});\n  if (!_fx) return;\n  _host.appendChild(_cv);\n  var _drv = { p: 0 };\n  timeline.to(_drv, { 'p': {{amount}}, 'duration': {{dur}}, 'ease': '{{ease}}', 'onUpdate': function () {\n    _fx.draw(_drv.p, timeline.time());\n  } }, {{at}});\n})();",
-   "needs": [
-    "img"
-   ],
-   "role": "none",
-   "note": "照片形变：要 WebGL 纹理，本链路不展开"
-  },
-  {
-   "id": "W13",
-   "name": "照片碎裂",
-   "family": "照片",
-   "layer": "media",
-   "status": "ready",
-   "cap": "6×10 分块按固定种子散开，块间留缝",
-   "src": "remotion:effects/shatter",
-   "params": {
-    "mode": 2,
-    "amount": 1,
-    "dur": 1.0,
-    "ease": "power2.out"
-   },
-   "use": "讲「崩了 / 散了 / 碎成几块」",
-   "avoid": "片头第一屏（信息还没建立）",
-   "code": "(function () {\n  var _el = document.querySelector('{{sel}}');\n  if (!_el || !window.kit || !kit.deform) return;\n  var _img = null;\n  if (_el.tagName === 'IMG') { _img = _el; }\n  else {\n    var _bg = getComputedStyle(_el).backgroundImage || '';\n    var _m = _bg.match(/url\\([\"']?(.*?)[\"']?\\)/);\n    if (_m) { _img = new Image(); _img.src = _m[1]; }\n  }\n  if (!_img) return;\n  var _host = _el.tagName === 'IMG' ? _el.parentNode : _el;\n  if (!_host) return;\n  if (getComputedStyle(_host).position === 'static') _host.style.position = 'relative';\n  var _r = _el.getBoundingClientRect(), _hr = _host.getBoundingClientRect();\n  var _cv = document.createElement('canvas');\n  _cv.width = 1080; _cv.height = 1920;\n  _cv.style.cssText = 'position:absolute;pointer-events:none;display:block;z-index:3;'\n    + 'left:' + (_r.left - _hr.left) + 'px;top:' + (_r.top - _hr.top) + 'px;'\n    + 'width:' + _r.width + 'px;height:' + _r.height + 'px;';\n  var _fx = kit.deform(_cv, _img, {{mode}});\n  if (!_fx) return;\n  _host.appendChild(_cv);\n  var _drv = { p: 0 };\n  timeline.to(_drv, { 'p': {{amount}}, 'duration': {{dur}}, 'ease': '{{ease}}', 'onUpdate': function () {\n    _fx.draw(_drv.p, timeline.time());\n  } }, {{at}});\n})();",
-   "needs": [
-    "img"
-   ],
-   "role": "none",
-   "note": "照片形变：要 WebGL 纹理，本链路不展开"
-  },
-  {
-   "id": "W15",
-   "name": "照片球面",
-   "family": "照片",
-   "layer": "media",
-   "status": "ready",
-   "cap": "平面映射到球面，中心亮边缘暗",
-   "src": "remotion:effects/sphere",
-   "params": {
-    "mode": 3,
-    "amount": 1,
-    "dur": 1.3,
-    "ease": "power2.inOut"
-   },
-   "use": "照片要「鼓起来 / 变成立体物」",
-   "avoid": "照片本身已满幅到边（会露黑边）",
-   "code": "(function () {\n  var _el = document.querySelector('{{sel}}');\n  if (!_el || !window.kit || !kit.deform) return;\n  var _img = null;\n  if (_el.tagName === 'IMG') { _img = _el; }\n  else {\n    var _bg = getComputedStyle(_el).backgroundImage || '';\n    var _m = _bg.match(/url\\([\"']?(.*?)[\"']?\\)/);\n    if (_m) { _img = new Image(); _img.src = _m[1]; }\n  }\n  if (!_img) return;\n  var _host = _el.tagName === 'IMG' ? _el.parentNode : _el;\n  if (!_host) return;\n  if (getComputedStyle(_host).position === 'static') _host.style.position = 'relative';\n  var _r = _el.getBoundingClientRect(), _hr = _host.getBoundingClientRect();\n  var _cv = document.createElement('canvas');\n  _cv.width = 1080; _cv.height = 1920;\n  _cv.style.cssText = 'position:absolute;pointer-events:none;display:block;z-index:3;'\n    + 'left:' + (_r.left - _hr.left) + 'px;top:' + (_r.top - _hr.top) + 'px;'\n    + 'width:' + _r.width + 'px;height:' + _r.height + 'px;';\n  var _fx = kit.deform(_cv, _img, {{mode}});\n  if (!_fx) return;\n  _host.appendChild(_cv);\n  var _drv = { p: 0 };\n  timeline.to(_drv, { 'p': {{amount}}, 'duration': {{dur}}, 'ease': '{{ease}}', 'onUpdate': function () {\n    _fx.draw(_drv.p, timeline.time());\n  } }, {{at}});\n})();",
-   "needs": [
-    "img"
-   ],
-   "role": "none",
-   "note": "照片形变：要 WebGL 纹理，本链路不展开"
-  },
-  {
-   "id": "W18",
-   "name": "照片鱼眼",
-   "family": "照片",
-   "layer": "media",
-   "status": "ready",
-   "cap": "径向幂次拉伸，四周外扩",
-   "src": "remotion:effects/fisheye",
-   "params": {
-    "mode": 4,
-    "amount": 1,
-    "dur": 1.2,
-    "ease": "power2.inOut"
-   },
-   "use": "强调「看得更近 / 视角放大」",
-   "avoid": "和 C01 缓推同屏（两套透视抢焦点）",
-   "code": "(function () {\n  var _el = document.querySelector('{{sel}}');\n  if (!_el || !window.kit || !kit.deform) return;\n  var _img = null;\n  if (_el.tagName === 'IMG') { _img = _el; }\n  else {\n    var _bg = getComputedStyle(_el).backgroundImage || '';\n    var _m = _bg.match(/url\\([\"']?(.*?)[\"']?\\)/);\n    if (_m) { _img = new Image(); _img.src = _m[1]; }\n  }\n  if (!_img) return;\n  var _host = _el.tagName === 'IMG' ? _el.parentNode : _el;\n  if (!_host) return;\n  if (getComputedStyle(_host).position === 'static') _host.style.position = 'relative';\n  var _r = _el.getBoundingClientRect(), _hr = _host.getBoundingClientRect();\n  var _cv = document.createElement('canvas');\n  _cv.width = 1080; _cv.height = 1920;\n  _cv.style.cssText = 'position:absolute;pointer-events:none;display:block;z-index:3;'\n    + 'left:' + (_r.left - _hr.left) + 'px;top:' + (_r.top - _hr.top) + 'px;'\n    + 'width:' + _r.width + 'px;height:' + _r.height + 'px;';\n  var _fx = kit.deform(_cv, _img, {{mode}});\n  if (!_fx) return;\n  _host.appendChild(_cv);\n  var _drv = { p: 0 };\n  timeline.to(_drv, { 'p': {{amount}}, 'duration': {{dur}}, 'ease': '{{ease}}', 'onUpdate': function () {\n    _fx.draw(_drv.p, timeline.time());\n  } }, {{at}});\n})();",
-   "needs": [
-    "img"
-   ],
-   "role": "none",
-   "note": "照片形变：要 WebGL 纹理，本链路不展开"
-  },
-  {
-   "id": "W20",
-   "name": "光拖尾",
-   "family": "照片",
-   "layer": "media",
-   "status": "ready",
-   "cap": "克隆 8 层沿角度方向散开，指数衰减",
-   "src": "remotion:effects/light-trail",
-   "params": {
-    "copies": 8,
-    "dist": 120,
-    "fade": 0.82,
-    "angle": 200,
-    "dur": 1.2,
-    "ease": "power2.out"
-   },
-   "use": "照片/文字卡快速进入、残影感",
-   "avoid": "静态构图屏（拖尾要有运动才成立）",
-   "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t) return;\n  var _p = _t.parentNode;\n  if (getComputedStyle(_p).position === 'static') _p.style.position = 'relative';\n  var _r = _t.getBoundingClientRect(), _pr = _p.getBoundingClientRect();\n  var _L = _r.left - _pr.left, _T = _r.top - _pr.top;\n  var _ang = {{angle}} * Math.PI / 180, _ux = Math.cos(_ang), _uy = Math.sin(_ang);\n  var _n = {{copies}}, _g = [], _i;\n  for (_i = _n; _i >= 1; _i--) {\n    var _c = _t.cloneNode(true);\n    _c.removeAttribute('data-anim');\n    _c.setAttribute('aria-hidden', 'true');\n    _c.style.cssText = 'position:absolute;pointer-events:none;opacity:0;left:' + _L + 'px;top:' + _T\n      + 'px;width:' + _r.width + 'px;height:' + _r.height + 'px;';\n    _p.appendChild(_c);\n    _g.push({ el: _c, k: _i });\n  }\n  var _drv = { p: 0 };\n  timeline.to(_drv, { 'p': 1, 'duration': {{dur}}, 'ease': '{{ease}}', 'onUpdate': function () {\n    for (var j = 0; j < _g.length; j++) {\n      var g = _g[j], o = Math.pow({{fade}}, g.k) * 0.55 * _drv.p;\n      var d = {{dist}} * _drv.p * g.k / _n;\n      g.el.style.opacity = o.toFixed(3);\n      g.el.style.transform = 'translate(' + (_ux * d).toFixed(2) + 'px,' + (_uy * d).toFixed(2) + 'px)';\n    }\n  } }, {{at}});\n})();",
-   "needs": [
-    "img"
-   ],
-   "role": "none",
-   "note": "照片形变：要 WebGL 纹理，本链路不展开"
-  },
-  {
-   "id": "K13",
-   "name": "手绘方框",
-   "family": "字形",
-   "layer": "element",
-   "status": "ready",
-   "cap": "四条边各自带超描，2 笔抖动",
-   "src": "remotion:rough-notation",
-   "params": {
-    "type": "box",
-    "color": "#FFD45E",
-    "w": 6,
-    "dur": 0.8,
-    "stagger": 0.05,
-    "passes": 2,
-    "fillOpacity": 0.34,
-    "seed": "box",
-    "z": 8
-   },
-   "use": "圈住一个词组、一个结论",
-   "avoid": "整段文字（框会花）",
-   "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t || !window.kit || !kit.rough) return;\n  var _sc = _t.closest('.scene') || document.getElementById('stage');\n  var _b = _sc.getBoundingClientRect(), _r = _t.getBoundingClientRect();\n  var _svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');\n  _svg.setAttribute('viewBox', '0 0 ' + Math.round(_b.width) + ' ' + Math.round(_b.height));\n  _svg.style.cssText = 'position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none;overflow:visible;z-index:{{z}};';\n  _sc.appendChild(_svg);\n  var _g = kit.rough('{{type}}', { x: _r.left - _b.left, y: _r.top - _b.top, w: _r.width, h: _r.height }, '{{seed}}', {{passes}});\n  var _i, _p, _len;\n  for (_i = 0; _i < _g.strokes.length; _i++) {\n    _p = document.createElementNS('http://www.w3.org/2000/svg', 'path');\n    _p.setAttribute('d', _g.strokes[_i]);\n    _p.setAttribute('fill', 'none');\n    _p.setAttribute('stroke', '{{color}}');\n    _p.setAttribute('stroke-width', {{w}});\n    _p.setAttribute('stroke-linecap', 'round');\n    _len = _p.getTotalLength ? (_p.getTotalLength() || 1) : 1;\n    _p.style.strokeDasharray = _len + ' ' + _len;\n    _svg.appendChild(_p);\n    timeline.fromTo(_p, { 'strokeDashoffset': _len }, { 'strokeDashoffset': 0, 'duration': {{dur}}, 'ease': 'power1.inOut' }, {{at}} + _i * {{stagger}});\n  }\n  for (_i = 0; _i < _g.fills.length; _i++) {\n    _p = document.createElementNS('http://www.w3.org/2000/svg', 'path');\n    _p.setAttribute('d', _g.fills[_i]);\n    _p.setAttribute('fill', '{{color}}');\n    _p.setAttribute('opacity', '0');\n    _svg.appendChild(_p);\n    timeline.to(_p, { 'opacity': {{fillOpacity}}, 'duration': {{dur}}, 'ease': 'none' }, {{at}});\n  }\n})();",
-   "needs": [
-    "text"
-   ],
-   "role": "none",
-   "note": "笔刷标注：要额外 plugin，本链路不展开"
-  },
-  {
-   "id": "K14",
-   "name": "手绘括号",
-   "family": "字形",
-   "layer": "element",
-   "status": "ready",
-   "cap": "左侧三段式括号，两遍抖动",
-   "src": "remotion:rough-notation",
-   "params": {
-    "type": "bracket",
-    "color": "#FFD45E",
-    "w": 6,
-    "dur": 0.7,
-    "stagger": 0.05,
-    "passes": 2,
-    "fillOpacity": 0.34,
-    "seed": "bracket",
-    "z": 8
-   },
-   "use": "给一行字加旁注、引一段话",
-   "avoid": "右侧有内容时（会压住）",
-   "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t || !window.kit || !kit.rough) return;\n  var _sc = _t.closest('.scene') || document.getElementById('stage');\n  var _b = _sc.getBoundingClientRect(), _r = _t.getBoundingClientRect();\n  var _svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');\n  _svg.setAttribute('viewBox', '0 0 ' + Math.round(_b.width) + ' ' + Math.round(_b.height));\n  _svg.style.cssText = 'position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none;overflow:visible;z-index:{{z}};';\n  _sc.appendChild(_svg);\n  var _g = kit.rough('{{type}}', { x: _r.left - _b.left, y: _r.top - _b.top, w: _r.width, h: _r.height }, '{{seed}}', {{passes}});\n  var _i, _p, _len;\n  for (_i = 0; _i < _g.strokes.length; _i++) {\n    _p = document.createElementNS('http://www.w3.org/2000/svg', 'path');\n    _p.setAttribute('d', _g.strokes[_i]);\n    _p.setAttribute('fill', 'none');\n    _p.setAttribute('stroke', '{{color}}');\n    _p.setAttribute('stroke-width', {{w}});\n    _p.setAttribute('stroke-linecap', 'round');\n    _len = _p.getTotalLength ? (_p.getTotalLength() || 1) : 1;\n    _p.style.strokeDasharray = _len + ' ' + _len;\n    _svg.appendChild(_p);\n    timeline.fromTo(_p, { 'strokeDashoffset': _len }, { 'strokeDashoffset': 0, 'duration': {{dur}}, 'ease': 'power1.inOut' }, {{at}} + _i * {{stagger}});\n  }\n  for (_i = 0; _i < _g.fills.length; _i++) {\n    _p = document.createElementNS('http://www.w3.org/2000/svg', 'path');\n    _p.setAttribute('d', _g.fills[_i]);\n    _p.setAttribute('fill', '{{color}}');\n    _p.setAttribute('opacity', '0');\n    _svg.appendChild(_p);\n    timeline.to(_p, { 'opacity': {{fillOpacity}}, 'duration': {{dur}}, 'ease': 'none' }, {{at}});\n  }\n})();",
-   "needs": [
-    "text"
-   ],
-   "role": "none",
-   "note": "笔刷标注：要额外 plugin，本链路不展开"
-  },
-  {
-   "id": "K15",
-   "name": "手绘打叉",
-   "family": "字形",
-   "layer": "element",
-   "status": "ready",
-   "cap": "两条对角线，2 笔抖动",
-   "src": "remotion:rough-notation",
-   "params": {
-    "type": "cross",
-    "color": "#FF5D6C",
-    "w": 6,
-    "dur": 0.6,
-    "stagger": 0.06,
-    "passes": 2,
-    "fillOpacity": 0.34,
-    "seed": "cross",
-    "z": 8
-   },
-   "use": "否定旧说法、划掉错误做法",
-   "avoid": "和 K12 删除线同屏（两个否定动作）",
-   "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t || !window.kit || !kit.rough) return;\n  var _sc = _t.closest('.scene') || document.getElementById('stage');\n  var _b = _sc.getBoundingClientRect(), _r = _t.getBoundingClientRect();\n  var _svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');\n  _svg.setAttribute('viewBox', '0 0 ' + Math.round(_b.width) + ' ' + Math.round(_b.height));\n  _svg.style.cssText = 'position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none;overflow:visible;z-index:{{z}};';\n  _sc.appendChild(_svg);\n  var _g = kit.rough('{{type}}', { x: _r.left - _b.left, y: _r.top - _b.top, w: _r.width, h: _r.height }, '{{seed}}', {{passes}});\n  var _i, _p, _len;\n  for (_i = 0; _i < _g.strokes.length; _i++) {\n    _p = document.createElementNS('http://www.w3.org/2000/svg', 'path');\n    _p.setAttribute('d', _g.strokes[_i]);\n    _p.setAttribute('fill', 'none');\n    _p.setAttribute('stroke', '{{color}}');\n    _p.setAttribute('stroke-width', {{w}});\n    _p.setAttribute('stroke-linecap', 'round');\n    _len = _p.getTotalLength ? (_p.getTotalLength() || 1) : 1;\n    _p.style.strokeDasharray = _len + ' ' + _len;\n    _svg.appendChild(_p);\n    timeline.fromTo(_p, { 'strokeDashoffset': _len }, { 'strokeDashoffset': 0, 'duration': {{dur}}, 'ease': 'power1.inOut' }, {{at}} + _i * {{stagger}});\n  }\n  for (_i = 0; _i < _g.fills.length; _i++) {\n    _p = document.createElementNS('http://www.w3.org/2000/svg', 'path');\n    _p.setAttribute('d', _g.fills[_i]);\n    _p.setAttribute('fill', '{{color}}');\n    _p.setAttribute('opacity', '0');\n    _svg.appendChild(_p);\n    timeline.to(_p, { 'opacity': {{fillOpacity}}, 'duration': {{dur}}, 'ease': 'none' }, {{at}});\n  }\n})();",
-   "needs": [
-    "text"
-   ],
-   "role": "none",
-   "note": "笔刷标注：要额外 plugin，本链路不展开"
-  },
-  {
-   "id": "K16",
-   "name": "荧光块",
-   "family": "字形",
-   "layer": "element",
-   "status": "ready",
-   "cap": "抖动四边形垫在字下面，从左淡入",
-   "src": "remotion:rough-notation",
-   "params": {
-    "type": "highlight",
-    "color": "#FFD45E",
-    "w": 6,
-    "dur": 0.55,
-    "stagger": 0.05,
-    "passes": 2,
-    "fillOpacity": 0.42,
-    "seed": "hl",
-    "z": 0
-   },
-   "use": "一个关键词被「刷」上高亮",
-   "avoid": "和 K07 下划线同一词（重复强调）",
-   "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t || !window.kit || !kit.rough) return;\n  var _sc = _t.closest('.scene') || document.getElementById('stage');\n  var _b = _sc.getBoundingClientRect(), _r = _t.getBoundingClientRect();\n  var _svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');\n  _svg.setAttribute('viewBox', '0 0 ' + Math.round(_b.width) + ' ' + Math.round(_b.height));\n  _svg.style.cssText = 'position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none;overflow:visible;z-index:{{z}};';\n  _sc.appendChild(_svg);\n  var _g = kit.rough('{{type}}', { x: _r.left - _b.left, y: _r.top - _b.top, w: _r.width, h: _r.height }, '{{seed}}', {{passes}});\n  var _i, _p, _len;\n  for (_i = 0; _i < _g.strokes.length; _i++) {\n    _p = document.createElementNS('http://www.w3.org/2000/svg', 'path');\n    _p.setAttribute('d', _g.strokes[_i]);\n    _p.setAttribute('fill', 'none');\n    _p.setAttribute('stroke', '{{color}}');\n    _p.setAttribute('stroke-width', {{w}});\n    _p.setAttribute('stroke-linecap', 'round');\n    _len = _p.getTotalLength ? (_p.getTotalLength() || 1) : 1;\n    _p.style.strokeDasharray = _len + ' ' + _len;\n    _svg.appendChild(_p);\n    timeline.fromTo(_p, { 'strokeDashoffset': _len }, { 'strokeDashoffset': 0, 'duration': {{dur}}, 'ease': 'power1.inOut' }, {{at}} + _i * {{stagger}});\n  }\n  for (_i = 0; _i < _g.fills.length; _i++) {\n    _p = document.createElementNS('http://www.w3.org/2000/svg', 'path');\n    _p.setAttribute('d', _g.fills[_i]);\n    _p.setAttribute('fill', '{{color}}');\n    _p.setAttribute('opacity', '0');\n    _svg.appendChild(_p);\n    timeline.to(_p, { 'opacity': {{fillOpacity}}, 'duration': {{dur}}, 'ease': 'none' }, {{at}});\n  }\n})();",
-   "needs": [
-    "text"
-   ],
-   "role": "none",
-   "note": "笔刷标注：要额外 plugin，本链路不展开"
-  },
-  {
-   "id": "U21",
-   "name": "文字圆角底板",
-   "family": "UI",
-   "layer": "element",
-   "status": "ready",
-   "cap": "按视觉行量矩形，逐行铺圆角底；字随后压成深色",
-   "src": "remotion:rounded-text-box",
-   "params": {
-    "color": "rgba(255,212,94,.92)",
-    "ink": "#101314",
-    "radius": 18,
-    "padX": 18,
-    "padY": 8,
-    "dur": 0.55,
-    "stagger": 0.22
-   },
-   "use": "字幕条、关键词句、iOS/TikTok 那种底",
-   "avoid": "正文段落超过 3 行（底会把版面压满）",
-   "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t || !window.kit || !kit.lines) return;\n  var _ls = kit.lines(_t);\n  var _host = _t.parentNode;\n  if (!_host) return;\n  if (getComputedStyle(_host).position === 'static') _host.style.position = 'relative';\n  _t.style.position = 'relative';\n  _t.style.zIndex = '1';\n  var _ox = _t.offsetLeft, _oy = _t.offsetTop;\n  var _i, _d;\n  for (_i = 0; _i < _ls.length; _i++) {\n    _d = document.createElement('i');\n    _d.style.cssText = 'position:absolute;pointer-events:none;z-index:0;background:{{color}};border-radius:{{radius}}px;'\n      + 'transform:scaleX(0);transform-origin:0 50%;'\n      + 'left:' + (_ox + _ls[_i].x - {{padX}}) + 'px;top:' + (_oy + _ls[_i].y - {{padY}}) + 'px;'\n      + 'width:' + (_ls[_i].w + {{padX}} * 2) + 'px;height:' + (_ls[_i].h + {{padY}} * 2) + 'px;';\n    _host.appendChild(_d);\n    timeline.to(_d, { 'scaleX': 1, 'duration': {{dur}}, 'ease': 'power2.out' }, {{at}} + _i * {{stagger}});\n  }\n  timeline.to(_t, { 'color': '{{ink}}', 'duration': {{dur}}, 'ease': 'none' }, {{at}} + {{dur}} * 0.5);\n})();",
-   "needs": [
-    "ui"
-   ],
-   "role": "none",
-   "note": "代码块/图表类 UI：要额外 DOM，本链路不展开"
-  },
-  {
-   "id": "G04",
-   "name": "多行适配",
-   "family": "版面",
-   "layer": "element",
-   "status": "ready",
-   "cap": "宽度变化时每帧二分字号，始终压在 n 行内",
-   "src": "remotion:layout-utils/fit-text-on-n-lines",
-   "params": {
-    "fromW": 900,
-    "toW": 560,
-    "lines": 2,
-    "minFs": 26,
-    "maxFs": 96,
-    "dur": 1.6,
-    "ease": "power2.inOut"
-   },
-   "use": "同屏换栏宽、侧栏收起、版面重排",
-   "avoid": "宽度不变时（等于没动）",
-   "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t || !window.kit || !kit.fitLines) return;\n  var _drv = { w: {{fromW}} };\n  timeline.to(_drv, { 'w': {{toW}}, 'duration': {{dur}}, 'ease': '{{ease}}', 'onUpdate': function () {\n    _t.style.width = _drv.w + 'px';\n    kit.fitLines(_t, {{lines}}, { min: {{minFs}}, max: {{maxFs}} });\n  } }, {{at}});\n})();",
-   "needs": [
-    "ui"
-   ],
-   "role": "none",
-   "note": "版面重排：要真实布局锚点，本链路不展开"
-  },
-  {
-   "id": "S13",
-   "name": "词级字幕",
-   "family": "状态",
-   "layer": "element",
-   "status": "ready",
-   "cap": "按 chunk 切词，当前词点亮放大",
-   "src": "remotion:captions/create-tiktok-style-captions",
-   "params": {
-    "text": "线索自动分好跟进自动记上",
-    "chunk": 2,
-    "span": 2.4,
-    "color": "#F4F1E9",
-    "ink": "#0d1010",
-    "hl": "#FFD45E"
-   },
-   "use": "底部字幕条、逐词强调",
-   "avoid": "一屏两处（字幕只能有一处）",
-   "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t || !window.kit || !kit.captionTokens) return;\n  var _raw = '{{text}}', _chunk = {{chunk}}, _step = {{span}} / Math.max(1, Math.ceil(_raw.length / _chunk));\n  var _items = [], _i;\n  for (_i = 0; _i * _chunk < _raw.length; _i++) {\n    _items.push({ text: _raw.substr(_i * _chunk, _chunk), from: {{at}} + _i * _step, to: {{at}} + (_i + 1) * _step });\n  }\n  _t.innerHTML = '';\n  var _sp = [];\n  for (_i = 0; _i < _items.length; _i++) {\n    var _s = document.createElement('span');\n    _s.textContent = _items[_i].text;\n    _s.style.cssText = 'display:inline-block;padding:0 .12em;border-radius:.18em;';\n    _t.appendChild(_s);\n    _sp.push({ el: _s, from: _items[_i].from, to: _items[_i].to });\n  }\n  var _drv = { p: 0 };\n  timeline.to(_drv, { 'p': 1, 'duration': {{span}} + 0.3, 'ease': 'none', 'onUpdate': function () {\n    var now = timeline.time(), j;\n    for (j = 0; j < _sp.length; j++) {\n      var on = now >= _sp[j].from && now < _sp[j].to;\n      _sp[j].el.style.color = on ? '{{ink}}' : '{{color}}';\n      _sp[j].el.style.background = on ? '{{hl}}' : 'transparent';\n      _sp[j].el.style.transform = on ? 'scale(1.08)' : 'scale(1)';\n    }\n  } }, {{at}});\n})();",
-   "role": "special_dom",
-   "note": "已有文本块可整体替换"
-  },
-  {
-   "id": "S14",
-   "name": "逐词出框页",
-   "family": "状态",
-   "layer": "element",
-   "status": "ready",
-   "cap": "每个词一个圆角框，逐条弹入，当前词放大",
-   "src": "remotion:template-tiktok/SubtitlePage",
-   "params": {
-    "text": "线索自动分好跟进自动记上",
-    "chunk": 2,
-    "span": 2.4,
-    "dur": 0.4,
-    "color": "#F4F1E9",
-    "ink": "#0d1010",
-    "hl": "#FFD45E"
-   },
-   "use": "整屏大字幕页、口播重点句",
-   "avoid": "和 S13 同屏",
-   "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t || !window.kit) return;\n  var _raw = '{{text}}', _chunk = {{chunk}};\n  var _n = Math.ceil(_raw.length / _chunk), _step = {{span}} / Math.max(1, _n);\n  _t.innerHTML = '';\n  var _sp = [], _i;\n  for (_i = 0; _i < _n; _i++) {\n    var _s = document.createElement('span');\n    _s.textContent = _raw.substr(_i * _chunk, _chunk);\n    _s.style.cssText = 'display:inline-block;padding:.06em .22em;border-radius:.22em;opacity:0;'\n      + 'background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.10);';\n    _t.appendChild(_s);\n    _sp.push({ el: _s, from: {{at}} + _i * _step, to: {{at}} + (_i + 1) * _step });\n  }\n  for (_i = 0; _i < _sp.length; _i++) {\n    timeline.fromTo(_sp[_i].el, { 'opacity': 0, 'scale': 0.82 }, { 'opacity': 1, 'scale': 1, 'duration': {{dur}}, 'ease': 'back.out' }, {{at}} + _i * _step * 0.85);\n  }\n  var _drv = { p: 0 };\n  timeline.to(_drv, { 'p': 1, 'duration': {{span}} + 0.3, 'ease': 'none', 'onUpdate': function () {\n    var now = timeline.time(), j;\n    for (j = 0; j < _sp.length; j++) {\n      var on = now >= _sp[j].from && now < _sp[j].to;\n      _sp[j].el.style.background = on ? '{{hl}}' : 'rgba(255,255,255,.06)';\n      _sp[j].el.style.color = on ? '{{ink}}' : '{{color}}';\n      _sp[j].el.style.borderColor = on ? '{{hl}}' : 'rgba(255,255,255,.10)';\n      _sp[j].el.style.transform = on ? 'scale(1.12)' : 'scale(1)';\n    }\n  } }, {{at}});\n})();",
-   "role": "special_dom",
-   "note": "已有文本块可逐字替换"
-  },
-  {
-   "id": "S15",
-   "name": "频谱柱",
-   "family": "状态",
-   "layer": "element",
-   "status": "ready",
-   "cap": "柱高由 t 合成（接真音频时换成频域数据）",
-   "src": "remotion:template-music-visualization",
-   "params": {
-    "bars": 24,
-    "height": 0.86,
-    "color": "rgba(134,240,192,.92)",
-    "hl": "#FFD45E",
-    "seed": "spec",
-    "dur": 2.4
-   },
-   "use": "数据节奏、音频可视化、进度感",
-   "avoid": "没有真实数值时冒充统计图（要标场景演示）",
-   "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t || !window.kit) return;\n  var _b = _t.getBoundingClientRect();\n  if (getComputedStyle(_t).position === 'static') { _t.style.position = 'relative'; }\n  var _cv = document.createElement('canvas');\n  _cv.width = Math.max(2, Math.round(_b.width));\n  _cv.height = Math.max(2, Math.round(_b.height));\n  _cv.style.cssText = 'position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none;display:block;';\n  _t.appendChild(_cv);\n  var _c = _cv.getContext('2d');\n  var _bars = {{bars}}, _base = [], _r = kit.seeded('{{seed}}'), _i;\n  for (_i = 0; _i < _bars; _i++) _base.push(0.15 + _r() * 0.85);\n  var _drv = { p: 0 };\n  timeline.to(_drv, { 'p': 1, 'duration': {{dur}}, 'ease': 'none', 'onUpdate': function () {\n    var t = timeline.time(), W = _cv.width, H = _cv.height, bw = W / _bars, i, drive, hh;\n    _c.clearRect(0, 0, W, H);\n    for (i = 0; i < _bars; i++) {\n      drive = 0.42 + 0.58 * Math.pow(0.5 + 0.5 * Math.sin(t * (2.2 + _base[i] * 4) + i * 0.55), 1.7);\n      hh = Math.max(4, _base[i] * drive * H * {{height}});\n      _c.fillStyle = i === {{bars}} - 1 ? '{{hl}}' : '{{color}}';\n      _c.fillRect(i * bw + bw * 0.16, H - hh, bw * 0.68, hh);\n    }\n  } }, {{at}});\n})();",
-   "role": "special_dom",
-   "note": "可逐项增删的列表"
-  },
-  {
-   "id": "U23",
-   "name": "代码打字",
-   "family": "UI",
-   "layer": "element",
-   "status": "ready",
-   "cap": "逐字显现，行内保留语法色",
-   "src": "remotion:template-code-hike",
-   "params": {
-    "dur": 1.4
-   },
-   "use": "代码、命令行、表单输入过程",
-   "avoid": "超过 6 行（打完已经切屏）",
-   "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t) return;\n  var _txt = _t.textContent || '';\n  _t.textContent = '';\n  var _ch = [], _i;\n  for (_i = 0; _i < _txt.length; _i++) {\n    var _s = document.createElement('span');\n    _s.textContent = _txt.charAt(_i);\n    _s.style.opacity = '0';\n    _t.appendChild(_s);\n    _ch.push(_s);\n  }\n  var _drv = { n: 0 };\n  timeline.to(_drv, { 'n': 1, 'duration': {{dur}}, 'ease': 'none', 'onUpdate': function () {\n    var k = Math.floor(_drv.n * _ch.length), j;\n    for (j = 0; j < _ch.length; j++) _ch[j].style.opacity = j < k ? '1' : '0';\n  } }, {{at}});\n})();",
-   "needs": [
-    "ui"
-   ],
-   "role": "none",
-   "note": "代码块/图表类 UI：要额外 DOM，本链路不展开"
-  },
-  {
-   "id": "U24",
-   "name": "表情强调",
-   "family": "UI",
-   "layer": "element",
-   "status": "ready",
-   "cap": "单个表情字形弹入 + 一次回弹（不用 Lottie）",
-   "src": "remotion:animated-emoji",
-   "params": {
-    "fromScale": 0.35,
-    "dur": 0.6
-   },
-   "use": "情绪转折处的一次强调",
-   "avoid": "当图标用；一屏超过一个（违反「不用 emoji 当图标」）",
-   "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t) return;\n  _t.style.display = 'inline-block';\n  _t.style.opacity = '0';\n  timeline.fromTo(_t, { 'opacity': 0, 'scale': {{fromScale}}, 'y': 26 },\n    { 'opacity': 1, 'scale': 1, 'y': 0, 'duration': {{dur}}, 'ease': 'back.out' }, {{at}});\n  timeline.to(_t, { 'scale': 1.1, 'duration': 0.18, 'ease': 'sine.inOut' }, {{at}} + {{dur}});\n  timeline.to(_t, { 'scale': 1, 'duration': 0.24, 'ease': 'sine.out' }, {{at}} + {{dur}} + 0.18);\n})();",
-   "needs": [
-    "ui"
-   ],
-   "role": "none",
-   "note": "代码块/图表类 UI：要额外 DOM，本链路不展开"
-  },
-  {
-   "id": "Z03",
-   "name": "立体挤出",
-   "family": "三维",
-   "layer": "element",
-   "status": "ready",
-   "cap": "24 层错位填充叠厚度，顶层盖亮色；纯 SVG 不占 GPU",
-   "src": "remotion:svg-3d-engine",
-   "params": {
-    "layers": 24,
-    "step": 3.2,
-    "color": "#F4F1E9",
-    "side": "#16262a",
-    "dur": 1.4,
-    "z": 12
-   },
-   "use": "大字标题要「有厚度」、又不想上 three",
-   "avoid": "和 Z01/Z02 同屏",
-   "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t) return;\n  var _NS = 'http://www.w3.org/2000/svg';\n  var _sc = _t.closest('.scene') || document.getElementById('stage');\n  var _b = _sc.getBoundingClientRect(), _r = _t.getBoundingClientRect();\n  var _txt = _t.textContent || '';\n  _t.style.color = 'transparent';\n  var _svg = document.createElementNS(_NS, 'svg');\n  _svg.setAttribute('viewBox', '0 0 ' + Math.round(_b.width) + ' ' + Math.round(_b.height));\n  _svg.style.cssText = 'position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none;z-index:{{z}};';\n  _sc.appendChild(_svg);\n  var _x = _r.left - _b.left, _y = _r.top - _b.top + _r.height * 0.76;\n  var _g = document.createElementNS(_NS, 'g');\n  _svg.appendChild(_g);\n  var _drv = { d: 0 };\n  timeline.to(_drv, { 'd': 1, 'duration': {{dur}}, 'ease': 'power2.out', 'onUpdate': function () {\n    while (_g.firstChild) _g.removeChild(_g.firstChild);\n    var steps = Math.max(1, Math.round({{layers}} * _drv.d)), i, el;\n    for (i = steps; i >= 1; i--) {\n      el = document.createElementNS(_NS, 'text');\n      el.setAttribute('x', _x + i * {{step}});\n      el.setAttribute('y', _y + i * {{step}} * 1.12);\n      el.setAttribute('font-size', _r.height * 0.92);\n      el.setAttribute('font-weight', '820');\n      el.setAttribute('fill', '{{side}}');\n      el.textContent = _txt;\n      _g.appendChild(el);\n    }\n    el = document.createElementNS(_NS, 'text');\n    el.setAttribute('x', _x);\n    el.setAttribute('y', _y);\n    el.setAttribute('font-size', _r.height * 0.92);\n    el.setAttribute('font-weight', '820');\n    el.setAttribute('fill', '{{color}}');\n    el.textContent = _txt;\n    _g.appendChild(el);\n  } }, {{at}});\n})();",
-   "role": "none",
-   "note": "三维：要 three.js 与 canvas，本链路不展开"
-  },
-  {
    "id": "K21",
    "name": "逐词逐字",
    "family": "字形",
@@ -2345,123 +1419,6 @@
    "role": "entrance_text"
   },
   {
-   "id": "U25",
-   "name": "描边滑行",
-   "family": "绘制",
-   "layer": "element",
-   "status": "ready",
-   "cap": "DrawSVG 只画中段并沿路径滑行",
-   "src": "gsap:DrawSVGPlugin",
-   "params": {
-    "a": 18,
-    "b": 82,
-    "dur": 2.0,
-    "ease": "power2.inOut"
-   },
-   "use": "路线、趋势线、流程连线",
-   "avoid": "闭合图形（看起来像在绕圈）",
-   "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t || !window.DrawSVGPlugin) return;\n  timeline.fromTo(_t, {'drawSVG': '0% {{a}}%'}, {'drawSVG': '{{b}}% 100%', 'duration': {{dur}}, 'ease': '{{ease}}'}, {{at}});\n})();",
-   "needs": [
-    "ui"
-   ],
-   "role": "none",
-   "note": "注入式图形/描边：要额外 SVG 或 plugin，本链路不展开"
-  },
-  {
-   "id": "U26",
-   "name": "多段描边",
-   "family": "绘制",
-   "layer": "element",
-   "status": "ready",
-   "cap": "多条线分别从左/右/中间画满，带 stagger",
-   "src": "gsap:DrawSVGPlugin",
-   "params": {
-    "dur": 0.9,
-    "ease": "power2.out",
-    "stagger": 0.15
-   },
-   "use": "对比三条线、并列条目、刻度",
-   "avoid": "超过 6 条（同时画会很吵）",
-   "code": "(function () {\n  var _els = [].slice.call(document.querySelectorAll('{{sel}}'));\n  if (!_els.length || !window.DrawSVGPlugin) return;\n  var _from = ['0% 0%', '100% 100%', '50% 50%'];\n  _els.forEach(function (el, i) {\n    timeline.fromTo(el, {'drawSVG': _from[i % 3]}, {'drawSVG': '0% 100%', 'duration': {{dur}}, 'ease': '{{ease}}'}, {{at}} + i * {{stagger}});\n  });\n})();",
-   "needs": [
-    "ui"
-   ],
-   "role": "none",
-   "note": "注入式图形/描边：要额外 SVG 或 plugin，本链路不展开"
-  },
-  {
-   "id": "U27",
-   "name": "形状变形",
-   "family": "绘制",
-   "layer": "element",
-   "status": "ready",
-   "cap": "MorphSVG：形状本身变形，目标由 data-morph-to 给",
-   "src": "gsap:MorphSVGPlugin",
-   "params": {
-    "to": "#morph-target",
-    "dur": 1.0,
-    "ease": "power2.inOut"
-   },
-   "use": "图标换形态、圆变方、概念演进",
-   "avoid": "带文字的图形（顶点对不上会拧）",
-   "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t || !window.MorphSVGPlugin) return;\n  var _to = _t.getAttribute('data-morph-to') || '{{to}}';\n  if (!_to || !document.querySelector(_to)) return;\n  timeline.to(_t, {'morphSVG': _to, 'duration': {{dur}}, 'ease': '{{ease}}'}, {{at}});\n})();",
-   "needs": [
-    "ui"
-   ],
-   "role": "none",
-   "note": "注入式图形/描边：要额外 SVG 或 plugin，本链路不展开"
-  },
-  {
-   "id": "U28",
-   "name": "沿路径行进",
-   "family": "绘制",
-   "layer": "element",
-   "status": "ready",
-   "cap": "MotionPath：沿路径走 + 朝向跟切线",
-   "src": "gsap:MotionPathPlugin",
-   "params": {
-    "path": "#motion-route",
-    "rotate": 1,
-    "start": 0,
-    "end": 1,
-    "dur": 2.2,
-    "ease": "power1.inOut"
-   },
-   "use": "地图路线、流程推进、球/车/箭头",
-   "avoid": "路径超出画布（会自动露边）",
-   "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t || !window.MotionPathPlugin) return;\n  var _p = _t.getAttribute('data-motion-path') || '{{path}}';\n  if (!_p || !document.querySelector(_p)) return;\n  timeline.to(_t, {'motionPath': {'path': _p, 'align': _p, 'alignOrigin': [0.5, 0.5],\n    'autoRotate': {{rotate}}, 'start': {{start}}, 'end': {{end}}},\n    'duration': {{dur}}, 'ease': '{{ease}}'}, {{at}});\n})();",
-   "needs": [
-    "ui"
-   ],
-   "role": "none",
-   "note": "注入式图形/描边：要额外 SVG 或 plugin，本链路不展开"
-  },
-  {
-   "id": "U29",
-   "name": "路径片段",
-   "family": "绘制",
-   "layer": "element",
-   "status": "ready",
-   "cap": "MotionPath 只走路径的一段（start/end）",
-   "src": "gsap:MotionPathPlugin",
-   "params": {
-    "path": "#motion-route",
-    "rotate": 0,
-    "start": 0.35,
-    "end": 0.75,
-    "dur": 2.0,
-    "ease": "power2.inOut"
-   },
-   "use": "「从中途接上」的镜头语言",
-   "avoid": "路径太短时看不出片段",
-   "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t || !window.MotionPathPlugin) return;\n  var _p = _t.getAttribute('data-motion-path') || '{{path}}';\n  if (!_p || !document.querySelector(_p)) return;\n  timeline.to(_t, {'motionPath': {'path': _p, 'align': _p, 'alignOrigin': [0.5, 0.5],\n    'autoRotate': {{rotate}}, 'start': {{start}}, 'end': {{end}}},\n    'duration': {{dur}}, 'ease': '{{ease}}'}, {{at}});\n})();",
-   "needs": [
-    "ui"
-   ],
-   "role": "none",
-   "note": "注入式图形/描边：要额外 SVG 或 plugin，本链路不展开"
-  },
-  {
    "id": "K22",
    "name": "遮罩到字",
    "family": "字形",
@@ -2482,236 +1439,6 @@
     "text"
    ],
    "role": "entrance_text"
-  },
-  {
-   "id": "K23",
-   "name": "重新拆分",
-   "family": "字形",
-   "layer": "element",
-   "status": "ready",
-   "cap": "容器变窄后 revert 再拆，重新落一次",
-   "src": "gsap:SplitText",
-   "params": {
-    "toW": 520,
-    "resplitAt": 0.9,
-    "dur": 0.6,
-    "stagger": 0.1
-   },
-   "use": "同屏换栏宽、侧栏收起后文字重排",
-   "avoid": "宽度不变时（等于没动）",
-   "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t || !window.SplitText) return;\n  var _box = _t.parentNode;\n  var _sp = new SplitText(_t, {'type': 'lines', 'mask': 'lines'});\n  timeline.from(_sp.lines, {'yPercent': 110, 'opacity': 0, 'duration': {{dur}}, 'stagger': {{stagger}}, 'ease': 'power3.out'}, {{at}});\n  var _done = false;\n  timeline.call(function () {\n    if (_done) return;\n    _done = true;\n    if (_box) _box.style.width = '{{toW}}px';\n    _sp.revert();\n    _sp = new SplitText(_t, {'type': 'lines', 'mask': 'lines'});\n  }, null, {{at}} + {{resplitAt}});\n})();",
-   "needs": [
-    "text"
-   ],
-   "role": "none",
-   "note": "笔刷标注：要额外 plugin，本链路不展开"
-  },
-  {
-   "id": "K24",
-   "name": "整体不拆",
-   "family": "字形",
-   "layer": "element",
-   "status": "ready",
-   "cap": "specialChars 让「¥299」这类当一个整体，不拆成单字",
-   "src": "gsap:SplitText",
-   "params": {
-    "keep": "¥299",
-    "y": 30,
-    "dur": 0.5,
-    "stagger": 0.04
-   },
-   "use": "价格、编号、英文缩写不能被拆开",
-   "avoid": "普通中文标题（用 K22 更合适）",
-   "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t || !window.SplitText) return;\n  var _sp = new SplitText(_t, {'type': 'chars', 'specialChars': ['{{keep}}']});\n  timeline.from(_sp.chars, {'opacity': 0, 'y': {{y}}, 'duration': {{dur}}, 'stagger': {{stagger}}, 'ease': 'power2.out'}, {{at}});\n})();",
-   "needs": [
-    "text"
-   ],
-   "role": "none",
-   "note": "笔刷标注：要额外 plugin，本链路不展开"
-  },
-  {
-   "id": "U30",
-   "name": "描边画满与收回",
-   "family": "绘制",
-   "layer": "element",
-   "status": "ready",
-   "cap": "drawSVG 0%→100% 画满，再从尾收回",
-   "src": "gsap:DrawSVGPlugin",
-   "params": {
-    "dur": 1.3,
-    "back": 1,
-    "backDur": 0.8
-   },
-   "use": "路线先画出来再收掉、强调后离场",
-   "avoid": "需要停在画满状态时（把 back 设 0）",
-   "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t || !window.DrawSVGPlugin) return;\n  timeline.fromTo(_t, {'drawSVG': '0%'}, {'drawSVG': '100%', 'duration': {{dur}}, 'ease': 'power2.inOut'}, {{at}});\n  if ({{back}}) timeline.to(_t, {'drawSVG': '100% 100%', 'duration': {{backDur}}, 'ease': 'power2.inOut'}, {{at}} + {{dur}});\n})();",
-   "needs": [
-    "ui"
-   ],
-   "role": "none",
-   "note": "注入式图形/描边：要额外 SVG 或 plugin，本链路不展开"
-  },
-  {
-   "id": "U31",
-   "name": "沿边描线",
-   "family": "绘制",
-   "layer": "element",
-   "status": "ready",
-   "cap": "闭合图形从一角描满，不用手算周长",
-   "src": "gsap:DrawSVGPlugin",
-   "params": {
-    "dur": 1.8,
-    "ease": "none"
-   },
-   "use": "边框、卡片轮廓、圆角矩形",
-   "avoid": "线条短于 200px（看不出过程）",
-   "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t || !window.DrawSVGPlugin) return;\n  timeline.fromTo(_t, {'drawSVG': '0%'}, {'drawSVG': '100%', 'duration': {{dur}}, 'ease': '{{ease}}'}, {{at}});\n})();",
-   "needs": [
-    "ui"
-   ],
-   "role": "none",
-   "note": "注入式图形/描边：要额外 SVG 或 plugin，本链路不展开"
-  },
-  {
-   "id": "U32",
-   "name": "形状对齐变形",
-   "family": "绘制",
-   "layer": "element",
-   "status": "ready",
-   "cap": "MorphSVG shapeIndex 指定起点，避免变形打结",
-   "src": "gsap:MorphSVGPlugin",
-   "params": {
-    "to": "#morph-target",
-    "shapeIndex": 1,
-    "dur": 1.2,
-    "ease": "power2.inOut"
-   },
-   "use": "顶点数差很多的形状互变",
-   "avoid": "两个形状顶点顺序本来就一致",
-   "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t || !window.MorphSVGPlugin) return;\n  var _to = _t.getAttribute('data-morph-to') || '{{to}}';\n  if (!_to || !document.querySelector(_to)) return;\n  timeline.to(_t, {'morphSVG': {'shape': _to, 'shapeIndex': {{shapeIndex}}}, 'duration': {{dur}}, 'ease': '{{ease}}'}, {{at}});\n})();",
-   "needs": [
-    "ui"
-   ],
-   "role": "none",
-   "note": "注入式图形/描边：要额外 SVG 或 plugin，本链路不展开"
-  },
-  {
-   "id": "U33",
-   "name": "旋转变形",
-   "family": "绘制",
-   "layer": "element",
-   "status": "ready",
-   "cap": "type rotational：按旋转方向对齐",
-   "src": "gsap:MorphSVGPlugin",
-   "params": {
-    "to": "#morph-target",
-    "dur": 1.3,
-    "ease": "power2.inOut"
-   },
-   "use": "图标「转着」换形态",
-   "avoid": "需要严格直线插值时",
-   "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t || !window.MorphSVGPlugin) return;\n  var _to = _t.getAttribute('data-morph-to') || '{{to}}';\n  if (!_to || !document.querySelector(_to)) return;\n  timeline.to(_t, {'morphSVG': {'shape': _to, 'type': 'rotational'}, 'duration': {{dur}}, 'ease': '{{ease}}'}, {{at}});\n})();",
-   "needs": [
-    "ui"
-   ],
-   "role": "none",
-   "note": "注入式图形/描边：要额外 SVG 或 plugin，本链路不展开"
-  },
-  {
-   "id": "U34",
-   "name": "变到基本图形",
-   "family": "绘制",
-   "layer": "element",
-   "status": "ready",
-   "cap": "目标直接给 <circle>/<rect>/<polygon>，不必转 path",
-   "src": "gsap:MorphSVGPlugin",
-   "params": {
-    "to": "#morph-target",
-    "dur": 1.2,
-    "ease": "power2.inOut"
-   },
-   "use": "方块变圆、方变角标",
-   "avoid": "目标不存在时（卡会直接跳过）",
-   "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t || !window.MorphSVGPlugin) return;\n  var _to = _t.getAttribute('data-morph-to') || '{{to}}';\n  if (!_to || !document.querySelector(_to)) return;\n  timeline.to(_t, {'morphSVG': _to, 'duration': {{dur}}, 'ease': '{{ease}}'}, {{at}});\n})();",
-   "needs": [
-    "ui"
-   ],
-   "role": "none",
-   "note": "注入式图形/描边：要额外 SVG 或 plugin，本链路不展开"
-  },
-  {
-   "id": "U35",
-   "name": "路径弯曲度",
-   "family": "绘制",
-   "layer": "element",
-   "status": "ready",
-   "cap": "curviness 控制路径拐角的圆滑程度",
-   "src": "gsap:MotionPathPlugin",
-   "params": {
-    "path": "#motion-route",
-    "curviness": 1,
-    "dur": 2.0,
-    "ease": "power1.inOut"
-   },
-   "use": "折线路径要走得圆滑",
-   "avoid": "路径本身已是平滑曲线（差别很小）",
-   "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t || !window.MotionPathPlugin) return;\n  var _p = _t.getAttribute('data-motion-path') || '{{path}}';\n  if (!_p || !document.querySelector(_p)) return;\n  timeline.to(_t, {'motionPath': {'path': _p, 'align': _p, 'alignOrigin': [0.5, 0.5], 'curviness': {{curviness}}},\n    'duration': {{dur}}, 'ease': '{{ease}}'}, {{at}});\n})();",
-   "needs": [
-    "ui"
-   ],
-   "role": "none",
-   "note": "注入式图形/描边：要额外 SVG 或 plugin，本链路不展开"
-  },
-  {
-   "id": "U36",
-   "name": "贴边与偏移",
-   "family": "绘制",
-   "layer": "element",
-   "status": "ready",
-   "cap": "alignOrigin 让箭头尖贴路径，offset 再微调",
-   "src": "gsap:MotionPathPlugin",
-   "params": {
-    "path": "#motion-route",
-    "ox": 0.9,
-    "oy": 0.5,
-    "rotate": 1,
-    "offX": 12,
-    "offY": -8,
-    "dur": 2.1,
-    "ease": "power1.inOut"
-   },
-   "use": "箭头、笔尖、车头这类有朝向的物件",
-   "avoid": "圆形物件（用中心对齐就行）",
-   "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t || !window.MotionPathPlugin) return;\n  var _p = _t.getAttribute('data-motion-path') || '{{path}}';\n  if (!_p || !document.querySelector(_p)) return;\n  timeline.to(_t, {'motionPath': {'path': _p, 'align': _p, 'alignOrigin': [{{ox}}, {{oy}}],\n    'autoRotate': {{rotate}}, 'offsetX': {{offX}}, 'offsetY': {{offY}}},\n    'duration': {{dur}}, 'ease': '{{ease}}'}, {{at}});\n})();",
-   "needs": [
-    "ui"
-   ],
-   "role": "none",
-   "note": "注入式图形/描边：要额外 SVG 或 plugin，本链路不展开"
-  },
-  {
-   "id": "U37",
-   "name": "平滑插值",
-   "family": "绘制",
-   "layer": "element",
-   "status": "ready",
-   "cap": "type cubic + resolution：折线路径走成平滑曲线",
-   "src": "gsap:MotionPathPlugin",
-   "params": {
-    "path": "#motion-route",
-    "curviness": 1.6,
-    "resolution": 12,
-    "dur": 2.2,
-    "ease": "power1.inOut"
-   },
-   "use": "路径是折线但运动要顺",
-   "avoid": "需要严格沿原折线走",
-   "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t || !window.MotionPathPlugin) return;\n  var _p = _t.getAttribute('data-motion-path') || '{{path}}';\n  if (!_p || !document.querySelector(_p)) return;\n  timeline.to(_t, {'motionPath': {'path': _p, 'align': _p, 'alignOrigin': [0.5, 0.5],\n    'type': 'cubic', 'curviness': {{curviness}}, 'resolution': {{resolution}}},\n    'duration': {{dur}}, 'ease': '{{ease}}'}, {{at}});\n})();",
-   "needs": [
-    "ui"
-   ],
-   "role": "none",
-   "note": "注入式图形/描边：要额外 SVG 或 plugin，本链路不展开"
   },
   {
    "id": "T14",
@@ -2897,91 +1624,6 @@
    "role": "decoration"
   },
   {
-   "id": "S16",
-   "name": "差异打字",
-   "family": "状态",
-   "layer": "element",
-   "status": "ready",
-   "cap": "TextPlugin type diff：只替换变化的字",
-   "src": "gsap:TextPlugin",
-   "params": {
-    "text": "线索 128 条 · 已成交",
-    "dur": 1.4
-   },
-   "use": "状态文案只改后半段",
-   "avoid": "整句都换（用 T05）",
-   "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t || !window.TextPlugin) return;\n  timeline.to(_t, {'duration': {{dur}}, 'text': {'value': '{{text}}', 'type': 'diff'}, 'ease': 'none'}, {{at}});\n})();",
-   "role": "special_dom",
-   "note": "已有文本块可整体替换"
-  },
-  {
-   "id": "S17",
-   "name": "旧字高亮",
-   "family": "状态",
-   "layer": "element",
-   "status": "ready",
-   "cap": "oldClass/newClass 给被替换的字上色",
-   "src": "gsap:TextPlugin",
-   "params": {
-    "text": "已成交 12 条",
-    "oldClass": "old-chunk",
-    "newClass": "new-chunk",
-    "dur": 1.5
-   },
-   "use": "改文案时让观众看到「改了什么」",
-   "avoid": "颜色变量未定义时（会没效果）",
-   "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t || !window.TextPlugin) return;\n  timeline.to(_t, {'duration': {{dur}},\n    'text': {'value': '{{text}}', 'oldClass': '{{oldClass}}', 'newClass': '{{newClass}}'}, 'ease': 'none'}, {{at}});\n})();",
-   "role": "special_dom",
-   "note": "两个文本块可对调"
-  },
-  {
-   "id": "G05",
-   "name": "网格重排",
-   "family": "版面",
-   "layer": "element",
-   "status": "ready",
-   "cap": "Flip 自动量位移尺寸，逐格错开",
-   "src": "gsap:Flip",
-   "params": {
-    "columns": "repeat(2,1fr)",
-    "gap": "28px",
-    "dur": 1.4,
-    "ease": "power3.inOut",
-    "stagger": 0.05
-   },
-   "use": "3 列变 2 列、筛选后补位",
-   "avoid": "元素数量变化（要配合出现/消失）",
-   "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t || !window.Flip) return;\n  var _items = _t.children;\n  if (!_items.length) return;\n  var _st = Flip.getState(_items);\n  _t.style.gridTemplateColumns = '{{columns}}';\n  _t.style.gap = '{{gap}}';\n  var _f = Flip.from(_st, {'duration': {{dur}}, 'ease': '{{ease}}', 'absolute': true, 'stagger': {{stagger}}});\n  _f.pause(0);\n  var _dv = {p: 0};\n  timeline.to(_dv, {'p': 1, 'duration': {{dur}}, 'ease': 'none', 'onUpdate': function () { _f.progress(_dv.p); }}, {{at}});\n})();",
-   "needs": [
-    "ui"
-   ],
-   "role": "none",
-   "note": "版面重排：要真实布局锚点，本链路不展开"
-  },
-  {
-   "id": "G06",
-   "name": "重排带旋转",
-   "family": "版面",
-   "layer": "element",
-   "status": "ready",
-   "cap": "Flip spin：重排时带一点转动",
-   "src": "gsap:Flip",
-   "params": {
-    "direction": "column",
-    "spin": 1,
-    "dur": 1.3,
-    "ease": "power2.inOut"
-   },
-   "use": "横排变竖排、方向感变化",
-   "avoid": "需要严格不旋转时",
-   "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t || !window.Flip) return;\n  var _items = _t.children;\n  if (!_items.length) return;\n  var _st = Flip.getState(_items);\n  _t.style.flexDirection = '{{direction}}';\n  var _f = Flip.from(_st, {'duration': {{dur}}, 'ease': '{{ease}}', 'absolute': true, 'spin': {{spin}}, 'simple': true});\n  _f.pause(0);\n  var _dv = {p: 0};\n  timeline.to(_dv, {'p': 1, 'duration': {{dur}}, 'ease': 'none', 'onUpdate': function () { _f.progress(_dv.p); }}, {{at}});\n})();",
-   "needs": [
-    "ui"
-   ],
-   "role": "none",
-   "note": "版面重排：要真实布局锚点，本链路不展开"
-  },
-  {
    "id": "S18",
    "name": "数值映射条",
    "family": "状态",
@@ -3069,38 +1711,6 @@
    "role": "entrance_block"
   },
   {
-   "id": "G08",
-   "name": "头像长成资料卡",
-   "family": "版面",
-   "layer": "element",
-   "status": "ready",
-   "cap": "圆形头像长成整张卡：尺寸/圆角/图片高度同时变，内容后段渐入",
-   "src": "motion:avatar-profile",
-   "params": {
-    "from": "64,900,180,180,90",
-    "toX": 64,
-    "toY": 520,
-    "toW": 952,
-    "toH": 820,
-    "toR": 26,
-    "imgH": 340,
-    "child": "img",
-    "textChild": ".morph-text",
-    "dur": 1.1,
-    "ease": "power3.inOut",
-    "fadeDur": 0.45,
-    "fadeAt": 0.55
-   },
-   "use": "点头像看详情、名片展开",
-   "avoid": "没有起点坐标时（要写 data-morph-from）",
-   "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t) return;\n  var _from = (_t.getAttribute('data-morph-from') || '{{from}}').split(',');\n  if (_from.length < 5) return;\n  var _img = _t.querySelector('{{child}}');\n  var _txt = _t.querySelector('{{textChild}}');\n  var _startH = _img ? _img.getBoundingClientRect().height : 0;\n  timeline.fromTo(_t,\n    {'left': parseFloat(_from[0]), 'top': parseFloat(_from[1]),\n     'width': parseFloat(_from[2]), 'height': parseFloat(_from[3]),\n     'borderRadius': parseFloat(_from[4])},\n    {'left': {{toX}}, 'top': {{toY}}, 'width': {{toW}}, 'height': {{toH}},\n     'borderRadius': {{toR}}, 'duration': {{dur}}, 'ease': '{{ease}}'}, {{at}});\n  if (_img && {{imgH}}) {\n    timeline.fromTo(_img, {'height': _startH}, {'height': {{imgH}}, 'duration': {{dur}}, 'ease': '{{ease}}'}, {{at}});\n  }\n  if (_txt) timeline.to(_txt, {'opacity': 1, 'duration': {{fadeDur}}, 'ease': 'power2.out'}, {{at}} + {{dur}} * {{fadeAt}});\n})();",
-   "needs": [
-    "ui"
-   ],
-   "role": "none",
-   "note": "版面重排：要真实布局锚点，本链路不展开"
-  },
-  {
    "id": "G09",
    "name": "错落进出加布局",
    "family": "版面",
@@ -3168,157 +1778,6 @@
    "avoid": "父级本来就不裁剪（直接动原元素即可）",
    "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t) return;\n  var _sc = _t.closest('.scene') || document.getElementById('stage');\n  var _st = _sc.getBoundingClientRect(), _r = _t.getBoundingClientRect();\n  var _to = (_t.getAttribute('data-escape-to') || '{{to}}').split(',');\n  if (_to.length < 2) return;\n  var _g = _t.cloneNode(true);\n  _g.removeAttribute('data-anim');\n  _g.removeAttribute('id');\n  _g.setAttribute('aria-hidden', 'true');\n  _g.style.cssText = 'position:absolute;pointer-events:none;z-index:{{z}};display:grid;place-items:center;'\n    + 'left:' + (_r.left - _st.left) + 'px;top:' + (_r.top - _st.top) + 'px;'\n    + 'width:' + _r.width + 'px;height:' + _r.height + 'px;';\n  _sc.appendChild(_g);\n  timeline.to(_t, {'opacity': 0, 'duration': {{hideDur}}, 'ease': 'none'}, {{at}});\n  timeline.to(_g, {'opacity': 1, 'duration': {{hideDur}}, 'ease': 'none'}, {{at}});\n  timeline.fromTo(_g, {'left': _r.left - _st.left, 'top': _r.top - _st.top, 'scale': 1},\n    {'left': parseFloat(_to[0]), 'top': parseFloat(_to[1]), 'scale': {{scale}},\n     'duration': {{dur}}, 'ease': '{{ease}}'}, {{at}} + {{hideDur}});\n})();",
    "role": "state_block"
-  },
-  {
-   "id": "W21",
-   "name": "海报变英雄区",
-   "family": "照片",
-   "layer": "media",
-   "status": "ready",
-   "cap": "2:3 海报变 16:9 英雄区，焦点位置同时移，文案后压",
-   "src": "motion:netflix",
-   "params": {
-    "frameTo": "64,520,952,536",
-    "child": "img",
-    "textChild": ".hero-meta",
-    "focusFrom": "center 35%",
-    "focusTo": "center 55%",
-    "dur": 1.15,
-    "ease": "power3.inOut",
-    "fadeDur": 0.45,
-    "fadeAt": 0.95
-   },
-   "use": "列表里的封面展开成详情头图",
-   "avoid": "照片不是 2:3 或 16:9（会裁掉主体）",
-   "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t) return;\n  var _to = (_t.getAttribute('data-frame-to') || '{{frameTo}}').split(',');\n  if (_to.length < 4) return;\n  var _img = _t.querySelector('{{child}}');\n  timeline.to(_t, {'left': parseFloat(_to[0]), 'top': parseFloat(_to[1]),\n    'width': parseFloat(_to[2]), 'height': parseFloat(_to[3]),\n    'duration': {{dur}}, 'ease': '{{ease}}'}, {{at}});\n  if (_img) timeline.fromTo(_img, {'objectPosition': '{{focusFrom}}'},\n    {'objectPosition': '{{focusTo}}', 'duration': {{dur}}, 'ease': '{{ease}}'}, {{at}});\n  var _txt = _t.querySelector('{{textChild}}');\n  if (_txt) timeline.to(_txt, {'opacity': 1, 'duration': {{fadeDur}}, 'ease': 'power2.out'}, {{at}} + {{dur}} * {{fadeAt}});\n})();",
-   "needs": [
-    "img"
-   ],
-   "role": "none",
-   "note": "照片形变：要 WebGL 纹理，本链路不展开"
-  },
-  {
-   "id": "X32",
-   "name": "弹层开合",
-   "family": "结构",
-   "layer": "element",
-   "status": "ready",
-   "cap": "覆盖层压暗 + 卡片带缩放进场",
-   "src": "motion:modal-open",
-   "params": {
-    "backdrop": ".bd",
-    "dim": 0.66,
-    "dimDur": 0.35,
-    "fromScale": 0.82,
-    "fromY": 80,
-    "dur": 0.6
-   },
-   "use": "弹窗、抽屉、详情浮层",
-   "avoid": "目标没有遮罩元素时（backdrop 留空）",
-   "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t) return;\n  var _sc = _t.closest('.scene') || document.getElementById('stage');\n  var _bd = _sc.querySelector('{{backdrop}}');\n  if (_bd) timeline.to(_bd, {'opacity': {{dim}}, 'duration': {{dimDur}}, 'ease': 'power2.out'}, {{at}});\n  timeline.fromTo(_t, {'scale': {{fromScale}}, 'y': {{fromY}}, 'opacity': 0},\n    {'scale': 1, 'y': 0, 'opacity': 1, 'duration': {{dur}}, 'ease': 'power3.out'}, {{at}});\n})();",
-   "role": "none",
-   "note": "结构改写：要额外 DOM，本链路不展开"
-  },
-  {
-   "id": "G12",
-   "name": "变形过去再回来",
-   "family": "版面",
-   "layer": "element",
-   "status": "ready",
-   "cap": "A→B 再回 A，来回走同一条路径",
-   "src": "motion:shared-element-a-b-a",
-   "params": {
-    "from": "120,800,300,300,20",
-    "to": "64,520,952,560,26",
-    "dur": 0.85,
-    "backAt": 1.25
-   },
-   "use": "预览、来回切换、返回列表",
-   "avoid": "只要单向时",
-   "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t) return;\n  var _a = (_t.getAttribute('data-frame-from') || '{{from}}').split(',');\n  var _b = (_t.getAttribute('data-morph-to') || '{{to}}').split(',');\n  if (_a.length < 5 || _b.length < 5) return;\n  var _rect = function (v) { return {'left': parseFloat(v[0]), 'top': parseFloat(v[1]),\n    'width': parseFloat(v[2]), 'height': parseFloat(v[3]), 'borderRadius': parseFloat(v[4])}; };\n  timeline.to(_t, Object.assign(_rect(_b), {'duration': {{dur}}, 'ease': 'power3.inOut'}), {{at}});\n  timeline.to(_t, Object.assign(_rect(_a), {'duration': {{dur}}, 'ease': 'power3.inOut'}), {{at}} + {{backAt}});\n})();",
-   "needs": [
-    "ui"
-   ],
-   "role": "none",
-   "note": "版面重排：要真实布局锚点，本链路不展开"
-  },
-  {
-   "id": "G13",
-   "name": "多元素同时变形",
-   "family": "版面",
-   "layer": "element",
-   "status": "ready",
-   "cap": "多张卡同时长成整宽行，可 stagger",
-   "src": "motion:shared-multiple-elements",
-   "params": {
-    "to": "64,0,952,300,22",
-    "dur": 1.0,
-    "stagger": 0.1
-   },
-   "use": "三张卡同时展开成列表",
-   "avoid": "元素超过 5 个（会挤）",
-   "code": "(function () {\n  var _els = [].slice.call(document.querySelectorAll('{{sel}}'));\n  if (!_els.length) return;\n  _els.forEach(function (el, i) {\n    var _to = (el.getAttribute('data-morph-to') || '{{to}}').split(',');\n    if (_to.length < 4) return;\n    timeline.to(el, {'left': parseFloat(_to[0]), 'top': parseFloat(_to[1]),\n      'width': parseFloat(_to[2]), 'height': parseFloat(_to[3]),\n      'borderRadius': parseFloat(_to[4] || 22),\n      'duration': {{dur}}, 'ease': 'power3.inOut'}, {{at}} + i * {{stagger}});\n  });\n})();",
-   "needs": [
-    "ui"
-   ],
-   "role": "none",
-   "note": "版面重排：要真实布局锚点，本链路不展开"
-  },
-  {
-   "id": "G14",
-   "name": "列表到详情再返回",
-   "family": "版面",
-   "layer": "element",
-   "status": "ready",
-   "cap": "行展开成详情再收回，图片跟着变",
-   "src": "motion:app-store-layout",
-   "params": {
-    "img": "img",
-    "openTop": 520,
-    "openH": 700,
-    "openR": 26,
-    "imgW": 952,
-    "imgH": 420,
-    "imgR": 0,
-    "listTop": 700,
-    "listH": 180,
-    "listR": 18,
-    "imgSmall": 120,
-    "dur": 0.85,
-    "backAt": 1.4,
-    "backDur": 0.8
-   },
-   "use": "列表项展开详情再回列表",
-   "avoid": "行内没有缩略图",
-   "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t) return;\n  var _img = _t.querySelector('{{img}}');\n  timeline.to(_t, {'top': {{openTop}}, 'height': {{openH}}, 'borderRadius': {{openR}},\n    'duration': {{dur}}, 'ease': 'power3.inOut'}, {{at}});\n  if (_img) timeline.to(_img, {'width': {{imgW}}, 'height': {{imgH}}, 'borderRadius': {{imgR}},\n    'duration': {{dur}}, 'ease': 'power3.inOut'}, {{at}});\n  timeline.to(_t, {'top': {{listTop}}, 'height': {{listH}}, 'borderRadius': {{listR}},\n    'duration': {{backDur}}, 'ease': 'power3.inOut'}, {{at}} + {{backAt}});\n  if (_img) timeline.to(_img, {'width': {{imgSmall}}, 'height': {{imgSmall}}, 'borderRadius': 14,\n    'duration': {{backDur}}, 'ease': 'power3.inOut'}, {{at}} + {{backAt}});\n})();",
-   "needs": [
-    "ui"
-   ],
-   "role": "none",
-   "note": "版面重排：要真实布局锚点，本链路不展开"
-  },
-  {
-   "id": "G16",
-   "name": "错开曲线",
-   "family": "版面",
-   "layer": "element",
-   "status": "ready",
-   "cap": "用幂次曲线分配延迟：前紧后松",
-   "src": "motion:stagger()",
-   "params": {
-    "y": 60,
-    "dur": 0.5,
-    "span": 1.2,
-    "power": 1.9
-   },
-   "use": "一排格子/标签要「一波」进场",
-   "avoid": "元素少于 4 个",
-   "code": "(function () {\n  var _els = [].slice.call(document.querySelectorAll('{{sel}}'));\n  if (!_els.length) return;\n  var _n = _els.length;\n  _els.forEach(function (el, i) {\n    var _lin = _n > 1 ? i / (_n - 1) : 0;\n    var _curve = Math.pow(_lin, {{power}});\n    timeline.fromTo(el, {'opacity': 0, 'y': {{y}}},\n      {'opacity': 1, 'y': 0, 'duration': {{dur}}, 'ease': 'power2.out'}, {{at}} + _curve * {{span}});\n  });\n})();",
-   "needs": [
-    "ui"
-   ],
-   "role": "none",
-   "note": "版面重排：要真实布局锚点，本链路不展开"
   },
   {
    "id": "S20",
@@ -3764,153 +2223,6 @@
    "note": "几个节点串成一条线；讲阶段、里程碑"
   },
   {
-   "id": "Z04",
-   "name": "边缘光体",
-   "family": "三维",
-   "layer": "camera",
-   "status": "ready",
-   "cap": "菲涅尔边缘发光，从暗场亮起来并转动",
-   "src": "ogl:fresnel",
-   "params": {
-    "dur": 2.6,
-    "pow": 2.2,
-    "radius": 0.86,
-    "tube": 0.36,
-    "posY": 0.78,
-    "bg": "#0a0b0b",
-    "base": "#0d1512",
-    "edge": "#86F0C0"
-   },
-   "use": "玻璃/金属球体、能量体、科技感主体；边缘一圈亮、正面暗",
-   "avoid": "需要看清内部细节的物体（边缘光会吃掉中间层次）",
-   "code": "(function () {\n  var _cv = document.querySelector('{{sel}}');\n  if (!_cv || !window.THREE) return;\n  var _w = _cv.width || 1080, _h = _cv.height || 1920;\n  var _r = new THREE.WebGLRenderer({canvas: _cv, antialias: true});\n  _r.setSize(_w, _h, false); _r.setPixelRatio(1);\n  var _s = new THREE.Scene();\n  _s.background = new THREE.Color('{{bg}}');\n  var _c = new THREE.PerspectiveCamera(38, _w / _h, 0.1, 100);\n  _c.position.set(0, 0.3, 7.6); _c.lookAt(0, 0.3, 0);\n  var _g = new THREE.TorusGeometry({{radius}}, {{tube}}, 72, 140);\n  var _m = new THREE.ShaderMaterial({\n    uniforms: {\n      uBase: {value: new THREE.Color('{{base}}')},\n      uEdge: {value: new THREE.Color('{{edge}}')},\n      uPow:  {value: {{pow}}},\n      uMix:  {value: 0}\n    },\n    vertexShader: 'varying vec3 vN; varying vec3 vV; void main() { vec4 w = modelMatrix * vec4(position, 1.0); vN = normalize(mat3(modelMatrix) * normal); vV = normalize(cameraPosition - w.xyz); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',\n    fragmentShader: 'uniform vec3 uBase; uniform vec3 uEdge; uniform float uPow; uniform float uMix; varying vec3 vN; varying vec3 vV; void main() { float f = abs(dot(normalize(vV), normalize(vN))); float e = pow(1.0 - f, uPow); float b = pow(f, 0.45); vec3 col = mix(uBase, uEdge, e) * mix(0.22, 1.0, uMix); col += uEdge * e * 0.5 * uMix; gl_FragColor = vec4(col, 1.0); }'\n  });\n  var _mesh = new THREE.Mesh(_g, _m);\n  _mesh.position.y = {{posY}};\n  _s.add(_mesh);\n  var _o = {'p': 0};\n  timeline.to(_o, {'p': 1, 'duration': {{dur}}, 'ease': 'none', 'onUpdate': function () {\n    var p = _o.p;\n    _m.uniforms.uMix.value = p;\n    _m.uniforms.uPow.value = {{pow}} * (0.35 + 0.95 * p);\n    _mesh.rotation.y = -0.55 + p * 1.75;\n    _mesh.rotation.x = 0.34 + p * 0.3;\n    _r.render(_s, _c);\n  }}, {{at}});\n})();",
-   "role": "none",
-   "note": "三维：要 three.js 与 canvas，本链路不展开"
-  },
-  {
-   "id": "Z05",
-   "name": "重心线框",
-   "family": "三维",
-   "layer": "camera",
-   "status": "ready",
-   "cap": "重心坐标画线，线宽可控、可虚线",
-   "src": "ogl:wireframe-shader",
-   "params": {
-    "dur": 2.6,
-    "seg": 1,
-    "size": 1.05,
-    "wire": 1.3,
-    "dash": 0,
-    "posY": 0.62,
-    "bg": "#0a0b0b",
-    "edge": "#86F0C0"
-   },
-   "use": "线框模型、结构示意、科技网格体；比 three 原生 wireframe 多线宽与虚线控制",
-   "avoid": "面数太高（重心坐标要 toNonIndexed，顶点数翻三倍）",
-   "code": "(function () {\n  var _cv = document.querySelector('{{sel}}');\n  if (!_cv || !window.THREE) return;\n  var _w = _cv.width || 1080, _h = _cv.height || 1920;\n  var _r = new THREE.WebGLRenderer({canvas: _cv, antialias: true});\n  _r.setSize(_w, _h, false); _r.setPixelRatio(1);\n  var _s = new THREE.Scene();\n  _s.background = new THREE.Color('{{bg}}');\n  var _c = new THREE.PerspectiveCamera(40, _w / _h, 0.1, 100);\n  _c.position.set(0, 0.2, 6.4); _c.lookAt(0, 0.2, 0);\n  var _src = new THREE.IcosahedronGeometry({{size}}, {{seg}}).toNonIndexed();\n  var _n = _src.attributes.position.count;\n  var _bary = new Float32Array(_n * 3);\n  for (var i = 0; i < _n; i++) { _bary[i * 3 + (i % 3)] = 1.0; }\n  _src.setAttribute('barycentric', new THREE.BufferAttribute(_bary, 3));\n  var _m = new THREE.ShaderMaterial({\n    uniforms: {\n      uLine: {value: new THREE.Color('{{edge}}')},\n      uWidth: {value: {{wire}}},\n      uDash: {value: {{dash}}},\n      uMix: {value: 0}\n    },\n    vertexShader: 'attribute vec3 barycentric; varying vec3 vB; void main() { vB = barycentric; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',\n    fragmentShader: 'uniform vec3 uLine; uniform float uWidth; uniform float uDash; uniform float uMix; varying vec3 vB; void main() { vec3 d = fwidth(vB); vec3 s = smoothstep(d * (uWidth + 0.5), d * (uWidth - 0.5), vB); float a = max(max(s.x, s.y), s.z); if (uDash > 0.0) { a *= step(0.0, sin(max(vB.x, vB.y) * 3.14159 * uDash)); } gl_FragColor = vec4(uLine * mix(0.35, 1.0, uMix), a * mix(0.25, 1.0, uMix)); }',\n    transparent: true,\n    depthWrite: false\n  });\n  var _mesh = new THREE.Mesh(_src, _m);\n  _mesh.position.y = {{posY}};\n  _s.add(_mesh);\n  var _o = {'p': 0};\n  timeline.to(_o, {'p': 1, 'duration': {{dur}}, 'ease': 'none', 'onUpdate': function () {\n    var p = _o.p;\n    _m.uniforms.uMix.value = p;\n    _mesh.rotation.y = -0.4 + p * 1.5;\n    _mesh.rotation.x = 0.28 + p * 0.22;\n    _mesh.scale.setScalar(0.9 + p * 0.12);\n    _r.render(_s, _c);\n  }}, {{at}});\n})();",
-   "role": "none",
-   "note": "三维：要 three.js 与 canvas，本链路不展开"
-  },
-  {
-   "id": "Z11",
-   "name": "实例阵列",
-   "family": "三维",
-   "layer": "camera",
-   "status": "ready",
-   "cap": "InstancedMesh 一次画上千个，按环形波起伏",
-   "src": "ogl:instancing",
-   "params": {
-    "dur": 2.8,
-    "grid": 28,
-    "cell": 0.14,
-    "span": 5.2,
-    "amp": 1.25,
-    "bg": "#07090a",
-    "base": "#8FE3C4"
-   },
-   "use": "数据体量、阵列律动、大规模元素同时动",
-   "avoid": "需要每个元素不同颜色的场合（实例化要额外属性）",
-   "code": "(function () {\n  var _cv = document.querySelector('{{sel}}');\n  if (!_cv || !window.THREE) return;\n  var _w = _cv.width || 1080, _h = _cv.height || 1920;\n  var _r = new THREE.WebGLRenderer({canvas: _cv, antialias: true});\n  _r.setSize(_w, _h, false); _r.setPixelRatio(1);\n  var _s = new THREE.Scene();\n  _s.background = new THREE.Color('{{bg}}');\n  var _c = new THREE.PerspectiveCamera(42, _w / _h, 0.1, 120);\n  _c.position.set(0, 4.4, 8.6); _c.lookAt(0, 0, 0);\n  var _N = {{grid}}, _cnt = _N * _N;\n  var _geo = new THREE.BoxGeometry({{cell}}, {{cell}}, {{cell}});\n  var _mat = new THREE.MeshStandardMaterial({color: new THREE.Color('{{base}}'), roughness: 0.45, metalness: 0.25});\n  var _inst = new THREE.InstancedMesh(_geo, _mat, _cnt);\n  _s.add(_inst);\n  var _l = new THREE.DirectionalLight(0xffffff, 2.6); _l.position.set(3, 6, 5); _s.add(_l);\n  _s.add(new THREE.HemisphereLight(0x86f0c0, 0x081014, 0.85));\n  var _m4 = new THREE.Matrix4();\n  var _q = new THREE.Quaternion();\n  var _e = new THREE.Euler();\n  var _v = new THREE.Vector3();\n  var _sc = new THREE.Vector3(1, 1, 1);\n  var _span = {{span}};\n  for (var i = 0; i < _cnt; i++) {\n    var ix = i % _N, iz = Math.floor(i / _N);\n    _v.set((ix / (_N - 1) - 0.5) * _span, 0, (iz / (_N - 1) - 0.5) * _span);\n    _m4.compose(_v, _q.identity(), _sc);\n    _inst.setMatrixAt(i, _m4);\n  }\n  _inst.instanceMatrix.needsUpdate = true;\n  var _o = {'p': 0};\n  timeline.to(_o, {'p': 1, 'duration': {{dur}}, 'ease': 'none', 'onUpdate': function () {\n    var p = _o.p;\n    for (var k = 0; k < _cnt; k++) {\n      var kx = k % _N, kz = Math.floor(k / _N);\n      var d = Math.sqrt(kx * kx + kz * kz) / _N;\n      var wave = Math.sin((d * 9.0) - p * 7.2) * 0.5 + 0.5;\n      var h = wave * {{amp}} * Math.min(1.0, p * 2.4);\n      _v.set((kx / (_N - 1) - 0.5) * _span, h, (kz / (_N - 1) - 0.5) * _span);\n      _e.set(p * 1.6 + d * 2.0, p * 1.1, 0);\n      _m4.compose(_v, _q.setFromEuler(_e), _sc);\n      _inst.setMatrixAt(k, _m4);\n    }\n    _inst.instanceMatrix.needsUpdate = true;\n    _r.render(_s, _c);\n  }}, {{at}});\n})();",
-   "role": "none",
-   "note": "三维：要 three.js 与 canvas，本链路不展开"
-  },
-  {
-   "id": "U38",
-   "name": "屏幕空间粗线",
-   "family": "绘制",
-   "layer": "element",
-   "status": "ready",
-   "cap": "路径两侧偏移生成条带，线宽可控、中间粗两头细、带生长头",
-   "src": "ogl:polylines",
-   "params": {
-    "dur": 2.4,
-    "seg": 260,
-    "x0": 0.1,
-    "xspan": 0.8,
-    "waves": 1.6,
-    "amp": 0.085,
-    "phase": 0.0,
-    "width": 15.0,
-    "cr": 0.53,
-    "cg": 0.94,
-    "cb": 0.75
-   },
-   "use": "手绘曲线、数据走势、能量流；比 SVG stroke 多渐变粗细和生长头",
-   "avoid": "需要精确折线角度时（这里按法线偏移，尖角会圆掉）",
-   "code": "(function () {\n  var _cv = document.querySelector('{{sel}}');\n  if (!_cv) return;\n  var gl = _cv.getContext('webgl', {premultipliedAlpha: false, alpha: true, preserveDrawingBuffer: true})\n        || _cv.getContext('experimental-webgl');\n  if (!gl) return;\n  var W = _cv.width || 1080, H = _cv.height || 1920;\n  var N = {{seg}};\n  var pts = [];\n  for (var i = 0; i <= N; i++) {\n    var u = i / N;\n    var x = ({{x0}} + u * {{xspan}}) * W;\n    var y = (0.5 + Math.sin(u * 6.2832 * {{waves}} + {{phase}}) * {{amp}}\n             + Math.sin(u * 6.2832 * {{waves}} * 2.0 + 1.1) * {{amp}} * 0.22) * H;\n    pts.push([x, y, u]);\n  }\n  var V = new Float32Array(N * 2 * 6);\n  for (var k = 0; k < N; k++) {\n    var a = pts[k], b = pts[k + 1];\n    var tx = b[0] - a[0], ty = b[1] - a[1];\n    var tl = Math.sqrt(tx * tx + ty * ty) || 1;\n    var nx = -ty / tl, ny = tx / tl;\n    for (var s = 0; s < 2; s++) {\n      var o = (k * 2 + s) * 6;\n      V[o] = a[0]; V[o + 1] = a[1]; V[o + 2] = nx; V[o + 3] = ny;\n      V[o + 4] = s === 0 ? -1 : 1; V[o + 5] = a[2];\n    }\n  }\n  var VS = 'attribute vec2 pos; attribute vec2 nrm; attribute float side; attribute float uv; uniform vec2 uRes; uniform float uWidth; varying float vUv; varying float vSide; void main() { float taper = 1.0 - pow(abs(uv - 0.5) * 2.0, 2.0) * 0.72; vec2 c = pos + nrm * side * uWidth * taper; gl_Position = vec4(c.x / uRes.x * 2.0 - 1.0, 1.0 - c.y / uRes.y * 2.0, 0.0, 1.0); vUv = uv; vSide = side; }';\n  var FS = 'precision highp float; uniform vec3 uCol; uniform vec3 uHead; uniform float uP; varying float vUv; varying float vSide; void main() { if (vUv > uP) discard; float edge = 1.0 - abs(vSide); float a = smoothstep(0.0, 0.32, edge); float head = smoothstep(uP - 0.05, uP, vUv); vec3 col = mix(uCol, uHead, head * 0.85); gl_FragColor = vec4(col, a * (0.62 + 0.38 * (1.0 - head))); }';\n  function mk(type, src) {\n    var o = gl.createShader(type);\n    gl.shaderSource(o, src); gl.compileShader(o);\n    return gl.getShaderParameter(o, gl.COMPILE_STATUS) ? o : null;\n  }\n  var vs = mk(gl.VERTEX_SHADER, VS), fs = mk(gl.FRAGMENT_SHADER, FS);\n  if (!vs || !fs) return;\n  var prog = gl.createProgram();\n  gl.attachShader(prog, vs); gl.attachShader(prog, fs); gl.linkProgram(prog);\n  if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) return;\n  gl.useProgram(prog);\n  var buf = gl.createBuffer();\n  gl.bindBuffer(gl.ARRAY_BUFFER, buf);\n  gl.bufferData(gl.ARRAY_BUFFER, V, gl.STATIC_DRAW);\n  var aPos = gl.getAttribLocation(prog, 'pos');\n  var aNrm = gl.getAttribLocation(prog, 'nrm');\n  var aSide = gl.getAttribLocation(prog, 'side');\n  var aUv = gl.getAttribLocation(prog, 'uv');\n  var S = 6 * 4;\n  gl.enableVertexAttribArray(aPos); gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, S, 0);\n  gl.enableVertexAttribArray(aNrm); gl.vertexAttribPointer(aNrm, 2, gl.FLOAT, false, S, 8);\n  gl.enableVertexAttribArray(aSide); gl.vertexAttribPointer(aSide, 1, gl.FLOAT, false, S, 16);\n  gl.enableVertexAttribArray(aUv); gl.vertexAttribPointer(aUv, 1, gl.FLOAT, false, S, 20);\n  var uRes = gl.getUniformLocation(prog, 'uRes');\n  var uWidth = gl.getUniformLocation(prog, 'uWidth');\n  var uCol = gl.getUniformLocation(prog, 'uCol');\n  var uHead = gl.getUniformLocation(prog, 'uHead');\n  var uP = gl.getUniformLocation(prog, 'uP');\n  gl.uniform2f(uRes, W, H);\n  gl.uniform1f(uWidth, {{width}});\n  gl.uniform3f(uCol, {{cr}}, {{cg}}, {{cb}});\n  gl.uniform3f(uHead, 1.0, 1.0, 1.0);\n  gl.enable(gl.BLEND);\n  gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);\n  gl.viewport(0, 0, W, H);\n  gl.clearColor(0, 0, 0, 0);\n  var _o = {'p': 0};\n  timeline.to(_o, {'p': 1, 'duration': {{dur}}, 'ease': 'none', 'onUpdate': function () {\n    gl.clear(gl.COLOR_BUFFER_BIT);\n    gl.uniform1f(uP, 0.04 + _o.p * 0.96);\n    gl.drawArrays(gl.TRIANGLE_STRIP, 0, N * 2);\n  }}, {{at}});\n})();",
-   "role": "none",
-   "note": "注入式图形/描边：要额外 SVG 或 plugin，本链路不展开"
-  },
-  {
-   "id": "Z07",
-   "name": "GPU 粒子群",
-   "family": "三维",
-   "layer": "camera",
-   "status": "ready",
-   "cap": "双 RT ping-pong 算速度与位置，粒子被虚拟指针推开再回弹",
-   "src": "ogl:gpgpu-particles",
-   "params": {
-    "dur": 2.8,
-    "size": 128,
-    "psize": 5.0,
-    "spread": 1.05,
-    "rad": 0.42,
-    "force": 3.2,
-    "fric": 0.982,
-    "orbit": 1.0,
-    "ptr": 0.45,
-    "bg": "#05070a",
-    "edge": "#86F0C0"
-   },
-   "use": "粒子流、被吸引/排斥的群体、科技感背景",
-   "avoid": "需要逐粒子精确轨迹时（seek 跳帧会从 0 重放，状态机要一致）",
-   "code": "(function () {\n  var _cv = document.querySelector('{{sel}}');\n  if (!_cv || !window.THREE) return;\n  var W = _cv.width || 1080, H = _cv.height || 1920;\n  var _r = new THREE.WebGLRenderer({canvas: _cv, antialias: false});\n  _r.setSize(W, H, false); _r.setPixelRatio(1);\n  var _s = new THREE.Scene();\n  _s.background = new THREE.Color('{{bg}}');\n  var _c = new THREE.PerspectiveCamera(45, W / H, 0.1, 100);\n  _c.position.set(0, 0, 5);\n  var N = {{size}}, CNT = N * N;\n  function rnd(i) { var x = Math.sin(i * 12.9898) * 43758.5453; return x - Math.floor(x); }\n  var posD = new Float32Array(CNT * 4), velD = new Float32Array(CNT * 4), rndD = new Float32Array(CNT * 4);\n  for (var i = 0; i < CNT; i++) {\n    var a = rnd(i + 1) * 6.2832, rr = Math.sqrt(rnd(i + 7)) * 0.95;\n    posD[i * 4] = Math.cos(a) * rr; posD[i * 4 + 1] = Math.sin(a) * rr;\n    posD[i * 4 + 2] = 0; posD[i * 4 + 3] = 1;\n    velD[i * 4] = 0; velD[i * 4 + 1] = 0; velD[i * 4 + 2] = 0; velD[i * 4 + 3] = 1;\n    rndD[i * 4] = rnd(i + 31); rndD[i * 4 + 1] = rnd(i + 61);\n    rndD[i * 4 + 2] = rnd(i + 97); rndD[i * 4 + 3] = rnd(i + 131);\n  }\n  function mkTex(arr) {\n    var t = new THREE.DataTexture(arr, N, N, THREE.RGBAFormat, THREE.FloatType);\n    t.needsUpdate = true;\n    return t;\n  }\n  var posInit = mkTex(posD), velInit = mkTex(velD);\n  function mkRT() {\n    return new THREE.WebGLRenderTarget(N, N, {\n      type: THREE.FloatType, format: THREE.RGBAFormat,\n      minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter, depthBuffer: false\n    });\n  }\n  var posA = mkRT(), posB = mkRT(), velA = mkRT(), velB = mkRT();\n  var qs = new THREE.Scene();\n  var qc = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);\n  var qm = new THREE.Mesh(new THREE.PlaneGeometry(2, 2));\n  qs.add(qm);\n  var COPY_VS = 'varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }';\n  var COPY_FS = 'precision highp float; varying vec2 vUv; uniform sampler2D tMap; void main() { gl_FragColor = texture2D(tMap, vUv); }';\n  function copyMat(tex) {\n    return new THREE.ShaderMaterial({uniforms: {tMap: {value: tex}}, vertexShader: COPY_VS, fragmentShader: COPY_FS});\n  }\n  function pass(mat, target) {\n    qm.material = mat;\n    _r.setRenderTarget(target);\n    _r.render(qs, qc);\n    _r.setRenderTarget(null);\n  }\n  var SIM_VS = COPY_VS;\n  var VEL_FS = 'precision highp float; varying vec2 vUv; uniform sampler2D tPos; uniform sampler2D tVel; uniform float uDt; uniform vec2 uPtr; void main() { vec4 p = texture2D(tPos, vUv); vec4 v = texture2D(tVel, vUv); vec2 toP = p.xy - uPtr; float d = length(toP) + 0.0001; v.xy += (toP / d) * smoothstep({{rad}}, 0.0, d) * {{force}} * uDt; v.xy *= {{fric}}; gl_FragColor = v; }';\n  var POS_FS = 'precision highp float; varying vec2 vUv; uniform sampler2D tPos; uniform sampler2D tVel; uniform float uDt; void main() { vec4 p = texture2D(tPos, vUv); vec4 v = texture2D(tVel, vUv); p.xy += v.xy * uDt; p.xy = mod(p.xy + 1.0, 2.0) - 1.0; gl_FragColor = p; }';\n  var velMat = new THREE.ShaderMaterial({\n    uniforms: {tPos: {value: posA.texture}, tVel: {value: velA.texture}, uDt: {value: 1 / 30}, uPtr: {value: new THREE.Vector2(0, 0)}},\n    vertexShader: SIM_VS, fragmentShader: VEL_FS\n  });\n  var posMat = new THREE.ShaderMaterial({\n    uniforms: {tPos: {value: posA.texture}, tVel: {value: velA.texture}, uDt: {value: 1 / 30}},\n    vertexShader: SIM_VS, fragmentShader: POS_FS\n  });\n  var _step = 0;\n  function resetSim() {\n    pass(copyMat(posInit), posA);\n    pass(copyMat(velInit), velA);\n    _step = 0;\n  }\n  resetSim();\n  function advance(ptr) {\n    velMat.uniforms.tPos.value = posA.texture;\n    velMat.uniforms.tVel.value = velA.texture;\n    velMat.uniforms.uPtr.value.copy(ptr);\n    pass(velMat, velB);\n    posMat.uniforms.tPos.value = posA.texture;\n    posMat.uniforms.tVel.value = velB.texture;\n    pass(posMat, posB);\n    var t = posA; posA = posB; posB = t;\n    var v = velA; velA = velB; velB = v;\n  }\n  var g = new THREE.BufferGeometry();\n  var coords = new Float32Array(CNT * 2);\n  var pos0 = new Float32Array(CNT * 3);\n  for (var k = 0; k < CNT; k++) {\n    var cx = (k % N + 0.5) / N, cy = (Math.floor(k / N) + 0.5) / N;\n    coords[k * 2] = cx; coords[k * 2 + 1] = cy;\n  }\n  g.setAttribute('position', new THREE.BufferAttribute(pos0, 3));\n  g.setAttribute('coords', new THREE.BufferAttribute(coords, 2));\n  g.setAttribute('rnd', new THREE.BufferAttribute(rndD, 4));\n  var pMat = new THREE.ShaderMaterial({\n    uniforms: {\n      tPos: {value: posA.texture}, tVel: {value: velA.texture},\n      uSize: {value: {{psize}}}, uSpread: {value: {{spread}}},\n      uCol: {value: new THREE.Color('{{edge}}')}, uP: {value: 0}\n    },\n    vertexShader: 'attribute vec2 coords; attribute vec4 rnd; uniform sampler2D tPos; uniform sampler2D tVel; uniform float uSize; uniform float uSpread; varying vec4 vR; varying float vSp; void main() { vec4 p = texture2D(tPos, coords); vec4 v = texture2D(tVel, coords); vR = rnd; vSp = length(v.xy); vec4 mv = modelViewMatrix * vec4(p.xy * uSpread, 0.0, 1.0); gl_Position = projectionMatrix * mv; gl_PointSize = uSize * (0.5 + rnd.x) * (1.0 + vSp * 2.2); }',\n    fragmentShader: 'precision highp float; uniform vec3 uCol; uniform float uP; varying vec4 vR; varying float vSp; void main() { vec2 d = gl_PointCoord - 0.5; if (dot(d, d) > 0.25) discard; float hot = smoothstep(0.0, 1.4, vSp); vec3 col = mix(uCol, vec3(1.0), hot * 0.75); gl_FragColor = vec4(col, (0.25 + 0.75 * vR.z) * uP); }',\n    transparent: true, depthWrite: false, depthTest: false\n  });\n  var pts = new THREE.Points(g, pMat);\n  pts.frustumCulled = false;\n  _s.add(pts);\n  var _o = {'p': 0};\n  var _ptr = new THREE.Vector2(0, 0);\n  timeline.to(_o, {'p': 1, 'duration': {{dur}}, 'ease': 'none', 'onUpdate': function () {\n    var p = _o.p;\n    var want = Math.round(p * {{dur}} * 30);\n    if (want < _step) resetSim();\n    _ptr.set(Math.cos(p * 6.2832 * {{orbit}}) * {{ptr}}, Math.sin(p * 6.2832 * {{orbit}}) * {{ptr}});\n    while (_step < want) { advance(_ptr); _step++; }\n    pMat.uniforms.tPos.value = posA.texture;\n    pMat.uniforms.tVel.value = velA.texture;\n    pMat.uniforms.uP.value = Math.min(1, p * 3.2);\n    _r.render(_s, _c);\n  }}, {{at}});\n})();",
-   "role": "none",
-   "note": "三维：要 three.js 与 canvas，本链路不展开"
-  },
-  {
-   "id": "Z13",
-   "name": "MatCap 材质球",
-   "family": "三维",
-   "layer": "camera",
-   "status": "ready",
-   "cap": "球面光照贴图直接贴到任意几何，陶瓷/漆面质感，不需要灯光",
-   "src": "ogl:flat-shading-matcap",
-   "params": {
-    "dur": 2.8,
-    "size": 0.62,
-    "posY": 0.62,
-    "knot": 1,
-    "bg": "#080b0c",
-    "tint": "#ffffff"
-   },
-   "use": "陶瓷/烤漆/塑料质感主体；比 PBR 轻，没有灯光也不会黑",
-   "avoid": "需要真实环境反射（MatCap 是预烘焙的一张球面图，不会随视角变）",
-   "code": "(function () {\n  var _cv = document.querySelector('{{sel}}');\n  if (!_cv || !window.THREE) return;\n  var _w = _cv.width || 1080, _h = _cv.height || 1920;\n  var _r = new THREE.WebGLRenderer({canvas: _cv, antialias: true});\n  _r.setSize(_w, _h, false); _r.setPixelRatio(1);\n  var _s = new THREE.Scene();\n  _s.background = new THREE.Color('{{bg}}');\n  var _c = new THREE.PerspectiveCamera(36, _w / _h, 0.1, 100);\n  _c.position.set(0, 0.15, 6.2); _c.lookAt(0, 0, 0);\n  var S = 256;\n  var _mc = document.createElement('canvas'); _mc.width = _mc.height = S;\n  var _mx = _mc.getContext('2d');\n  var _img = _mx.createImageData(S, S);\n  for (var y = 0; y < S; y++) {\n    for (var x = 0; x < S; x++) {\n      var nx = (x + 0.5) / S * 2.0 - 1.0;\n      var ny = 1.0 - (y + 0.5) / S * 2.0;\n      var k = (y * S + x) * 4;\n      var r2 = nx * nx + ny * ny;\n      if (r2 > 1.0) { _img.data[k + 3] = 0; continue; }\n      var nz = Math.sqrt(1.0 - r2);\n      var l1 = Math.max(0.0, nx * 0.34 + ny * 0.56 + nz * 0.76);\n      var rim = Math.pow(1.0 - nz, 2.3);\n      var spec = Math.pow(Math.max(0.0, nx * 0.18 + ny * 0.92 + nz * 0.36), 46.0);\n      var base = 0.09 + 0.70 * Math.pow(l1, 0.9);\n      _img.data[k]     = Math.min(255, (base * 0.60 + rim * 0.24 + spec * 1.0) * 255);\n      _img.data[k + 1] = Math.min(255, (base * 0.90 + rim * 0.56 + spec * 1.0) * 255);\n      _img.data[k + 2] = Math.min(255, (base * 0.84 + rim * 0.46 + spec * 1.0) * 255);\n      _img.data[k + 3] = 255;\n    }\n  }\n  _mx.putImageData(_img, 0, 0);\n  var _tex = new THREE.CanvasTexture(_mc);\n  _tex.colorSpace = THREE.SRGBColorSpace;\n  var _mat = new THREE.MeshMatcapMaterial({matcap: _tex, color: new THREE.Color('{{tint}}')});\n  var _geo = {{knot}} ? new THREE.TorusKnotGeometry({{size}}, {{size}} * 0.34, 200, 32)\n                      : new THREE.SphereGeometry({{size}}, 128, 128);\n  var _mesh = new THREE.Mesh(_geo, _mat);\n  _mesh.position.y = {{posY}};\n  _s.add(_mesh);\n  var _o = {'p': 0};\n  timeline.to(_o, {'p': 1, 'duration': {{dur}}, 'ease': 'none', 'onUpdate': function () {\n    var p = _o.p;\n    _mesh.rotation.y = -0.7 + p * 1.55;\n    _mesh.rotation.x = 0.24 + p * 0.34;\n    _mesh.rotation.z = -0.2 + p * 0.42;\n    _r.render(_s, _c);\n  }}, {{at}});\n})();",
-   "role": "none",
-   "note": "三维：要 three.js 与 canvas，本链路不展开"
-  },
-  {
    "id": "T23",
    "name": "整块滑入",
    "family": "入场",
@@ -4033,80 +2345,6 @@
    "role": "decoration"
   },
   {
-   "id": "X40",
-   "name": "拉远离场",
-   "family": "结构",
-   "layer": "camera",
-   "status": "ready",
-   "cap": "入屏层从过近倍率拉回 1 倍，出屏层同时缩进中心并消失",
-   "src": "revideo:core/transitions/zoomOutTransition.ts",
-   "params": {
-    "scale0": 1.62,
-    "scaleOut": 0.66,
-    "dur": 1.0,
-    "ease": "power2.out"
-   },
-   "use": "从细节拉到全景；场景里要同时有入屏层与出屏层",
-   "avoid": "与 C02 缓拉同屏（同一个动作做两遍）",
-   "code": "(function () {\n  var _in = document.querySelector('{{sel}}');\n  var _out = document.querySelector('{{sel2}}');\n  if (!_in) return;\n  timeline.fromTo(_in, {'scale': {{scale0}}, 'opacity': 0, 'transformOrigin': '50% 46%'},\n    {'scale': 1, 'opacity': 1, 'duration': {{dur}}, 'ease': '{{ease}}'}, {{at}});\n  if (_out) {\n    timeline.to(_out, {'scale': {{scaleOut}}, 'opacity': 0, 'duration': {{dur}}, 'ease': '{{ease}}'}, {{at}});\n  }\n})();",
-   "needs": [
-    "ui"
-   ],
-   "cand": "RV06",
-   "role": "none",
-   "note": "结构改写：要额外 DOM，本链路不展开"
-  },
-  {
-   "id": "W25",
-   "name": "图片缩放落定",
-   "family": "照片",
-   "layer": "media",
-   "status": "ready",
-   "cap": "图片从略放大收到原尺寸，同时长圆角",
-   "src": "revideo:2d/components/Img.ts",
-   "params": {
-    "scale0": 1.18,
-    "radius": 28,
-    "dur": 1.4,
-    "ease": "power2.out"
-   },
-   "use": "照片刚出现、要「稳住」时；比直接淡入有落定感",
-   "avoid": "已用 W01 包裹（圆角会打架）；满幅照片",
-   "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t) return;\n  timeline.fromTo(_t, {'scale': {{scale0}}, 'borderRadius': '0px'},\n    {'scale': 1, 'borderRadius': '{{radius}}px', 'duration': {{dur}}, 'ease': '{{ease}}'}, {{at}});\n})();",
-   "needs": [
-    "img"
-   ],
-   "cand": "CP16",
-   "role": "none",
-   "note": "照片形变：要 WebGL 纹理，本链路不展开"
-  },
-  {
-   "id": "W26",
-   "name": "文字镂空照片",
-   "family": "照片",
-   "layer": "media",
-   "status": "ready",
-   "cap": "把照片当字色（background-clip:text），字是取景框；照片在字里横移、字不动",
-   "src": "revideo:docs/filters-and-effects#masking",
-   "params": {
-    "src": "",
-    "bgw": "1200px auto",
-    "pan0": "-260px",
-    "pan1": "340px",
-    "dur": 1.9,
-    "ease": "power1.inOut"
-   },
-   "use": "大字标题 + 一张真实照片；要「照片长在字里」的封面感",
-   "avoid": "小字号（镂空后看不清字）；同屏再放一张照片",
-   "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t) return;\n  var _src = '{{src}}';\n  if (!_src) {\n    var _cand = [document.querySelector('{{sel2}}'), document.querySelector('[data-photo]'),\n                 document.querySelector('img')];\n    for (var _i = 0; _i < _cand.length && !_src; _i++) {\n      var _p = _cand[_i];\n      if (!_p) continue;\n      if (_p.tagName === 'IMG') { _src = _p.getAttribute('src'); continue; }\n      var _bg = getComputedStyle(_p).backgroundImage || '';\n      var _m = _bg.match(/url\\([\"']?(.*?)[\"']?\\)/);\n      if (_m) { _src = _m[1]; }\n    }\n  }\n  if (!_src) return;\n  _t.style.backgroundImage = 'url(\"' + _src + '\")';\n  _t.style.backgroundSize = '{{bgw}}';\n  _t.style.webkitBackgroundClip = 'text';\n  _t.style.backgroundClip = 'text';\n  _t.style.color = 'transparent';\n  timeline.fromTo(_t, {'backgroundPosition': '{{pan0}} 46%'},\n    {'backgroundPosition': '{{pan1}} 46%', 'duration': {{dur}}, 'ease': '{{ease}}'}, {{at}});\n})();",
-   "needs": [
-    "text"
-   ],
-   "cand": "RV11",
-   "role": "none",
-   "note": "照片形变：要 WebGL 纹理，本链路不展开"
-  },
-  {
    "id": "K25",
    "name": "字距收紧",
    "family": "字形",
@@ -4151,419 +2389,6 @@
    ],
    "cand": "CP23",
    "role": "state_text"
-  },
-  {
-   "id": "U39",
-   "name": "圆形生长",
-   "family": "绘制",
-   "layer": "element",
-   "status": "ready",
-   "cap": "注入一个圆，半径从 0 长到目标，描边同时收细",
-   "src": "revideo:2d/components/Circle.ts",
-   "params": {
-    "pct": 80,
-    "sw": 10,
-    "swEnd": 2,
-    "color": "#86F0C0",
-    "dur": 1.4,
-    "ease": "power3.out"
-   },
-   "use": "圈出重点、做「聚焦」的外框；目标元素是空容器时",
-   "avoid": "目标里已经有图形（会叠）；文字节点上（会盖住字）",
-   "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t) return;\n  var _ns = 'http://www.w3.org/2000/svg';\n  function _mk(n) { return document.createElementNS(_ns, n); }\n  if (getComputedStyle(_t).position === 'static') _t.style.position = 'relative';\n  var _r = _t.getBoundingClientRect();\n  var _w = Math.round(_r.width) || 420, _h = Math.round(_r.height) || 420;\n  var _s = _mk('svg');\n  _s.setAttribute('viewBox', '0 0 ' + _w + ' ' + _h);\n  _s.style.cssText = 'position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;';\n  _t.appendChild(_s);\n  var _c = _mk('circle');\n  _c.setAttribute('cx', _w / 2);\n  _c.setAttribute('cy', _h / 2);\n  _c.setAttribute('r', 0);\n  _c.setAttribute('fill', 'none');\n  _c.setAttribute('stroke', '{{color}}');\n  _c.setAttribute('stroke-width', '{{sw}}');\n  _s.appendChild(_c);\n  var _rad = Math.min(_w, _h) * {{pct}} / 100;\n  timeline.to(_c, {'attr': {'r': _rad}, 'duration': {{dur}}, 'ease': '{{ease}}'}, {{at}});\n  timeline.to(_c, {'attr': {'stroke-width': {{swEnd}}}, 'duration': {{dur}}, 'ease': '{{ease}}'}, {{at}});\n})();",
-   "needs": [
-    "ui"
-   ],
-   "cand": "CP01",
-   "role": "none",
-   "note": "注入式图形/描边：要额外 SVG 或 plugin，本链路不展开"
-  },
-  {
-   "id": "U40",
-   "name": "矩形生长",
-   "family": "绘制",
-   "layer": "element",
-   "status": "ready",
-   "cap": "注入一个矩形，宽高与圆角同时长出来（从中心外扩）",
-   "src": "revideo:2d/components/Rect.ts",
-   "params": {
-    "pct": 88,
-    "radius": 40,
-    "sw": 4,
-    "color": "#86F0C0",
-    "dur": 1.3,
-    "ease": "power3.out"
-   },
-   "use": "给一块内容加框、做「卡片轮廓」先立起来",
-   "avoid": "目标本身是卡片组件（边框重复）",
-   "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t) return;\n  var _ns = 'http://www.w3.org/2000/svg';\n  function _mk(n) { return document.createElementNS(_ns, n); }\n  if (getComputedStyle(_t).position === 'static') _t.style.position = 'relative';\n  var _r = _t.getBoundingClientRect();\n  var _w = Math.round(_r.width) || 420, _h = Math.round(_r.height) || 420;\n  var _s = _mk('svg');\n  _s.setAttribute('viewBox', '0 0 ' + _w + ' ' + _h);\n  _s.style.cssText = 'position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;';\n  _t.appendChild(_s);\n  var _r2 = _mk('rect');\n  _r2.setAttribute('x', _w / 2);\n  _r2.setAttribute('y', _h / 2);\n  _r2.setAttribute('width', 0);\n  _r2.setAttribute('height', 0);\n  _r2.setAttribute('rx', 0);\n  _r2.setAttribute('fill', 'none');\n  _r2.setAttribute('stroke', '{{color}}');\n  _r2.setAttribute('stroke-width', '{{sw}}');\n  _s.appendChild(_r2);\n  var _bw = _w * {{pct}} / 100, _bh = _h * {{pct}} / 100;\n  timeline.to(_r2, {'attr': {'x': (_w - _bw) / 2, 'y': (_h - _bh) / 2, 'width': _bw, 'height': _bh,\n    'rx': {{radius}}, 'stroke-width': {{sw}}}, 'duration': {{dur}}, 'ease': '{{ease}}'}, {{at}});\n})();",
-   "needs": [
-    "ui"
-   ],
-   "cand": "CP02",
-   "role": "none",
-   "note": "注入式图形/描边：要额外 SVG 或 plugin，本链路不展开"
-  },
-  {
-   "id": "U41",
-   "name": "直线生长",
-   "family": "绘制",
-   "layer": "element",
-   "status": "ready",
-   "cap": "一条线从起点画到终点，角度与长度可调",
-   "src": "revideo:2d/components/Line.ts",
-   "params": {
-    "angle": 52,
-    "len": 92,
-    "sw": 5,
-    "color": "#86F0C0",
-    "dur": 1.2,
-    "ease": "power2.inOut"
-   },
-   "use": "趋势线、连接线、指示线；目标元素是空容器",
-   "avoid": "已经有 SVG 路径时（用 U31 描边更准）",
-   "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t) return;\n  var _ns = 'http://www.w3.org/2000/svg';\n  function _mk(n) { return document.createElementNS(_ns, n); }\n  if (getComputedStyle(_t).position === 'static') _t.style.position = 'relative';\n  var _r = _t.getBoundingClientRect();\n  var _w = Math.round(_r.width) || 420, _h = Math.round(_r.height) || 420;\n  var _s = _mk('svg');\n  _s.setAttribute('viewBox', '0 0 ' + _w + ' ' + _h);\n  _s.style.cssText = 'position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;';\n  _t.appendChild(_s);\n  var _ln = _mk('line');\n  var _cx = _w / 2, _cy = _h / 2;\n  var _L = Math.min(_w, _h) * {{len}} / 100;\n  var _a = {{angle}} * Math.PI / 180;\n  var _x0 = _cx - Math.cos(_a) * _L / 2, _y0 = _cy + Math.sin(_a) * _L / 2;\n  _ln.setAttribute('x1', _x0);\n  _ln.setAttribute('y1', _y0);\n  _ln.setAttribute('x2', _x0);\n  _ln.setAttribute('y2', _y0);\n  _ln.setAttribute('stroke', '{{color}}');\n  _ln.setAttribute('stroke-width', '{{sw}}');\n  _ln.setAttribute('stroke-linecap', 'round');\n  _s.appendChild(_ln);\n  timeline.to(_ln, {'attr': {'x2': _x0 + Math.cos(_a) * _L, 'y2': _y0 - Math.sin(_a) * _L},\n    'duration': {{dur}}, 'ease': '{{ease}}'}, {{at}});\n})();",
-   "needs": [
-    "ui"
-   ],
-   "cand": "CP04",
-   "role": "none",
-   "note": "注入式图形/描边：要额外 SVG 或 plugin，本链路不展开"
-  },
-  {
-   "id": "U42",
-   "name": "射线箭头",
-   "family": "绘制",
-   "layer": "element",
-   "status": "ready",
-   "cap": "线 + 箭头，箭头始终贴着线头并跟着切线转向",
-   "src": "revideo:2d/components/Ray.ts",
-   "params": {
-    "angle": 52,
-    "len": 90,
-    "sw": 5,
-    "head": 26,
-    "color": "#86F0C0",
-    "dur": 1.2,
-    "ease": "power2.inOut"
-   },
-   "use": "指向、流程箭头、坐标轴；目标元素是空容器",
-   "avoid": "箭头要指着文字（用 I01 指针卡）",
-   "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t) return;\n  var _ns = 'http://www.w3.org/2000/svg';\n  function _mk(n) { return document.createElementNS(_ns, n); }\n  if (getComputedStyle(_t).position === 'static') _t.style.position = 'relative';\n  var _r = _t.getBoundingClientRect();\n  var _w = Math.round(_r.width) || 420, _h = Math.round(_r.height) || 420;\n  var _s = _mk('svg');\n  _s.setAttribute('viewBox', '0 0 ' + _w + ' ' + _h);\n  _s.style.cssText = 'position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;';\n  _t.appendChild(_s);\n  var _cx = _w / 2, _cy = _h / 2;\n  var _L = Math.min(_w, _h) * {{len}} / 100;\n  var _a = {{angle}} * Math.PI / 180;\n  var _x0 = _cx - Math.cos(_a) * _L / 2, _y0 = _cy + Math.sin(_a) * _L / 2;\n  var _ln = _mk('line');\n  _ln.setAttribute('x1', _x0); _ln.setAttribute('y1', _y0);\n  _ln.setAttribute('x2', _x0); _ln.setAttribute('y2', _y0);\n  _ln.setAttribute('stroke', '{{color}}'); _ln.setAttribute('stroke-width', {{sw}});\n  _ln.setAttribute('stroke-linecap', 'round');\n  _s.appendChild(_ln);\n  var _hd = _mk('polygon');\n  _hd.setAttribute('points', '0,-{{head}} {{head}},0 0,{{head}}');\n  _hd.setAttribute('fill', '{{color}}');\n  _s.appendChild(_hd);\n  var _drv = {p: 0};\n  timeline.to(_drv, {'p': 1, 'duration': {{dur}}, 'ease': '{{ease}}', 'onUpdate': function () {\n    var px = _x0 + Math.cos(_a) * _L * _drv.p, py = _y0 - Math.sin(_a) * _L * _drv.p;\n    _ln.setAttribute('x2', px); _ln.setAttribute('y2', py);\n    _hd.setAttribute('transform', 'translate(' + px + ',' + py + ') rotate(' + (-{{angle}}) + ')');\n  }}, {{at}});\n})();",
-   "needs": [
-    "ui"
-   ],
-   "cand": "CP05",
-   "role": "none",
-   "note": "注入式图形/描边：要额外 SVG 或 plugin，本链路不展开"
-  },
-  {
-   "id": "U43",
-   "name": "网格铺开",
-   "family": "绘制",
-   "layer": "element",
-   "status": "ready",
-   "cap": "横竖线从中间往两头长，横竖错开；比整张网格淡入有方向",
-   "src": "revideo:2d/components/Grid.ts",
-   "params": {
-    "cols": 12,
-    "rows": 20,
-    "color": "rgba(134,240,192,.20)",
-    "stagger": 0.035,
-    "dur": 0.75,
-    "ease": "power3.out"
-   },
-   "use": "科技感底纹、数据页起手；目标元素是空容器或满屏层",
-   "avoid": "有照片满幅的屏（会被盖住）；同屏已用 B 系 canvas 背景",
-   "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t) return;\n  if (getComputedStyle(_t).position === 'static') _t.style.position = 'relative';\n  var _cols = {{cols}}, _rows = {{rows}}, i;\n  var _v = [], _h = [];\n  for (i = 0; i <= _cols; i++) {\n    var _d = document.createElement('i');\n    _d.style.cssText = 'position:absolute;top:0;bottom:0;width:1px;left:' + (i * 100 / _cols) + '%;'\n      + 'background:{{color}};transform:scaleY(0);transform-origin:50% 50%;';\n    _t.appendChild(_d);\n    _v.push(_d);\n  }\n  for (i = 0; i <= _rows; i++) {\n    var _e = document.createElement('i');\n    _e.style.cssText = 'position:absolute;left:0;right:0;height:1px;top:' + (i * 100 / _rows) + '%;'\n      + 'background:{{color}};transform:scaleX(0);transform-origin:50% 50%;';\n    _t.appendChild(_e);\n    _h.push(_e);\n  }\n  timeline.to(_h, {'scaleX': 1, 'duration': {{dur}}, 'ease': '{{ease}}',\n    'stagger': {'each': {{stagger}}, 'from': 'center'}}, {{at}});\n  timeline.to(_v, {'scaleY': 1, 'duration': {{dur}}, 'ease': '{{ease}}',\n    'stagger': {'each': {{stagger}}, 'from': 'center'}}, {{at}} + 0.12);\n})();",
-   "needs": [
-    "ui"
-   ],
-   "cand": "RV15",
-   "role": "none",
-   "note": "注入式图形/描边：要额外 SVG 或 plugin，本链路不展开"
-  },
-  {
-   "id": "U44",
-   "name": "公式逐项",
-   "family": "绘制",
-   "layer": "element",
-   "status": "ready",
-   "cap": "公式按项依次落位：左边、中间、右边各一段，后一段等前一段站稳",
-   "src": "revideo:2d/components/Latex.ts",
-   "params": {
-    "stagger": 0.42,
-    "dur": 0.55,
-    "ease": "power2.out",
-    "from": 26
-   },
-   "use": "公式、等式、推导步骤；目标元素的子项要拆成 span",
-   "avoid": "整段公式只有一个节点（那就只有一次落位）",
-   "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t) return;\n  var _kids = [].slice.call(_t.children);\n  if (!_kids.length) _kids = [_t];\n  timeline.fromTo(_kids, {'opacity': 0, 'y': {{from}}},\n    {'opacity': 1, 'y': 0, 'duration': {{dur}}, 'ease': '{{ease}}', 'stagger': {{stagger}}}, {{at}});\n})();",
-   "needs": [
-    "text"
-   ],
-   "cand": "CP20",
-   "role": "none",
-   "note": "注入式图形/描边：要额外 SVG 或 plugin，本链路不展开"
-  },
-  {
-   "id": "U45",
-   "name": "矩形环绕描边",
-   "family": "绘制",
-   "layer": "element",
-   "status": "ready",
-   "cap": "沿矩形边框从一角描满一圈（矩形剖面取点，不用手算周长）",
-   "src": "revideo:2d/curves/getRectProfile.ts",
-   "params": {
-    "inset": 6,
-    "sw": 4,
-    "color": "#86F0C0",
-    "dur": 1.7,
-    "ease": "power1.inOut"
-   },
-   "use": "给一块内容「围一圈」；比 U40 更像手画",
-   "avoid": "没有明确边界的文字块",
-   "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t || !window.DrawSVGPlugin) return;\n  var _ns = 'http://www.w3.org/2000/svg';\n  function _mk(n) { return document.createElementNS(_ns, n); }\n  if (getComputedStyle(_t).position === 'static') _t.style.position = 'relative';\n  var _r = _t.getBoundingClientRect();\n  var _w = Math.round(_r.width) || 420, _h = Math.round(_r.height) || 420;\n  var _s = _mk('svg');\n  _s.setAttribute('viewBox', '0 0 ' + _w + ' ' + _h);\n  _s.style.cssText = 'position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;';\n  _t.appendChild(_s);\n  var _i = {{inset}};\n  var _p = _mk('path');\n  _p.setAttribute('d', 'M' + _i + ',' + _i + ' L' + (_w - _i) + ',' + _i\n    + ' L' + (_w - _i) + ',' + (_h - _i) + ' L' + _i + ',' + (_h - _i) + ' Z');\n  _p.setAttribute('fill', 'none');\n  _p.setAttribute('stroke', '{{color}}');\n  _p.setAttribute('stroke-width', '{{sw}}');\n  _p.setAttribute('stroke-linejoin', 'round');\n  _s.appendChild(_p);\n  timeline.fromTo(_p, {'drawSVG': '0%'}, {'drawSVG': '100%', 'duration': {{dur}}, 'ease': '{{ease}}'}, {{at}});\n})();",
-   "needs": [
-    "ui"
-   ],
-   "cand": "CV01",
-   "role": "none",
-   "note": "注入式图形/描边：要额外 SVG 或 plugin，本链路不展开"
-  },
-  {
-   "id": "U46",
-   "name": "圆周描边",
-   "family": "绘制",
-   "layer": "element",
-   "status": "ready",
-   "cap": "沿圆周从一点描满一整圈（圆剖面），收口处不重叠",
-   "src": "revideo:2d/curves/getCircleProfile.ts",
-   "params": {
-    "pct": 78,
-    "sw": 4,
-    "color": "#86F0C0",
-    "dur": 1.7,
-    "ease": "power1.inOut"
-   },
-   "use": "圈重点、做「进度环」的底；目标元素是空容器",
-   "avoid": "同屏已用 U39（两个圆会打架）",
-   "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t || !window.DrawSVGPlugin) return;\n  var _ns = 'http://www.w3.org/2000/svg';\n  function _mk(n) { return document.createElementNS(_ns, n); }\n  if (getComputedStyle(_t).position === 'static') _t.style.position = 'relative';\n  var _r = _t.getBoundingClientRect();\n  var _w = Math.round(_r.width) || 420, _h = Math.round(_r.height) || 420;\n  var _s = _mk('svg');\n  _s.setAttribute('viewBox', '0 0 ' + _w + ' ' + _h);\n  _s.style.cssText = 'position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;';\n  _t.appendChild(_s);\n  var _rad = Math.min(_w, _h) * {{pct}} / 200;\n  var _p = _mk('path');\n  _p.setAttribute('d', 'M' + (_w / 2 - _rad) + ',' + (_h / 2)\n    + ' a' + _rad + ',' + _rad + ' 0 1,1 ' + (_rad * 2) + ',0'\n    + ' a' + _rad + ',' + _rad + ' 0 1,1 ' + (-_rad * 2) + ',0');\n  _p.setAttribute('fill', 'none');\n  _p.setAttribute('stroke', '{{color}}');\n  _p.setAttribute('stroke-width', '{{sw}}');\n  _s.appendChild(_p);\n  timeline.fromTo(_p, {'drawSVG': '0%'}, {'drawSVG': '100%', 'duration': {{dur}}, 'ease': '{{ease}}'}, {{at}});\n})();",
-   "needs": [
-    "ui"
-   ],
-   "cand": "CV04",
-   "role": "none",
-   "note": "注入式图形/描边：要额外 SVG 或 plugin，本链路不展开"
-  },
-  {
-   "id": "U47",
-   "name": "圆点环绕",
-   "family": "绘制",
-   "layer": "element",
-   "status": "ready",
-   "cap": "一个圆点沿圆周匀速走一圈，朝向跟着切线",
-   "src": "revideo:2d/curves/getPointAtDistance.ts",
-   "params": {
-    "pct": 74,
-    "dot": 26,
-    "sw": 3,
-    "color": "#86F0C0",
-    "dur": 1.9
-   },
-   "use": "绕行、环绕标注、「第几步」的指示",
-   "avoid": "需要直线路径（用 U28 MotionPath）",
-   "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t) return;\n  var _ns = 'http://www.w3.org/2000/svg';\n  function _mk(n) { return document.createElementNS(_ns, n); }\n  if (getComputedStyle(_t).position === 'static') _t.style.position = 'relative';\n  var _r = _t.getBoundingClientRect();\n  var _w = Math.round(_r.width) || 420, _h = Math.round(_r.height) || 420;\n  var _s = _mk('svg');\n  _s.setAttribute('viewBox', '0 0 ' + _w + ' ' + _h);\n  _s.style.cssText = 'position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;';\n  _t.appendChild(_s);\n  var _rad = Math.min(_w, _h) * {{pct}} / 200;\n  var _trk = _mk('circle');\n  _trk.setAttribute('cx', _w / 2); _trk.setAttribute('cy', _h / 2);\n  _trk.setAttribute('r', _rad);\n  _trk.setAttribute('fill', 'none');\n  _trk.setAttribute('stroke', '{{color}}');\n  _trk.setAttribute('stroke-width', {{sw}});\n  _trk.setAttribute('opacity', '0.18');\n  _s.appendChild(_trk);\n  var _dot = _mk('circle');\n  _dot.setAttribute('r', {{dot}} / 2);\n  _dot.setAttribute('fill', '{{color}}');\n  _s.appendChild(_dot);\n  var _drv = {p: 0};\n  timeline.to(_drv, {'p': 1, 'duration': {{dur}}, 'ease': 'none', 'onUpdate': function () {\n    var a = -Math.PI / 2 + _drv.p * Math.PI * 2;\n    _dot.setAttribute('cx', _w / 2 + Math.cos(a) * _rad);\n    _dot.setAttribute('cy', _h / 2 + Math.sin(a) * _rad);\n  }}, {{at}});\n})();",
-   "needs": [
-    "ui"
-   ],
-   "cand": "CV06",
-   "role": "none",
-   "note": "注入式图形/描边：要额外 SVG 或 plugin，本链路不展开"
-  },
-  {
-   "id": "UA09",
-   "name": "代码行级 diff",
-   "family": "UI",
-   "layer": "element",
-   "status": "ready",
-   "cap": "行级 diff：旧行划掉压暗、新行就地长出来，行号跟着顺移",
-   "src": "revideo:2d/code/CodeSignal.ts#diff",
-   "params": {
-    "dur": 0.45,
-    "ease": "power2.out"
-   },
-   "use": "讲「改了什么」；代码块要标 data-old / data-new",
-   "avoid": "超过 8 行（观众跟不上）；纯截图型代码",
-   "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t) return;\n  var _old = _t.querySelector('[data-old]');\n  var _new = _t.querySelector('[data-new]');\n  if (!_old || !_new) return;\n  var _lh = _new.getBoundingClientRect().height || 52;\n  _new.style.overflow = 'hidden';\n  _new.style.opacity = '0';\n  _new.style.height = '0px';\n  timeline.to(_old, {'opacity': 0.3, 'duration': {{dur}}, 'ease': 'none'}, {{at}});\n  timeline.to(_old, {'textDecoration': 'line-through', 'duration': {{dur}}, 'ease': 'none'}, {{at}});\n  timeline.to(_new, {'opacity': 1, 'height': _lh, 'duration': {{dur}}, 'ease': '{{ease}}'}, {{at}} + {{dur}});\n})();",
-   "needs": [
-    "ui"
-   ],
-   "cand": "RV13",
-   "role": "special_dom",
-   "note": "代码块结构"
-  },
-  {
-   "id": "UA10",
-   "name": "代码选区扫",
-   "family": "UI",
-   "layer": "element",
-   "status": "ready",
-   "cap": "底色块按字符范围从左铺到右，扫完停在原地",
-   "src": "revideo:2d/code/CodeSignal.ts#selection",
-   "params": {
-    "dur": 0.7,
-    "ease": "power2.inOut",
-    "color": "rgba(134,240,192,.24)"
-   },
-   "use": "讲某一句代码时指一下；代码块里要标 data-mark",
-   "avoid": "整行都要高亮（用整行底色，不是选区）",
-   "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t) return;\n  var _m = _t.querySelector('[data-mark]') || _t;\n  _m.style.backgroundImage = 'linear-gradient({{color}},{{color}})';\n  _m.style.backgroundRepeat = 'no-repeat';\n  _m.style.backgroundSize = '0% 100%';\n  _m.style.borderRadius = '4px';\n  var _drv = {w: 0};\n  timeline.to(_drv, {'w': 1, 'duration': {{dur}}, 'ease': '{{ease}}', 'onUpdate': function () {\n    _m.style.backgroundSize = (_drv.w * 100) + '% 100%';\n  }}, {{at}});\n})();",
-   "needs": [
-    "ui"
-   ],
-   "cand": "RV14",
-   "role": "special_dom",
-   "note": "代码块结构"
-  },
-  {
-   "id": "UA11",
-   "name": "代码尾部追加",
-   "family": "UI",
-   "layer": "element",
-   "status": "ready",
-   "cap": "在代码块末尾接一行，前面的行不动",
-   "src": "revideo:2d/code/CodeSignal.ts#append",
-   "params": {
-    "text": "    leads.push_to(crm)",
-    "dur": 0.6,
-    "ease": "power2.out"
-   },
-   "use": "讲「再加一步」；代码块标 data-code",
-   "avoid": "同时还要删行（会抢注意力）",
-   "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t) return;\n  var _d = document.createElement('div');\n  _d.setAttribute('data-line', '');\n  _d.style.cssText = 'opacity:0;height:0px;overflow:hidden;white-space:pre;';\n  _d.textContent = '{{text}}';\n  _t.appendChild(_d);\n  timeline.to(_d, {'opacity': 1, 'height': 'auto', 'duration': {{dur}}, 'ease': '{{ease}}'}, {{at}});\n})();",
-   "needs": [
-    "ui"
-   ],
-   "cand": "CD02",
-   "role": "special_dom",
-   "note": "代码块结构"
-  },
-  {
-   "id": "UA12",
-   "name": "代码头部插入",
-   "family": "UI",
-   "layer": "element",
-   "status": "ready",
-   "cap": "在最前面塞一行，整块往下让",
-   "src": "revideo:2d/code/CodeSignal.ts#prepend",
-   "params": {
-    "text": "import search",
-    "dur": 0.6,
-    "ease": "power2.out"
-   },
-   "use": "讲「前提是什么」；代码块标 data-code",
-   "avoid": "行数已经顶到屏幕下沿",
-   "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t) return;\n  var _d = document.createElement('div');\n  _d.setAttribute('data-line', '');\n  _d.style.cssText = 'opacity:0;height:0px;overflow:hidden;white-space:pre;';\n  _d.textContent = '{{text}}';\n  _t.insertBefore(_d, _t.firstChild);\n  timeline.to(_d, {'opacity': 1, 'height': 'auto', 'duration': {{dur}}, 'ease': '{{ease}}'}, {{at}});\n})();",
-   "needs": [
-    "ui"
-   ],
-   "cand": "CD03",
-   "role": "special_dom",
-   "note": "代码块结构"
-  },
-  {
-   "id": "UA13",
-   "name": "代码中间插入",
-   "family": "UI",
-   "layer": "element",
-   "status": "ready",
-   "cap": "在第 N 行后插一行，下面的行顺移",
-   "src": "revideo:2d/code/CodeSignal.ts#insert",
-   "params": {
-    "after": 1,
-    "text": "    # 校验",
-    "dur": 0.6,
-    "ease": "power2.out"
-   },
-   "use": "讲「中间漏了一步」；代码块标 data-code",
-   "avoid": "插在最后一行（用 UA11 更自然）",
-   "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t) return;\n  var _ls = [].slice.call(_t.querySelectorAll('[data-line]'));\n  var _anchor = _ls[{{after}} - 1] || _t.lastChild;\n  var _d = document.createElement('div');\n  _d.setAttribute('data-line', '');\n  _d.style.cssText = 'opacity:0;height:0px;overflow:hidden;white-space:pre;';\n  _d.textContent = '{{text}}';\n  if (_anchor && _anchor.parentNode) { _anchor.parentNode.insertBefore(_d, _anchor.nextSibling); }\n  else { _t.appendChild(_d); }\n  timeline.to(_d, {'opacity': 1, 'height': 'auto', 'duration': {{dur}}, 'ease': '{{ease}}'}, {{at}});\n})();",
-   "needs": [
-    "ui"
-   ],
-   "cand": "CD04",
-   "role": "special_dom",
-   "note": "代码块结构"
-  },
-  {
-   "id": "UA14",
-   "name": "代码删除一行",
-   "family": "UI",
-   "layer": "element",
-   "status": "ready",
-   "cap": "整行收掉，下面的行补上来",
-   "src": "revideo:2d/code/CodeSignal.ts#remove",
-   "params": {
-    "index": 2,
-    "dur": 0.6,
-    "ease": "power2.in"
-   },
-   "use": "讲「这步不需要了」；代码块标 data-code",
-   "avoid": "删完只剩一行（观众还没读完）",
-   "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t) return;\n  var _ls = [].slice.call(_t.querySelectorAll('[data-line]'));\n  var _d = _ls[{{index}} - 1];\n  if (!_d) return;\n  _d.style.overflow = 'hidden';\n  timeline.to(_d, {'opacity': 0, 'height': 0, 'duration': {{dur}}, 'ease': '{{ease}}'}, {{at}});\n})();",
-   "needs": [
-    "ui"
-   ],
-   "cand": "CD05",
-   "role": "special_dom",
-   "note": "代码块结构"
-  },
-  {
-   "id": "UA15",
-   "name": "代码编辑态",
-   "family": "UI",
-   "layer": "element",
-   "status": "ready",
-   "cap": "光标闪两下，字一个个敲进去，像真在改",
-   "src": "revideo:2d/code/CodeSignal.ts#edit",
-   "params": {
-    "text": "leads = search.run(q)",
-    "dur": 1.5,
-    "caret": 5
-   },
-   "use": "演示「正在写」；目标元素是空的行容器",
-   "avoid": "超过 30 字（敲不完）；已有 T05 打字机同屏",
-   "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t) return;\n  var _txt = '{{text}}';\n  _t.textContent = '';\n  var _cur = document.createElement('i');\n  _cur.style.cssText = 'display:inline-block;width:3px;height:1.05em;vertical-align:-.16em;background:#86F0C0;margin-left:2px;';\n  _t.appendChild(_cur);\n  var _drv = {n: 0};\n  timeline.to(_cur, {'opacity': 0, 'duration': 0.14, 'repeat': {{caret}}, 'yoyo': true}, {{at}});\n  timeline.to(_drv, {'n': 1, 'duration': {{dur}}, 'ease': 'none', 'onUpdate': function () {\n    var k = Math.floor(_drv.n * _txt.length);\n    _t.firstChild && _t.firstChild.nodeType === 3 ? (_t.firstChild.nodeValue = _txt.slice(0, k)) : null;\n    if (!_t.firstChild || _t.firstChild.nodeType !== 3) {\n      _t.insertBefore(document.createTextNode(_txt.slice(0, k)), _cur);\n    }\n  }}, {{at}} + 0.1);\n})();",
-   "needs": [
-    "ui"
-   ],
-   "cand": "CD07",
-   "role": "none",
-   "note": "代码块/图表类 UI：要额外 DOM，本链路不展开"
-  },
-  {
-   "id": "UA16",
-   "name": "代码块揭示",
-   "family": "UI",
-   "layer": "element",
-   "status": "ready",
-   "cap": "整块代码用 clip-path 从左往右揭开，行内颜色保持",
-   "src": "revideo:examples/code-block",
-   "params": {
-    "dur": 1.2,
-    "ease": "none"
-   },
-   "use": "代码块整体出现（不逐字）；比淡入干净",
-   "avoid": "需要逐行讲的时候（用 UA09 / UA10）",
-   "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t) return;\n  _t.style.clipPath = 'inset(0 100% 0 0)';\n  timeline.to(_t, {'clipPath': 'inset(0 0% 0 0)', 'duration': {{dur}}, 'ease': '{{ease}}'}, {{at}});\n})();",
-   "needs": [
-    "ui"
-   ],
-   "cand": "EX06",
-   "role": "none",
-   "note": "代码块/图表类 UI：要额外 DOM，本链路不展开"
   },
   {
    "id": "U48",
@@ -7169,6 +4994,1542 @@
     "sel": "#list",
     "stage": "<div class=\"paper\" style=\"padding:40px\"><div class=\"kick\">清单</div><div id=\"list\" style=\"margin-top:50px;display:flex;flex-direction:column;gap:24px\"><div class=\"row\" style=\"height:70px;border-radius:12px;background:rgba(255,255,255,.04);display:flex;align-items:center;padding:0 26px;font-size:32px\">01 项</div><div class=\"row\" style=\"height:70px;border-radius:12px;background:rgba(255,255,255,.04);display:flex;align-items:center;padding:0 26px;font-size:32px\">02 项</div><div class=\"row\" style=\"height:70px;border-radius:12px;background:rgba(255,255,255,.04);display:flex;align-items:center;padding:0 26px;font-size:32px\">03 项</div><div class=\"row\" style=\"height:70px;border-radius:12px;background:rgba(255,255,255,.04);display:flex;align-items:center;padding:0 26px;font-size:32px\">04 项</div></div></div>"
    }
+  },
+  {
+   "id": "U58",
+   "name": "灵动岛手机",
+   "family": "组件",
+   "layer": "element",
+   "status": "ready",
+   "cap": "component-html",
+   "src": "devicecss:iphone-14-pro",
+   "params": {},
+   "use": "把一屏内容装进真实比例的机身里；框内只放 ui-* 组件，当作\"产品界面\"演示，示例数据要标场景演示。",
+   "avoid": "框内塞截图或自己改机身颜色；不要改 class 名和 --dv-* 变量；一屏只放一个机身。",
+   "code": "<div class=\"ui-device ui-device-iphone-island\" data-anim=\"device\">\n  <div class=\"ui-device-frame\">\n    <div class=\"ui-device-screen\" data-anim=\"screen\">\n      <div class=\"ui-row\"><span class=\"k\">今日新增</span><span class=\"v\" data-anim=\"num\">128</span></div>\n      <div class=\"ui-card\" data-anim=\"card-1\"><h3>标题最多两行</h3><p>一句解释，不超过 24 字。</p></div>\n    </div>\n  </div>\n  <span class=\"ui-device-mark\"></span><span class=\"ui-device-btns\"></span><span class=\"ui-device-power\"></span>\n</div>",
+   "needs": [
+    "ui"
+   ],
+   "impl": {
+    "kind": "html"
+   },
+   "role": "component",
+   "note": "428×868 机身装一块 390×830 屏；演示 App 界面、讲产品操作"
+  },
+  {
+   "id": "U59",
+   "name": "刘海手机",
+   "family": "组件",
+   "layer": "element",
+   "status": "ready",
+   "cap": "component-html",
+   "src": "devicecss:iphone-14",
+   "params": {},
+   "use": "把一屏内容装进真实比例的机身里；框内只放 ui-* 组件，当作\"产品界面\"演示，示例数据要标场景演示。",
+   "avoid": "框内塞截图或自己改机身颜色；不要改 class 名和 --dv-* 变量；一屏只放一个机身。",
+   "code": "<div class=\"ui-device ui-device-iphone-notch\" data-anim=\"device\">\n  <div class=\"ui-device-frame\">\n    <div class=\"ui-device-screen\" data-anim=\"screen\">\n      <div class=\"ui-card\" data-anim=\"card-1\"><h3>标题最多两行</h3><p>一句解释，不超过 24 字。</p></div>\n      <span class=\"ui-chip is-on\" data-anim=\"chip-1\">已接通</span>\n    </div>\n  </div>\n  <span class=\"ui-device-mark\"></span><span class=\"ui-device-btns\"></span><span class=\"ui-device-power\"></span>\n</div>",
+   "needs": [
+    "ui"
+   ],
+   "impl": {
+    "kind": "html"
+   },
+   "role": "component",
+   "note": "428×868 机身 + 宽刘海；演示单步操作、讲一个界面"
+  },
+  {
+   "id": "U60",
+   "name": "旧款刘海",
+   "family": "组件",
+   "layer": "element",
+   "status": "ready",
+   "cap": "component-html",
+   "src": "devicecss:iphone-x",
+   "params": {},
+   "use": "把一屏内容装进真实比例的机身里；框内只放 ui-* 组件，当作\"产品界面\"演示，示例数据要标场景演示。",
+   "avoid": "框内塞截图或自己改机身颜色；不要改 class 名和 --dv-* 变量；一屏只放一个机身。",
+   "code": "<div class=\"ui-device ui-device-iphone-legacy\" data-anim=\"device\">\n  <div class=\"ui-device-frame\">\n    <div class=\"ui-device-screen\" data-anim=\"screen\">\n      <div class=\"ui-steps\" data-anim=\"steps\">\n        <div class=\"ui-step is-done\"><b>第一步</b><span>说明</span></div>\n        <div class=\"ui-step\"><b>第二步</b><span>说明</span></div>\n      </div>\n      <div class=\"ui-card\" data-anim=\"card-1\"><h3>标题最多两行</h3><p>一句解释，不超过 24 字。</p></div>\n    </div>\n  </div>\n  <span class=\"ui-device-mark\"></span><span class=\"ui-device-btns\"></span><span class=\"ui-device-power\"></span>\n</div>",
+   "needs": [
+    "ui"
+   ],
+   "impl": {
+    "kind": "html"
+   },
+   "role": "component",
+   "note": "428×868 全银边老机型；讲流程、讲前后两代对比"
+  },
+  {
+   "id": "U61",
+   "name": "直板安卓",
+   "family": "组件",
+   "layer": "element",
+   "status": "ready",
+   "cap": "component-html",
+   "src": "devicecss:google-pixel-6-pro",
+   "params": {},
+   "use": "把一屏内容装进真实比例的机身里；框内只放 ui-* 组件，当作\"产品界面\"演示，示例数据要标场景演示。",
+   "avoid": "框内塞截图或自己改机身颜色；不要改 class 名和 --dv-* 变量；一屏只放一个机身。",
+   "code": "<div class=\"ui-device ui-device-pixel\" data-anim=\"device\">\n  <div class=\"ui-device-frame\">\n    <div class=\"ui-device-screen\" data-anim=\"screen\">\n      <div class=\"ui-bento\" data-anim=\"bento\">\n        <div class=\"ui-bento-cell w2\"><b>128</b>说明</div>\n        <div class=\"ui-bento-cell\">32%</div>\n        <div class=\"ui-bento-cell\">7 天</div>\n      </div>\n    </div>\n  </div>\n  <span class=\"ui-device-mark\"></span><span class=\"ui-device-btns\"></span><span class=\"ui-device-power\"></span>\n</div>",
+   "needs": [
+    "ui"
+   ],
+   "impl": {
+    "kind": "html"
+   },
+   "role": "component",
+   "note": "404×862 居中打孔、直角边框；讲安卓端、讲参数面板"
+  },
+  {
+   "id": "U62",
+   "name": "曲面安卓",
+   "family": "组件",
+   "layer": "element",
+   "status": "ready",
+   "cap": "component-html",
+   "src": "devicecss:galaxy-s8",
+   "params": {},
+   "use": "把一屏内容装进真实比例的机身里；框内只放 ui-* 组件，当作\"产品界面\"演示，示例数据要标场景演示。",
+   "avoid": "框内塞截图或自己改机身颜色；不要改 class 名和 --dv-* 变量；一屏只放一个机身。",
+   "code": "<div class=\"ui-device ui-device-galaxy\" data-anim=\"device\">\n  <div class=\"ui-device-frame\">\n    <div class=\"ui-device-screen\" data-anim=\"screen\">\n      <div class=\"ui-grid c2\" data-anim=\"grid\">\n        <div class=\"ui-cell\">一格</div><div class=\"ui-cell\">一格</div>\n        <div class=\"ui-cell\">一格</div><div class=\"ui-cell\">一格</div>\n      </div>\n    </div>\n  </div>\n  <span class=\"ui-device-mark\"></span><span class=\"ui-device-btns\"></span><span class=\"ui-device-power\"></span>\n</div>",
+   "needs": [
+    "ui"
+   ],
+   "impl": {
+    "kind": "html"
+   },
+   "role": "component",
+   "note": "380×828 上下留边、圆角屏；讲多端覆盖、讲清单"
+  },
+  {
+   "id": "U63",
+   "name": "平板",
+   "family": "组件",
+   "layer": "element",
+   "status": "ready",
+   "cap": "component-html",
+   "src": "devicecss:ipad-pro",
+   "params": {},
+   "use": "把一屏内容装进真实比例的机身里；框内只放 ui-* 组件，当作\"产品界面\"演示，示例数据要标场景演示。",
+   "avoid": "框内塞截图或自己改机身颜色；不要改 class 名和 --dv-* 变量；一屏只放一个机身。",
+   "code": "<div class=\"ui-device ui-device-ipad\" data-anim=\"device\">\n  <div class=\"ui-device-frame\">\n    <div class=\"ui-device-screen\" data-anim=\"screen\">\n      <div class=\"ui-grid c2\" data-anim=\"grid\">\n        <div class=\"ui-cell\">一格</div><div class=\"ui-cell\">一格</div>\n        <div class=\"ui-cell\">一格</div><div class=\"ui-cell\">一格</div>\n      </div>\n      <div class=\"ui-card\" data-anim=\"card-1\"><h3>标题最多两行</h3><p>一句解释，不超过 24 字。</p></div>\n    </div>\n  </div>\n  <span class=\"ui-device-mark\"></span><span class=\"ui-device-power\"></span>\n</div>",
+   "needs": [
+    "ui"
+   ],
+   "impl": {
+    "kind": "html"
+   },
+   "role": "component",
+   "note": "560×778 宽体屏；整屏当主视觉用，窄栏放不进"
+  },
+  {
+   "id": "B49",
+   "name": "抖动网点",
+   "family": "背景",
+   "role": "bg",
+   "layer": "overlay",
+   "status": "ready",
+   "cap": "canvas-t",
+   "src": "magicui:dither-field",
+   "params": {
+    "cell": 8,
+    "lv": 0.62
+   },
+   "use": "低日加雾带，按 8×8 Bayer 阈值排成一格格方块点；复古印刷、监控回放、终端、旧档案",
+   "avoid": "和照片满屏同屏；标题正落在点最密处会糊，先垫柔光或把 lv 调低",
+   "surface": "opaque",
+   "tone": "dark",
+   "base": "#07090f",
+   "impl": {
+    "kind": "canvas",
+    "name": "B49"
+   },
+   "ink": {
+    "primary": "#eaf7f1",
+    "secondary": "#8fa79c",
+    "accent": "#86F0C0"
+   },
+   "tunable": [
+    "brightness",
+    "cell",
+    "hue",
+    "invert",
+    "lv",
+    "saturate"
+   ],
+   "params_note": "可调：cell 点格边长 / lv 明度阈值(越大点越稀) / invert(1=黑白反相) / hue / saturate / brightness",
+   "bg_family": "dot",
+   "keywords": [
+    "网点",
+    "半调",
+    "抖动",
+    "复古",
+    "印刷",
+    "颗粒",
+    "扫描",
+    "旧",
+    "终端"
+   ],
+   "note": "方点按明度疏密排开，暗处留黑；像老印刷或监控回放",
+   "code": "/* canvas 背景：由 H02SX 调 bgkit.bind/draw，不展开 GSAP */"
+  },
+  {
+   "id": "B50",
+   "name": "透视网格",
+   "family": "背景",
+   "role": "bg",
+   "layer": "overlay",
+   "status": "ready",
+   "cap": "canvas-t",
+   "src": "magicui:retro-grid",
+   "params": {
+    "hz": 0.61,
+    "speed": 0.55
+   },
+   "use": "地平线在画面下方，网格一格格往你脚下推；赛博、复古未来、加速、往前走",
+   "avoid": "字别压在地平线附近（那一带最亮）；和 M30 扫描线同屏会花",
+   "surface": "opaque",
+   "tone": "dark",
+   "base": "#0a0710",
+   "impl": {
+    "kind": "canvas",
+    "name": "B50"
+   },
+   "ink": {
+    "primary": "#eaf7f1",
+    "secondary": "#8fa79c",
+    "accent": "#86F0C0"
+   },
+   "tunable": [
+    "brightness",
+    "hz",
+    "hue",
+    "invert",
+    "saturate",
+    "speed"
+   ],
+   "params_note": "可调：hz 地平线高度(0–1) / speed 推进速度 / invert / hue / saturate / brightness",
+   "bg_family": "line",
+   "keywords": [
+    "网格",
+    "透视",
+    "地平线",
+    "赛博",
+    "复古未来",
+    "向前",
+    "空间",
+    "数据世界"
+   ],
+   "note": "带透视的网格从地平线往画面外推，中间一条暖光",
+   "code": "/* canvas 背景：由 H02SX 调 bgkit.bind/draw，不展开 GSAP */"
+  },
+  {
+   "id": "B51",
+   "name": "流星",
+   "family": "背景",
+   "role": "bg",
+   "layer": "overlay",
+   "status": "ready",
+   "cap": "canvas-t",
+   "src": "magicui:meteors",
+   "params": {
+    "count": 18,
+    "seed": 77
+   },
+   "use": "斜下划过的短光，带渐隐尾巴；运气、一瞬间、机会、夜里的决定",
+   "avoid": "和 B29 雪点 / B35 浮尘同屏（都是粒子，会打架）；一屏别超过 30 秒的连续使用",
+   "surface": "opaque",
+   "tone": "dark",
+   "base": "#05070c",
+   "impl": {
+    "kind": "canvas",
+    "name": "B51"
+   },
+   "ink": {
+    "primary": "#eef6ff",
+    "secondary": "#8fa0b8",
+    "accent": "#9BD8FF"
+   },
+   "tunable": [
+    "brightness",
+    "count",
+    "hue",
+    "invert",
+    "seed",
+    "saturate"
+   ],
+   "params_note": "可调：count 数量 / seed 换一组轨迹 / invert / hue / saturate / brightness",
+   "bg_family": "line",
+   "keywords": [
+    "流星",
+    "划过",
+    "瞬间",
+    "希望",
+    "夜空",
+    "运气",
+    "机会",
+    "一闪"
+   ],
+   "note": "十几颗流星错峰斜下，配一层会呼吸的星点；暗底最适合压亮字",
+   "code": "/* canvas 背景：由 H02SX 调 bgkit.bind/draw，不展开 GSAP */"
+  },
+  {
+   "id": "Z17",
+   "name": "点阵地球",
+   "family": "三维",
+   "role": "bg",
+   "layer": "overlay",
+   "status": "ready",
+   "cap": "canvas-t",
+   "src": "magicui:globe",
+   "params": {
+    "count": 2400,
+    "per": 6,
+    "cy": 0.46,
+    "tilt": 0.34
+   },
+   "use": "一颗自转的点阵地球，几个节点在脉冲；全球、出海、国际、网络覆盖",
+   "avoid": "和照片同屏；节点数别调太高（4000 以上开始糊成球体）",
+   "surface": "opaque",
+   "tone": "dark",
+   "base": "#070a0c",
+   "impl": {
+    "kind": "canvas",
+    "name": "Z17"
+   },
+   "ink": {
+    "primary": "#eaf7f1",
+    "secondary": "#8fa79c",
+    "accent": "#86F0C0"
+   },
+   "tunable": [
+    "brightness",
+    "count",
+    "cy",
+    "hue",
+    "invert",
+    "per",
+    "tilt"
+   ],
+   "params_note": "可调：count 点数 / per 自转一周秒数 / cy 圆心高度(0–1) / tilt 地轴倾角 / invert / hue",
+   "bg_family": "dot",
+   "keywords": [
+    "地球",
+    "全球",
+    "世界",
+    "国际",
+    "节点",
+    "网络",
+    "出海",
+    "覆盖"
+   ],
+   "note": "球面点阵自转，几处节点脉冲；讲全球/覆盖/出海时用",
+   "code": "/* canvas 背景：由 H02SX 调 bgkit.bind/draw，不展开 GSAP */"
+  },
+  {
+   "id": "M34",
+   "name": "撒花庆祝",
+   "family": "材质",
+   "role": "decoration",
+   "layer": "overlay",
+   "status": "ready",
+   "cap": "confetti",
+   "src": "magicui:confetti",
+   "params": {
+    "count": 110,
+    "dur": 2.6,
+    "z": 32,
+    "seed": 20261117
+   },
+   "use": "达成、上线、发布的那一下：彩纸从下方两侧抛上来自己落下去",
+   "avoid": "和 M05 辉光 / M36 边框流光同屏；别压在两行以上正文上",
+   "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t) return;\n  if (getComputedStyle(_t).position === 'static') { _t.style.position = 'relative'; }\n  var _c = document.createElement('canvas');\n  _c.width = 1080; _c.height = 1920;\n  _c.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:{{z}};';\n  _t.appendChild(_c);\n  var _g = _c.getContext('2d');\n  if (!_g) return;\n  var _s = {{seed}};\n  var _r = function () { _s = (_s * 9301 + 49297) % 233280; return _s / 233280; };\n  var _COL = ['#86F0C0', '#FFD166', '#F4F1E9', '#7FB2FF', '#FF8FA3', '#C4A6FF'];\n  var _P = [];\n  function _push(x, y, a, sp, n) {\n    for (var i = 0; i < n; i++) {\n      var ang = a + (_r() - 0.5) * 0.95, v = sp * (0.55 + _r() * 0.9);\n      _P.push({ x: x, y: y, vx: Math.cos(ang) * v, vy: Math.sin(ang) * v,\n        t0: _r() * 0.30, sx: 6 + _r() * 9, sy: 10 + _r() * 13,\n        col: _COL[(i + Math.floor(_r() * 3)) % _COL.length],\n        rot: _r() * 6.28, spin: (_r() - 0.5) * 14, circ: _r() > 0.62 });\n    }\n  }\n  _push(60, 1560, -1.05, 1520, Math.round({{count}} * 0.36));\n  _push(1020, 1560, -2.09, 1520, Math.round({{count}} * 0.36));\n  _push(540, 980, -1.57, 1180, Math.round({{count}} * 0.28));\n  function _draw(t) {\n    _g.clearRect(0, 0, 1080, 1920);\n    for (var i = 0; i < _P.length; i++) {\n      var p = _P[i], dt = t - p.t0;\n      if (dt < 0) continue;\n      var x = p.x + p.vx * dt, y = p.y + p.vy * dt + 560 * dt * dt;\n      if (y > 1980) continue;\n      var a = dt > 1.45 ? 1 - (dt - 1.45) / 1.25 : 1;\n      if (a <= 0) continue;\n      _g.save(); _g.globalAlpha = a; _g.translate(x, y); _g.rotate(p.rot + p.spin * dt);\n      _g.fillStyle = p.col;\n      if (p.circ) { _g.beginPath(); _g.arc(0, 0, p.sx * 0.5, 0, 6.2832); _g.fill(); }\n      else { _g.fillRect(-p.sx / 2, -p.sy / 2, p.sx, p.sy * Math.abs(Math.cos(dt * 3 + p.rot))); }\n      _g.restore();\n    }\n  }\n  _draw(0);\n  var _o = { v: 0 };\n  timeline.to(_o, { v: 1, duration: {{dur}}, ease: 'none',\n    onUpdate: function () { _draw(_o.v * {{dur}}); } }, {{at}});\n})();",
+   "sample": {
+    "sel": "[data-anim=\"subject\"]",
+    "stage": "<div data-anim=\"subject\" style=\"position:absolute;inset:0\"><div style=\"position:absolute;left:110px;right:110px;top:700px;padding:64px 56px;border-radius:28px;background:rgba(255,255,255,.045);border:1px solid rgba(255,255,255,.09)\"><span style=\"display:inline-block;padding:12px 24px;border:1px solid rgba(134,240,192,.45);border-radius:999px;font-family:'SF Mono',Menlo,monospace;font-size:24px;letter-spacing:.2em;color:#86F0C0\">RELEASE 1.0</span><div style=\"margin-top:40px;font-size:120px;font-weight:700;letter-spacing:-.045em;line-height:1.06\">上线了</div><div style=\"margin-top:30px;font-size:32px;color:#8b968f\">全量开放 · 今天起可用</div></div></div>"
+   }
+  },
+  {
+   "id": "M36",
+   "name": "边框流光",
+   "family": "材质",
+   "role": "decoration",
+   "layer": "overlay",
+   "status": "ready",
+   "cap": "rim-flow",
+   "src": "magicui:shine-border + border-beam",
+   "params": {
+    "dur": 2.6,
+    "w": 4,
+    "z": 22,
+    "color": "rgba(134,240,192,.85)"
+   },
+   "use": "一束光沿卡片边框跑一圈；卡片在等你点、新品待拆、悬而未决",
+   "avoid": "和 M33 边缘受光同屏（一个亮整边一个亮一点，会看不出谁在动）；目标必须有圆角",
+   "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t) return;\n  if (getComputedStyle(_t).position === 'static') { _t.style.position = 'relative'; }\n  var _ring = document.createElement('i');\n  _ring.style.cssText = 'position:absolute;inset:0;border-radius:inherit;padding:{{w}}px;pointer-events:none;' +\n    'z-index:{{z}};overflow:hidden;' +\n    '-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;' +\n    'mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);mask-composite:exclude;';\n  var _beam = document.createElement('i');\n  _beam.style.cssText = 'position:absolute;left:50%;top:50%;width:200%;height:200%;' +\n    'margin:-100% 0 0 -100%;display:block;' +\n    'background:conic-gradient(from 0deg,transparent 0deg,transparent 200deg,{{color}} 252deg,' +\n    '#ffffff 290deg,{{color}} 312deg,transparent 352deg);';\n  _ring.appendChild(_beam);\n  _t.appendChild(_ring);\n  timeline.to(_beam, { rotation: 360, duration: {{dur}}, ease: 'none' }, {{at}});\n})();",
+   "sample": {
+    "sel": "[data-anim=\"subject\"]",
+    "stage": "<div data-anim=\"subject\" style=\"position:absolute;left:120px;right:120px;top:700px;padding:56px 52px;border-radius:30px;background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.08);box-shadow:0 0 90px rgba(134,240,192,.10)\"><div style=\"font-family:'SF Mono',Menlo,monospace;font-size:24px;letter-spacing:.24em;color:#86F0C0\">READY</div><div style=\"margin-top:24px;font-size:82px;font-weight:680;letter-spacing:-.035em\">新品已就绪</div><div style=\"height:1px;background:rgba(255,255,255,.10);margin:40px 0 32px\"></div><div style=\"display:flex;font-size:30px;color:#a8b3ac\">发布通道<span style=\"margin-left:auto;font-family:'SF Mono',Menlo,monospace;color:#F4F1E9\">灰度 5%</span></div><div style=\"display:flex;font-size:30px;color:#a8b3ac;margin-top:18px\">回滚预案<span style=\"margin-left:auto;font-family:'SF Mono',Menlo,monospace;color:#F4F1E9\">已就位</span></div></div>"
+   }
+  },
+  {
+   "id": "K40",
+   "name": "字面扫光",
+   "family": "字形",
+   "role": "entrance_text",
+   "layer": "element",
+   "status": "ready",
+   "cap": "clip-sheen",
+   "src": "magicui:animated-shiny-text",
+   "params": {
+    "dur": 1.5,
+    "ease": "power2.inOut",
+    "ink": "#F4F1E9"
+   },
+   "use": "一道白光从左往右刷过字面；焕新、提亮、新品、把旧话重说一遍",
+   "avoid": "和 K37 逐字上色同屏（一个刷光一个换色，会乱）；两行以上正文不要用",
+   "needs": [
+    "text"
+   ],
+   "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t) return;\n  var _ink = (getComputedStyle(_t).color || '').trim() || '{{ink}}';\n  _t.style.backgroundImage = 'linear-gradient(100deg,' + _ink + ' 0%,' + _ink + ' 34%,' +\n    '#ffffff 46%,#eafff6 50%,' + _ink + ' 60%,' + _ink + ' 100%)';\n  _t.style.backgroundSize = '300% 100%';\n  _t.style.backgroundRepeat = 'no-repeat';\n  _t.style.webkitBackgroundClip = 'text';\n  _t.style.backgroundClip = 'text';\n  _t.style.color = 'transparent';\n  timeline.fromTo(_t, { backgroundPosition: '100% 0' },\n    { backgroundPosition: '0% 0', duration: {{dur}}, ease: '{{ease}}' }, {{at}});\n})();",
+   "sample": {
+    "sel": "[data-anim=\"subject\"]",
+    "stage": "<div style=\"position:absolute;left:80px;right:80px;top:700px\"><div style=\"font-family:'SF Mono',Menlo,monospace;font-size:24px;letter-spacing:.2em;color:#86F0C0\">K40</div><div data-anim=\"subject\" style=\"margin-top:34px;font-size:140px;line-height:1.12;font-weight:700;letter-spacing:-.045em\">焕新登场</div><div style=\"margin-top:36px;font-size:32px;color:#8b968f\">同一套流程，快了四成</div></div>"
+   }
+  },
+  {
+   "id": "K41",
+   "name": "极光流动字",
+   "family": "字形",
+   "role": "entrance_text",
+   "layer": "element",
+   "status": "ready",
+   "cap": "aurora-type",
+   "src": "magicui:animated-gradient-text + aurora-text",
+   "params": {
+    "dur": 2.8,
+    "c1": "#FF0080",
+    "c2": "#7928CA",
+    "c3": "#0070F3",
+    "c4": "#38bdf8"
+   },
+   "use": "字面自己流着一段彩色渐变；新章节、发布会标题、要一点未来感",
+   "avoid": "和 K40 同屏（都是往字上刷）；深底色上用，浅底会脏",
+   "needs": [
+    "text"
+   ],
+   "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t) return;\n  _t.style.backgroundImage = 'linear-gradient(120deg,{{c1}} 0%,{{c2}} 26%,{{c3}} 52%,{{c4}} 74%,{{c1}} 100%)';\n  _t.style.backgroundSize = '260% 100%';\n  _t.style.backgroundRepeat = 'no-repeat';\n  _t.style.webkitBackgroundClip = 'text';\n  _t.style.backgroundClip = 'text';\n  _t.style.color = 'transparent';\n  timeline.fromTo(_t, { backgroundPosition: '0% 0' },\n    { backgroundPosition: '100% 0', duration: {{dur}}, ease: 'none' }, {{at}});\n})();",
+   "sample": {
+    "sel": "[data-anim=\"subject\"]",
+    "stage": "<div style=\"position:absolute;left:80px;right:80px;top:700px\"><div style=\"font-family:'SF Mono',Menlo,monospace;font-size:24px;letter-spacing:.2em;color:#86F0C0\">K41</div><div data-anim=\"subject\" style=\"margin-top:34px;font-size:140px;line-height:1.12;font-weight:700;letter-spacing:-.045em\">一个新的开始</div><div style=\"margin-top:36px;font-size:32px;color:#8b968f\">颜色自己会动，字还是那四个字</div></div>"
+   }
+  },
+  {
+   "id": "K42",
+   "name": "漫画字",
+   "family": "字形",
+   "role": "entrance_text",
+   "layer": "element",
+   "status": "ready",
+   "cap": "comic-type",
+   "src": "magicui:comic-text",
+   "params": {
+    "dur": 0.8,
+    "ease": "power2.out",
+    "sw": 10,
+    "off": 12,
+    "burst": "rgba(255,209,102,.20)",
+    "stroke": "#0a0b0b",
+    "shadow": "#0a0b0b"
+   },
+   "use": "粗描边加错位硬影，背后炸开一朵锯齿；吐槽、质疑、把一句话喊出来",
+   "avoid": "一屏只用一次；正文字号小于 60px 时描边会糊掉（要配大字）",
+   "needs": [
+    "text"
+   ],
+   "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t) return;\n  var _p = _t.parentNode;\n  if (getComputedStyle(_p).position === 'static') { _p.style.position = 'relative'; }\n  var _b = document.createElement('i');\n  _b.style.cssText = 'position:absolute;left:50%;top:50%;width:104%;height:150%;' +\n    'margin-left:-52%;margin-top:-75%;pointer-events:none;z-index:0;' +\n    'background:linear-gradient(180deg,{{burst}},transparent);' +\n    'clip-path:polygon(50% 0%,58% 16%,74% 8%,76% 26%,93% 24%,84% 40%,100% 50%,84% 60%,93% 76%,' +\n    '76% 74%,74% 92%,58% 84%,50% 100%,42% 84%,26% 92%,24% 74%,7% 76%,16% 60%,0% 50%,' +\n    '16% 40%,7% 24%,24% 26%,26% 8%,42% 16%);';\n  _p.appendChild(_b);\n  _t.style.position = 'relative';\n  _t.style.zIndex = '1';\n  _t.style.webkitTextStrokeColor = '{{stroke}}';\n  _t.style.webkitTextStrokeWidth = '0px';\n  var _o = { v: 0 };\n  timeline.fromTo(_b, { scale: 0.2, opacity: 0, rotation: -14 },\n    { scale: 1, opacity: 1, rotation: -4, duration: {{dur}} * 0.55, ease: 'back.out(2.6)' }, {{at}});\n  timeline.to(_o, { v: 1, duration: {{dur}}, ease: '{{ease}}', onUpdate: function () {\n    var k = _o.v;\n    _t.style.webkitTextStrokeWidth = (k * {{sw}}) + 'px';\n    _t.style.textShadow = (k * {{off}}) + 'px ' + (k * {{off}}) + 'px 0 {{shadow}}';\n  } }, {{at}} + {{dur}} * 0.15);\n})();",
+   "sample": {
+    "sel": "[data-anim=\"subject\"]",
+    "stage": "<div style=\"position:absolute;left:70px;right:70px;top:760px;text-align:center\"><div data-anim=\"subject\" style=\"font-size:200px;font-weight:900;letter-spacing:-.03em;line-height:1;color:#FFD166\">真的吗</div><div style=\"margin-top:60px;font-size:44px;font-weight:700;color:#F4F1E9\">这句话，<span style=\"background:#FFD166;color:#0a0b0b;padding:4px 16px;border-radius:8px\">我不信</span></div></div>"
+   }
+  },
+  {
+   "id": "W32",
+   "name": "像素化照片",
+   "family": "照片",
+   "role": "decoration",
+   "layer": "media",
+   "status": "ready",
+   "cap": "pixel-grid",
+   "src": "magicui:pixel-image",
+   "params": {
+    "cols": 6,
+    "rows": 8,
+    "dur": 0.62,
+    "stagger": 0.022,
+    "ease": "power3.out",
+    "z": 12
+   },
+   "use": "真实照片被切成格子，从灰度像素一块块落定为彩色；回到像素、老照片、马赛克、看得见的细节",
+   "avoid": "格数超过 8×12 会变慢且看不出格子；目标里必须有 img",
+   "needs": [
+    "img"
+   ],
+   "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t) return;\n  var _img = _t.tagName === 'IMG' ? _t : _t.querySelector('img');\n  if (!_img) return;\n  var _host = _t.tagName === 'IMG' ? _t.parentNode : _t;\n  if (getComputedStyle(_host).position === 'static') { _host.style.position = 'relative'; }\n  var _src = _img.getAttribute('src');\n  var _hr = _host.getBoundingClientRect(), _ir = _img.getBoundingClientRect();\n  var _ox = 0, _oy = 0, _iw = _ir.width, _ih = _ir.height;\n  if (_iw > 0 && _ih > 0) { _ox = _ir.left - _hr.left; _oy = _ir.top - _hr.top; }\n  else { _iw = _hr.width; _ih = _hr.height; }\n  if (!_iw || !_ih) return;\n  var _cols = {{cols}}, _rows = {{rows}};\n  var _cw = _iw / _cols, _ch = _ih / _rows;\n  var _box = document.createElement('div');\n  _box.style.cssText = 'position:absolute;left:' + _ox + 'px;top:' + _oy + 'px;width:' + _iw + 'px;height:' +\n    _ih + 'px;pointer-events:none;overflow:hidden;z-index:{{z}};';\n  var _cells = [];\n  for (var r = 0; r < _rows; r++) {\n    for (var c = 0; c < _cols; c++) {\n      var _d = document.createElement('i');\n      _d.style.cssText = 'position:absolute;display:block;width:' + (_cw + 0.6) + 'px;height:' + (_ch + 0.6) +\n        'px;left:' + (c * _cw) + 'px;top:' + (r * _ch) + 'px;background-image:url(' + _src + ');' +\n        'background-size:' + _iw + 'px ' + _ih + 'px;background-position:' + (-c * _cw) + 'px ' +\n        (-r * _ch) + 'px;transform-origin:center center;';\n      _box.appendChild(_d);\n      _cells.push(_d);\n    }\n  }\n  _host.appendChild(_box);\n  timeline.fromTo(_cells, { scale: 0.34, opacity: 0, filter: 'grayscale(1) brightness(.55)' },\n    { scale: 1, opacity: 1, filter: 'grayscale(0) brightness(1)', duration: {{dur}}, ease: '{{ease}}',\n      stagger: {{stagger}} }, {{at}});\n})();",
+   "sample": {
+    "sel": "[data-anim=\"subject\"]",
+    "stage": "<div data-anim=\"subject\" style=\"position:absolute;left:90px;top:430px;width:900px;height:1120px;border-radius:24px;overflow:hidden;border:1px solid rgba(255,255,255,.08)\"><img src=\"./photo.png\" alt=\"\" style=\"width:100%;height:100%;object-fit:cover;display:block\"></div>"
+   }
+  },
+  {
+   "id": "G27",
+   "name": "公转轨道",
+   "family": "版面",
+   "role": "decoration",
+   "layer": "element",
+   "status": "ready",
+   "cap": "orbit",
+   "src": "magicui:orbiting-circles",
+   "params": {
+    "dur": 3.0,
+    "cy": 0.48,
+    "size": 46,
+    "z": 6,
+    "c1": "#FFD166",
+    "c2": "#7FB2FF",
+    "c3": "#FF8FA3"
+   },
+   "use": "三颗球沿不同周期的椭圆轨道绕着中心转；围绕、生态、循环、谁离不开谁",
+   "avoid": "和 UA47 圆点环绕同屏；目标上不要再放别的装饰",
+   "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t) return;\n  if (getComputedStyle(_t).position === 'static') { _t.style.position = 'relative'; }\n  var _r = _t.getBoundingClientRect();\n  var _w = _r.width || 1080, _h = _r.height || 1920;\n  var _cx = _w * 0.5, _cy = _h * {{cy}};\n  var _wrap = document.createElement('div');\n  _wrap.style.cssText = 'position:absolute;inset:0;pointer-events:none;z-index:{{z}};';\n  _t.appendChild(_wrap);\n  var _COLS = ['{{c1}}', '{{c2}}', '{{c3}}'];\n  var _sp = [\n    { a: 0.41, b: 0.085, per: 2.0, ph: 0.0, size: {{size}} },\n    { a: 0.30, b: 0.062, per: 2.6, ph: 2.1, size: {{size}} * 0.74 },\n    { a: 0.20, b: 0.042, per: 3.2, ph: 4.0, size: {{size}} * 0.56 }\n  ];\n  for (var i = 0; i < _sp.length; i++) {\n    var _ring = document.createElement('i');\n    _ring.style.cssText = 'position:absolute;left:50%;top:' + (_cy / _h * 100) + '%;width:' +\n      (_sp[i].a * _w * 2) + 'px;height:' + (_sp[i].b * _h * 2) + 'px;margin-left:' + (-_sp[i].a * _w) +\n      'px;margin-top:' + (-_sp[i].b * _h) + 'px;border-radius:50%;border:1px solid rgba(255,255,255,' +\n      (0.16 - i * 0.03).toFixed(2) + ');';\n    _wrap.appendChild(_ring);\n  }\n  var _dots = [], _core = document.createElement('b');\n  _core.style.cssText = 'position:absolute;left:50%;top:' + (_cy / _h * 100) + '%;width:' + ({{size}} * 1.5) +\n    'px;height:' + ({{size}} * 1.5) + 'px;margin-left:' + (-{{size}} * 0.75) + 'px;margin-top:' +\n    (-{{size}} * 0.75) + 'px;border-radius:50%;background:radial-gradient(circle at 38% 32%,#c4ffe9,#2aa37a 62%,#123c33);' +\n    'box-shadow:0 0 60px rgba(134,240,192,.45);';\n  _wrap.appendChild(_core);\n  for (var k = 0; k < _sp.length; k++) {\n    var _d = document.createElement('b');\n    _d.style.cssText = 'position:absolute;left:0;top:0;width:' + _sp[k].size + 'px;height:' + _sp[k].size +\n      'px;border-radius:50%;background:radial-gradient(circle at 36% 32%,' + _COLS[k] + ',rgba(0,0,0,.45));' +\n      'box-shadow:0 0 22px ' + _COLS[k] + ';';\n    _wrap.appendChild(_d);\n    _dots.push(_d);\n  }\n  var _o = { v: 0 };\n  timeline.fromTo(_core, { scale: 0.4, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.6, ease: 'back.out(2.4)' }, {{at}});\n  timeline.to(_o, { v: 1, duration: {{dur}}, ease: 'none', onUpdate: function () {\n    var tt = _o.v * {{dur}};\n    for (var i = 0; i < _sp.length; i++) {\n      var s = _sp[i], th = s.ph + tt / s.per * 6.2832;\n      var x = _cx + s.a * _w * Math.cos(th), y = _cy + s.b * _h * Math.sin(th);\n      var z = Math.sin(th);\n      _dots[i].style.transform = 'translate(' + (x - s.size / 2) + 'px,' + (y - s.size / 2) + 'px) scale(' +\n        (0.88 + 0.18 * z).toFixed(3) + ')';\n      _dots[i].style.opacity = (0.72 + 0.28 * (0.5 + 0.5 * z)).toFixed(3);\n      _dots[i].style.zIndex = z > 0 ? 3 : 1;\n    }\n  } }, {{at}});\n})();",
+   "sample": {
+    "sel": "[data-anim=\"subject\"]",
+    "stage": "<div data-anim=\"subject\" style=\"position:absolute;inset:0\"><div style=\"position:absolute;left:64px;bottom:400px;font-family:'SF Mono',Menlo,monospace;font-size:24px;letter-spacing:.2em;color:rgba(244,241,233,.42)\">三条轨道 · 各自周期 2.0 / 2.6 / 3.2 秒</div></div>"
+   }
+  },
+  {
+   "id": "U65",
+   "name": "终端窗口",
+   "family": "组件",
+   "role": "component",
+   "layer": "element",
+   "status": "ready",
+   "cap": "component-html",
+   "src": "magicui:terminal",
+   "params": {},
+   "use": "把命令行装进一个窗口：讲安装、跑脚本、部署、AI 在后台干什么",
+   "avoid": "窗口里只放命令行文本，不要塞表格；一屏一个窗口",
+   "needs": [
+    "ui"
+   ],
+   "code": "<div class=\"ui-term\"><div class=\"ui-term-bar\"><i class=\"dot\"></i><i class=\"dot\"></i><i class=\"dot\"></i><span class=\"ttl\">zsh — 项目目录</span></div><div class=\"ui-term-body\"><div class=\"ui-term-ln\"><b>$</b> npx magicui add shine-border</div><div class=\"ui-term-ln ok\">✔ 组件已写入 components/ui</div><div class=\"ui-term-ln ok\">✔ 依赖：motion · tailwind-merge</div><div class=\"ui-term-ln dim\">3 个文件，0 个冲突</div><div class=\"ui-term-ln\"><b>$</b> npm run dev<i class=\"ui-term-cur\"></i></div><div class=\"ui-term-ln ok\">ready in 412 ms — localhost:3000</div></div></div>",
+   "note": "标题栏三点 + 等宽命令行；配色只用 ui-* 变量，不写死颜色"
+  },
+  {
+   "id": "U66",
+   "name": "文件树",
+   "family": "组件",
+   "role": "component",
+   "layer": "element",
+   "status": "ready",
+   "cap": "component-html",
+   "src": "magicui:file-tree",
+   "params": {},
+   "use": "把项目结构摊开给人看：讲代码组织、交付了什么、改了哪几个文件",
+   "avoid": "超过 8 行会看不清；层级最多三层；不要和 U51 目录页同屏",
+   "needs": [
+    "ui"
+   ],
+   "code": "<div class=\"ui-tree\"><div class=\"ui-tree-row dir\"><span class=\"ic\">▾</span>src/</div><div class=\"ui-tree-row dir l2\"><span class=\"ic\">▾</span>components/</div><div class=\"ui-tree-row l3\"><span class=\"ic\">◦</span>hero.tsx<span class=\"tag\">新增</span></div><div class=\"ui-tree-row l3\"><span class=\"ic\">◦</span>card.tsx</div><div class=\"ui-tree-row dir l2\"><span class=\"ic\">▾</span>lib/</div><div class=\"ui-tree-row l3\"><span class=\"ic\">◦</span>utils.ts</div><div class=\"ui-tree-row l2\"><span class=\"ic\">◦</span>app.tsx</div><div class=\"ui-tree-row l2\"><span class=\"ic\">◦</span>globals.css</div></div>",
+   "note": "目录行带三角、文件行带圆点，缩进两级；新增文件挂 tag"
+  },
+  {
+   "id": "U67",
+   "name": "浏览器窗口",
+   "family": "组件",
+   "role": "component",
+   "layer": "element",
+   "status": "ready",
+   "cap": "component-html",
+   "src": "magicui:safari",
+   "params": {},
+   "use": "讲网页、后台、系统上线：地址栏 + 侧栏 + 两块指标 + 一张柱图",
+   "avoid": "示例数据必须标「场景演示」，不得冒充真实产品截图；一屏一个窗口",
+   "needs": [
+    "ui"
+   ],
+   "code": "<div class=\"ui-browser\"><div class=\"ui-browser-bar\"><i class=\"dot\"></i><i class=\"dot\"></i><i class=\"dot\"></i><div class=\"ui-browser-url\"><b>https://</b>app.example.com/dashboard</div></div><div class=\"ui-browser-body\"><div class=\"ui-browser-side\"><i class=\"i on\"></i><i class=\"i\"></i><i class=\"i\"></i><i class=\"i\"></i></div><div class=\"ui-browser-main\"><div class=\"ui-browser-kpi\"><div class=\"k\"><b>1,284</b><span>本周活跃</span></div><div class=\"k\"><b>+18%</b><span>环比</span></div></div><div class=\"ui-browser-chart\"><i class=\"bar\" style=\"left:4%;height:34%\"></i><i class=\"bar\" style=\"left:22%;height:52%\"></i><i class=\"bar\" style=\"left:40%;height:44%\"></i><i class=\"bar\" style=\"left:58%;height:68%\"></i><i class=\"bar\" style=\"left:76%;height:82%\"></i></div></div></div></div>",
+   "note": "浏览器外框 + 侧栏 + KPI + 柱图；数字是自己填的示例数据"
+  },
+  {
+   "id": "U68",
+   "name": "推文卡",
+   "family": "组件",
+   "role": "component",
+   "layer": "element",
+   "status": "ready",
+   "cap": "component-html",
+   "src": "magicui:tweet-card",
+   "params": {},
+   "use": "引用一条用户反馈、一句评论：头像 + 昵称 + 一段话 + 转赞评",
+   "avoid": "只能用虚构身份，配文中标「场景演示」；不要放真人头像照",
+   "needs": [
+    "ui"
+   ],
+   "code": "<div class=\"ui-tweet\"><div class=\"ui-tweet-hd\"><i class=\"ui-tweet-av\"></i><div><div class=\"ui-tweet-name\">林小满</div><div class=\"ui-tweet-handle\">@xiaoman · 产品</div></div></div><div class=\"ui-tweet-body\">把一件事讲清楚，比把它讲完重要。</div><div class=\"ui-tweet-meta\">上午 9:12 · 2026 年 11 月 17 日</div><div class=\"ui-tweet-line\"></div><div class=\"ui-tweet-stats\"><span><b>128</b> 转发</span><span><b>1.2K</b> 喜欢</span><span><b>36</b> 回复</span></div></div>",
+   "note": "头像 + 昵称 + 账号 + 正文 + 时间 + 转赞评；内容一律虚构"
+  },
+  {
+   "id": "K43",
+   "name": "手绘旁注括号",
+   "family": "字形",
+   "role": "decoration",
+   "layer": "element",
+   "status": "ready",
+   "cap": "右侧手绘大括号，向右张开；三笔折线，起止点各自抖",
+   "src": "rough-notation:render.ts/bracket-right",
+   "params": {
+    "type": "bracket",
+    "dir": "right",
+    "color": "#86F0C0",
+    "sw": 7,
+    "rgh": 1.6,
+    "bow": 1,
+    "off": 2.2,
+    "pad": 34,
+    "passes": 1,
+    "at": 0.62,
+    "dur": 0.85,
+    "z": 6
+   },
+   "use": "一句话的右侧挂一句旁注，正文不动",
+   "avoid": "右侧已有内容（括号会压上去）；整段多行（只能包一块）",
+   "needs": [
+    "text"
+   ],
+   "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t || !window.kit || !kit.anno) return;\n  kit.anno(timeline, _t, { type: '{{type}}', color: '{{color}}', sw: {{sw}}, pad: {{pad}}, passes: {{passes}}, rgh: {{rgh}}, bow: {{bow}}, off: {{off}}, dur: {{dur}}, z: {{z}}, dir: 'right', at: {{at}} });\n})();"
+  },
+  {
+   "id": "K44",
+   "name": "手绘夹注双括号",
+   "family": "字形",
+   "role": "decoration",
+   "layer": "element",
+   "status": "ready",
+   "cap": "左右各一道手绘括号把整句夹住，两侧先后落笔",
+   "src": "rough-notation:render.ts/brackets-array",
+   "params": {
+    "type": "bracket",
+    "dir": [
+     "left",
+     "right"
+    ],
+    "color": "#FFD45E",
+    "sw": 7,
+    "rgh": 1.6,
+    "bow": 1,
+    "off": 2.2,
+    "pad": 30,
+    "passes": 1,
+    "at": 0.6,
+    "dur": 1.0,
+    "overlap": 0.7,
+    "z": 6
+   },
+   "use": "把一句结论夹出来，像引文或批注",
+   "avoid": "已经用了 K67 左括号（同一侧重复）",
+   "needs": [
+    "text"
+   ],
+   "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t || !window.kit || !kit.anno) return;\n  kit.anno(timeline, _t, { type: '{{type}}', color: '{{color}}', sw: {{sw}}, pad: {{pad}}, passes: {{passes}}, rgh: {{rgh}}, bow: {{bow}}, off: {{off}}, dur: {{dur}}, overlap: {{overlap}}, z: {{z}}, dir: ['left','right'], at: {{at}} });\n})();"
+  },
+  {
+   "id": "K45",
+   "name": "手绘粗笔高亮",
+   "family": "字形",
+   "role": "decoration",
+   "layer": "element",
+   "status": "ready",
+   "cap": "约 0.9 倍行高的粗描边当马克笔，圆头、两端出界、边缘抖",
+   "src": "rough-notation:render.ts/highlight-stroke",
+   "params": {
+    "type": "highlight",
+    "color": "#FFD45E",
+    "sw": 96,
+    "op": 0.4,
+    "rgh": 1.4,
+    "bow": 1.2,
+    "off": 2.4,
+    "pad": 14,
+    "passes": 2,
+    "at": 0.5,
+    "dur": 0.7,
+    "overlap": 0.95,
+    "z": 1
+   },
+   "use": "一个关键词被划上荧光笔，字压在上面",
+   "avoid": "和 K48 下划线同一词；深色字上 op 超过 0.5 会糊",
+   "needs": [
+    "text"
+   ],
+   "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t || !window.kit || !kit.anno) return;\n  kit.anno(timeline, _t, { type: '{{type}}', color: '{{color}}', sw: {{sw}}, pad: {{pad}}, passes: {{passes}}, rgh: {{rgh}}, bow: {{bow}}, off: {{off}}, dur: {{dur}}, overlap: {{overlap}}, z: {{z}}, op: {{op}}, at: {{at}} });\n})();"
+  },
+  {
+   "id": "K46",
+   "name": "手绘绕圈重点",
+   "family": "字形",
+   "role": "decoration",
+   "layer": "element",
+   "status": "ready",
+   "cap": "开放椭圆绕一圈，起笔与收笔重叠，半径带抖动",
+   "src": "rough-notation:render.ts/circle-ellipse",
+   "params": {
+    "type": "circle",
+    "color": "#FF5D6C",
+    "sw": 6,
+    "rgh": 1.5,
+    "bow": 1,
+    "off": 2.0,
+    "pad": 0,
+    "passes": 2,
+    "at": 0.55,
+    "dur": 0.95,
+    "overlap": 0.86,
+    "z": 6
+   },
+   "use": "圈住一个数字或短词，讲占比、讲异常",
+   "avoid": "整句（圈会拉到两行）；和 K59 紧圈同屏",
+   "needs": [
+    "text"
+   ],
+   "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t || !window.kit || !kit.anno) return;\n  kit.anno(timeline, _t, { type: '{{type}}', color: '{{color}}', sw: {{sw}}, pad: {{pad}}, passes: {{passes}}, rgh: {{rgh}}, bow: {{bow}}, off: {{off}}, dur: {{dur}}, overlap: {{overlap}}, z: {{z}}, at: {{at}} });\n})();"
+  },
+  {
+   "id": "K47",
+   "name": "手绘方框",
+   "family": "字形",
+   "role": "decoration",
+   "layer": "element",
+   "status": "ready",
+   "cap": "两遍四条边，每条边两端各出头、四个角互相交叠",
+   "src": "rough-notation:render.ts/box",
+   "params": {
+    "type": "box",
+    "color": "#FFD45E",
+    "sw": 6,
+    "rgh": 1.5,
+    "bow": 1,
+    "off": 2.4,
+    "pad": 10,
+    "passes": 2,
+    "at": 0.58,
+    "dur": 1.0,
+    "overlap": 0.9,
+    "z": 6
+   },
+   "use": "圈住一个词组、一个结论；比加粗更像有人在这划了一下",
+   "avoid": "整段文字（框会花）；和 K71 双框同屏",
+   "needs": [
+    "text"
+   ],
+   "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t || !window.kit || !kit.anno) return;\n  kit.anno(timeline, _t, { type: '{{type}}', color: '{{color}}', sw: {{sw}}, pad: {{pad}}, passes: {{passes}}, rgh: {{rgh}}, bow: {{bow}}, off: {{off}}, dur: {{dur}}, overlap: {{overlap}}, z: {{z}}, at: {{at}} });\n})();"
+  },
+  {
+   "id": "K55",
+   "name": "手绘细线框",
+   "family": "字形",
+   "role": "decoration",
+   "layer": "element",
+   "status": "ready",
+   "cap": "单遍细线，四角依然出头；最轻的一次框",
+   "src": "rough-notation:render.ts/box-single",
+   "params": {
+    "type": "box",
+    "color": "#86F0C0",
+    "sw": 3.5,
+    "rgh": 1.3,
+    "bow": 1,
+    "off": 1.8,
+    "pad": 12,
+    "passes": 1,
+    "at": 0.6,
+    "dur": 0.85,
+    "z": 6
+   },
+   "use": "不想太抢眼的圈重点；正文旁标注",
+   "avoid": "要在满屏压住注意力时（太轻，用 K47）",
+   "needs": [
+    "text"
+   ],
+   "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t || !window.kit || !kit.anno) return;\n  kit.anno(timeline, _t, { type: '{{type}}', color: '{{color}}', sw: {{sw}}, pad: {{pad}}, passes: {{passes}}, rgh: {{rgh}}, bow: {{bow}}, off: {{off}}, dur: {{dur}}, z: {{z}}, at: {{at}} });\n})();"
+  },
+  {
+   "id": "K71",
+   "name": "双框",
+   "family": "字形",
+   "role": "decoration",
+   "layer": "element",
+   "status": "ready",
+   "cap": "两道框一大一小套在一起，像改了一版又框一次",
+   "src": "rough-notation:render.ts/box-two-pass",
+   "params": {
+    "rgh": 1.6,
+    "bow": 1.1,
+    "off": 2.2,
+    "passes": 1,
+    "at": 0.5,
+    "dur": 1.1,
+    "overlap": 0.55,
+    "z": 6,
+    "pad2": 30,
+    "sw": 6,
+    "color": "#FFD45E",
+    "sw2": 4,
+    "color2": "#86F0C0",
+    "pad": 10,
+    "type": "box"
+   },
+   "use": "同一句里「既要」和「重点」两层意思",
+   "avoid": "小字（两个框挤成一团）；和 K47 同屏",
+   "needs": [
+    "text"
+   ],
+   "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t || !window.kit || !kit.anno) return;\n  kit.anno(timeline, _t, { parts: [\n    { type: 'box', pad: {{pad}}, sw: {{sw}}, color: '{{color}}', passes: 1 },\n    { type: 'box', pad: {{pad2}}, sw: {{sw2}}, color: '{{color2}}', passes: 1 }\n  ], rgh: {{rgh}}, bow: {{bow}}, off: {{off}}, at: {{at}}, dur: {{dur}}, overlap: {{overlap}}, z: {{z}} });\n})();"
+  },
+  {
+   "id": "K54",
+   "name": "手绘三笔加重",
+   "family": "字形",
+   "role": "decoration",
+   "layer": "element",
+   "status": "ready",
+   "cap": "同一条边框描三遍，每遍错开 2px，像马克笔反复涂",
+   "src": "rough-notation:render.ts/iterations-3",
+   "params": {
+    "type": "box",
+    "color": "#FFD45E",
+    "sw": 5,
+    "rgh": 1.7,
+    "bow": 1.1,
+    "off": 2.6,
+    "pad": 9,
+    "passes": 3,
+    "at": 0.52,
+    "dur": 1.2,
+    "overlap": 0.88,
+    "z": 6
+   },
+   "use": "要压过整屏的结论；反复描出来的分量",
+   "avoid": "正文小字（三笔会糊成一团）；和 K47 同屏",
+   "needs": [
+    "text"
+   ],
+   "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t || !window.kit || !kit.anno) return;\n  kit.anno(timeline, _t, { type: '{{type}}', color: '{{color}}', sw: {{sw}}, pad: {{pad}}, passes: {{passes}}, rgh: {{rgh}}, bow: {{bow}}, off: {{off}}, dur: {{dur}}, overlap: {{overlap}}, z: {{z}}, at: {{at}} });\n})();"
+  },
+  {
+   "id": "K48",
+   "name": "手绘下划线",
+   "family": "字形",
+   "role": "decoration",
+   "layer": "element",
+   "status": "ready",
+   "cap": "两笔反向重描，第二笔整体错开，末尾略翘",
+   "src": "rough-notation:render.ts/underline",
+   "params": {
+    "type": "underline",
+    "color": "#86F0C0",
+    "sw": 6,
+    "rgh": 1.4,
+    "bow": 1.3,
+    "off": 2.2,
+    "pad": 18,
+    "passes": 2,
+    "at": 0.58,
+    "dur": 0.8,
+    "overlap": 0.9,
+    "z": 6
+   },
+   "use": "单行词句被划上重点；比加粗自然",
+   "avoid": "多行段落（逐行下划请用 K53）",
+   "needs": [
+    "text"
+   ],
+   "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t || !window.kit || !kit.anno) return;\n  kit.anno(timeline, _t, { type: '{{type}}', color: '{{color}}', sw: {{sw}}, pad: {{pad}}, passes: {{passes}}, rgh: {{rgh}}, bow: {{bow}}, off: {{off}}, dur: {{dur}}, overlap: {{overlap}}, z: {{z}}, at: {{at}} });\n})();"
+  },
+  {
+   "id": "K70",
+   "name": "三笔下划线",
+   "family": "字形",
+   "role": "decoration",
+   "layer": "element",
+   "status": "ready",
+   "cap": "同一条线描三遍，每遍多错开 5px，像笔在纸上蹭",
+   "src": "rough-notation:render.ts/underline-x3",
+   "params": {
+    "type": "underline",
+    "color": "#FFD45E",
+    "sw": 5,
+    "rgh": 1.6,
+    "bow": 1.3,
+    "off": 2.6,
+    "pad": 16,
+    "passes": 3,
+    "at": 0.5,
+    "dur": 1.0,
+    "overlap": 0.9,
+    "z": 6
+   },
+   "use": "要压过整屏的一句结论",
+   "avoid": "正文小字（三笔会糊）；和 K48 同屏",
+   "needs": [
+    "text"
+   ],
+   "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t || !window.kit || !kit.anno) return;\n  kit.anno(timeline, _t, { type: '{{type}}', color: '{{color}}', sw: {{sw}}, pad: {{pad}}, passes: {{passes}}, rgh: {{rgh}}, bow: {{bow}}, off: {{off}}, dur: {{dur}}, overlap: {{overlap}}, z: {{z}}, at: {{at}} });\n})();"
+  },
+  {
+   "id": "K69",
+   "name": "逆向划线",
+   "family": "字形",
+   "role": "decoration",
+   "layer": "element",
+   "status": "ready",
+   "cap": "从右端起笔往左划，收笔落在句首",
+   "src": "rough-notation:render.ts/underline-rtl",
+   "params": {
+    "type": "underline",
+    "color": "#FF5D6C",
+    "sw": 6,
+    "rgh": 1.4,
+    "bow": 1.2,
+    "off": 2.2,
+    "pad": 18,
+    "passes": 1,
+    "rtl": 1,
+    "at": 0.58,
+    "dur": 0.75,
+    "z": 6
+   },
+   "use": "和上一屏的左起笔形成节奏差",
+   "avoid": "观众会以为在倒放（超过 3 笔就别逆）",
+   "needs": [
+    "text"
+   ],
+   "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t || !window.kit || !kit.anno) return;\n  kit.anno(timeline, _t, { type: '{{type}}', color: '{{color}}', sw: {{sw}}, pad: {{pad}}, passes: {{passes}}, rgh: {{rgh}}, bow: {{bow}}, off: {{off}}, dur: {{dur}}, z: {{z}}, rtl: 1, at: {{at}} });\n})();"
+  },
+  {
+   "id": "K57",
+   "name": "斜划删除",
+   "family": "字形",
+   "role": "decoration",
+   "layer": "element",
+   "status": "ready",
+   "cap": "一笔略微倾斜地划过字身，像真划掉的",
+   "src": "rough-notation:render.ts/strike-angle",
+   "params": {
+    "type": "strike",
+    "color": "#FF5D6C",
+    "sw": 6,
+    "rgh": 1.4,
+    "bow": 1,
+    "off": 2.2,
+    "pad": 12,
+    "passes": 1,
+    "angle": 6,
+    "at": 0.56,
+    "dur": 0.7,
+    "z": 6
+   },
+   "use": "否定一句旧说法",
+   "avoid": "和 K58 双斜划同屏",
+   "needs": [
+    "text"
+   ],
+   "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t || !window.kit || !kit.anno) return;\n  kit.anno(timeline, _t, { type: '{{type}}', color: '{{color}}', sw: {{sw}}, pad: {{pad}}, passes: {{passes}}, rgh: {{rgh}}, bow: {{bow}}, off: {{off}}, dur: {{dur}}, z: {{z}}, angle: 6, at: {{at}} });\n})();"
+  },
+  {
+   "id": "K49",
+   "name": "手绘删除线",
+   "family": "字形",
+   "role": "decoration",
+   "layer": "element",
+   "status": "ready",
+   "cap": "穿过字身中线的一笔，第二笔方向相反、错开 5px",
+   "src": "rough-notation:render.ts/strike-through",
+   "params": {
+    "type": "strike",
+    "color": "#FF5D6C",
+    "sw": 6,
+    "rgh": 1.4,
+    "bow": 1.1,
+    "off": 2.2,
+    "pad": 12,
+    "passes": 2,
+    "at": 0.56,
+    "dur": 0.7,
+    "overlap": 0.9,
+    "z": 6
+   },
+   "use": "否定一个旧说法，下一屏再给新的",
+   "avoid": "和 K50 打叉同屏（两个否定动作）",
+   "needs": [
+    "text"
+   ],
+   "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t || !window.kit || !kit.anno) return;\n  kit.anno(timeline, _t, { type: '{{type}}', color: '{{color}}', sw: {{sw}}, pad: {{pad}}, passes: {{passes}}, rgh: {{rgh}}, bow: {{bow}}, off: {{off}}, dur: {{dur}}, overlap: {{overlap}}, z: {{z}}, at: {{at}} });\n})();"
+  },
+  {
+   "id": "K58",
+   "name": "双斜划",
+   "family": "字形",
+   "role": "decoration",
+   "layer": "element",
+   "status": "ready",
+   "cap": "两道方向相反的斜线交错，像划了两遍才划干净",
+   "src": "rough-notation:render.ts/strike-cross2",
+   "params": {
+    "rgh": 1.5,
+    "bow": 1.1,
+    "off": 2.4,
+    "passes": 1,
+    "at": 0.5,
+    "dur": 0.8,
+    "overlap": 0.5,
+    "z": 6,
+    "sw2": 5,
+    "color2": "#FF8A93",
+    "type": "strike",
+    "color": "#FF5D6C",
+    "sw": 6
+   },
+   "use": "强烈否定；讲「别再这样」",
+   "avoid": "和 K57 同屏；礼貌场合（太凶）",
+   "needs": [
+    "text"
+   ],
+   "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t || !window.kit || !kit.anno) return;\n  kit.anno(timeline, _t, { parts: [\n    { type: 'strike', angle: 7, sw: {{sw}}, color: '{{color}}' },\n    { type: 'strike', angle: -5, sw: {{sw2}}, color: '{{color2}}' }\n  ], rgh: {{rgh}}, bow: {{bow}}, off: {{off}}, at: {{at}}, dur: {{dur}}, overlap: {{overlap}}, z: {{z}} });\n})();"
+  },
+  {
+   "id": "K59",
+   "name": "手绘紧圈",
+   "family": "字形",
+   "role": "decoration",
+   "layer": "element",
+   "status": "ready",
+   "cap": "贴得很紧的小椭圆，两圈几乎重叠",
+   "src": "rough-notation:render.ts/circle-tight",
+   "params": {
+    "type": "circle",
+    "color": "#86F0C0",
+    "sw": 5,
+    "rgh": 1.3,
+    "bow": 1,
+    "off": 1.8,
+    "rxK": 0.54,
+    "ryK": 0.56,
+    "pad": 0,
+    "passes": 2,
+    "at": 0.55,
+    "dur": 0.85,
+    "overlap": 0.9,
+    "z": 6
+   },
+   "use": "圈一个数字或两个字，注意力收得极紧",
+   "avoid": "圈长词（会框不住）",
+   "needs": [
+    "text"
+   ],
+   "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t || !window.kit || !kit.anno) return;\n  kit.anno(timeline, _t, { type: '{{type}}', color: '{{color}}', sw: {{sw}}, pad: {{pad}}, passes: {{passes}}, rgh: {{rgh}}, bow: {{bow}}, off: {{off}}, dur: {{dur}}, overlap: {{overlap}}, z: {{z}}, rxK: 0.54, ryK: 0.56, at: {{at}} });\n})();"
+  },
+  {
+   "id": "K60",
+   "name": "手绘大松圈",
+   "family": "字形",
+   "role": "decoration",
+   "layer": "element",
+   "status": "ready",
+   "cap": "圈得很松，离内容一圈空，像随手一围",
+   "src": "rough-notation:render.ts/circle-loose",
+   "params": {
+    "type": "circle",
+    "color": "#FFD45E",
+    "sw": 5,
+    "rgh": 1.8,
+    "bow": 1.2,
+    "off": 2.6,
+    "rxK": 0.8,
+    "ryK": 0.92,
+    "pad": 0,
+    "passes": 1,
+    "at": 0.55,
+    "dur": 1.0,
+    "z": 6
+   },
+   "use": "把两三个元素一起圈进来",
+   "avoid": "细字（松圈会显得飘）",
+   "needs": [
+    "text"
+   ],
+   "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t || !window.kit || !kit.anno) return;\n  kit.anno(timeline, _t, { type: '{{type}}', color: '{{color}}', sw: {{sw}}, pad: {{pad}}, passes: {{passes}}, rgh: {{rgh}}, bow: {{bow}}, off: {{off}}, dur: {{dur}}, z: {{z}}, rxK: 0.8, ryK: 0.92, at: {{at}} });\n})();"
+  },
+  {
+   "id": "K50",
+   "name": "手绘打叉",
+   "family": "字形",
+   "role": "decoration",
+   "layer": "element",
+   "status": "ready",
+   "cap": "两条对角线，第二遍反向叠加，端点各自外扩",
+   "src": "rough-notation:render.ts/crossed-off",
+   "params": {
+    "type": "cross",
+    "color": "#FF5D6C",
+    "sw": 7,
+    "rgh": 1.5,
+    "bow": 1.1,
+    "off": 2.4,
+    "pad": 8,
+    "passes": 2,
+    "at": 0.55,
+    "dur": 0.75,
+    "overlap": 0.8,
+    "z": 6
+   },
+   "use": "划掉一个错误做法、一个旧方案",
+   "avoid": "和 K49 删除线同屏；大段文字（叉会变成网格）",
+   "needs": [
+    "text"
+   ],
+   "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t || !window.kit || !kit.anno) return;\n  kit.anno(timeline, _t, { type: '{{type}}', color: '{{color}}', sw: {{sw}}, pad: {{pad}}, passes: {{passes}}, rgh: {{rgh}}, bow: {{bow}}, off: {{off}}, dur: {{dur}}, overlap: {{overlap}}, z: {{z}}, at: {{at}} });\n})();"
+  },
+  {
+   "id": "K62",
+   "name": "三笔叉",
+   "family": "字形",
+   "role": "decoration",
+   "layer": "element",
+   "status": "ready",
+   "cap": "叉三遍，每遍角度略偏，划得最狠",
+   "src": "rough-notation:render.ts/crossed-off-x3",
+   "params": {
+    "type": "cross",
+    "color": "#FF5D6C",
+    "sw": 6,
+    "rgh": 1.7,
+    "bow": 1.2,
+    "off": 2.6,
+    "pad": 6,
+    "passes": 3,
+    "at": 0.5,
+    "dur": 1.0,
+    "overlap": 0.75,
+    "z": 6
+   },
+   "use": "彻底否掉；一个方案被毙",
+   "avoid": "语气已经很强，一屏只放一次",
+   "needs": [
+    "text"
+   ],
+   "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t || !window.kit || !kit.anno) return;\n  kit.anno(timeline, _t, { type: '{{type}}', color: '{{color}}', sw: {{sw}}, pad: {{pad}}, passes: {{passes}}, rgh: {{rgh}}, bow: {{bow}}, off: {{off}}, dur: {{dur}}, overlap: {{overlap}}, z: {{z}}, at: {{at}} });\n})();"
+  },
+  {
+   "id": "K63",
+   "name": "手绘细高亮",
+   "family": "字形",
+   "role": "decoration",
+   "layer": "element",
+   "status": "ready",
+   "cap": "只有 0.4 倍行高的窄笔，像签字笔涂的一道",
+   "src": "rough-notation:render.ts/highlight-thin",
+   "params": {
+    "type": "highlight",
+    "color": "#86F0C0",
+    "sw": 36,
+    "op": 0.55,
+    "rgh": 1.3,
+    "bow": 1.2,
+    "off": 2.2,
+    "pad": 12,
+    "passes": 1,
+    "at": 0.52,
+    "dur": 0.6,
+    "z": 1
+   },
+   "use": "在长句里点一个词，不遮住字身",
+   "avoid": "要整体压满时（用 K45 粗笔）",
+   "needs": [
+    "text"
+   ],
+   "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t || !window.kit || !kit.anno) return;\n  kit.anno(timeline, _t, { type: '{{type}}', color: '{{color}}', sw: {{sw}}, pad: {{pad}}, passes: {{passes}}, rgh: {{rgh}}, bow: {{bow}}, off: {{off}}, dur: {{dur}}, z: {{z}}, op: {{op}}, at: {{at}} });\n})();"
+  },
+  {
+   "id": "K64",
+   "name": "折行高亮",
+   "family": "字形",
+   "role": "decoration",
+   "layer": "element",
+   "status": "ready",
+   "cap": "按视觉行逐行涂，折到第二行自动接一笔",
+   "src": "rough-notation:render.ts/highlight-multiline",
+   "params": {
+    "type": "highlight",
+    "color": "#FFD45E",
+    "sw": 68,
+    "op": 0.34,
+    "rgh": 1.5,
+    "bow": 1.2,
+    "off": 2.4,
+    "pad": 10,
+    "passes": 1,
+    "at": 0.5,
+    "dur": 1.0,
+    "z": 1
+   },
+   "use": "要涂的那句折了行，每行各自涂一道",
+   "avoid": "超过三行（涂满会闷）",
+   "needs": [
+    "text"
+   ],
+   "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t || !window.kit || !kit.anno) return;\n  kit.anno(timeline, _t, { type: '{{type}}', color: '{{color}}', sw: {{sw}}, pad: {{pad}}, passes: {{passes}}, rgh: {{rgh}}, bow: {{bow}}, off: {{off}}, dur: {{dur}}, z: {{z}}, op: {{op}}, at: {{at}} });\n})();"
+  },
+  {
+   "id": "K67",
+   "name": "手绘左括号",
+   "family": "字形",
+   "role": "decoration",
+   "layer": "element",
+   "status": "ready",
+   "cap": "左侧大括号，向左张开；补上正文前的引子",
+   "src": "rough-notation:render.ts/bracket-left",
+   "params": {
+    "type": "bracket",
+    "dir": "left",
+    "color": "#86F0C0",
+    "sw": 7,
+    "rgh": 1.6,
+    "bow": 1,
+    "off": 2.2,
+    "pad": 34,
+    "passes": 1,
+    "at": 0.62,
+    "dur": 0.85,
+    "z": 6
+   },
+   "use": "正文左边挂一句来源或前提",
+   "avoid": "已经用了 K44 双括号（左侧重复）",
+   "needs": [
+    "text"
+   ],
+   "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t || !window.kit || !kit.anno) return;\n  kit.anno(timeline, _t, { type: '{{type}}', color: '{{color}}', sw: {{sw}}, pad: {{pad}}, passes: {{passes}}, rgh: {{rgh}}, bow: {{bow}}, off: {{off}}, dur: {{dur}}, z: {{z}}, dir: 'left', at: {{at}} });\n})();"
+  },
+  {
+   "id": "K53",
+   "name": "手绘折行标注",
+   "family": "字形",
+   "role": "decoration",
+   "layer": "element",
+   "status": "ready",
+   "cap": "按视觉行逐段标注，折到第二行自动补一笔，时长按行宽分配",
+   "src": "rough-notation:render.ts/multiline",
+   "params": {
+    "type": "underline",
+    "color": "#86F0C0",
+    "sw": 6,
+    "rgh": 1.4,
+    "bow": 1.2,
+    "off": 2.2,
+    "pad": 16,
+    "passes": 1,
+    "at": 0.55,
+    "dur": 1.1,
+    "overlap": 0.85,
+    "z": 6
+   },
+   "use": "要标的那句折了行，每行各自画一笔",
+   "avoid": "单行文案（用 K48 更省）；行数超过 3 行会很碎",
+   "needs": [
+    "text"
+   ],
+   "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t || !window.kit || !kit.anno) return;\n  kit.anno(timeline, _t, { type: '{{type}}', color: '{{color}}', sw: {{sw}}, pad: {{pad}}, passes: {{passes}}, rgh: {{rgh}}, bow: {{bow}}, off: {{off}}, dur: {{dur}}, overlap: {{overlap}}, z: {{z}}, at: {{at}} });\n})();"
+  },
+  {
+   "id": "K73",
+   "name": "折行方框",
+   "family": "字形",
+   "role": "decoration",
+   "layer": "element",
+   "status": "ready",
+   "cap": "每一行各自框住，行与行之间不连",
+   "src": "rough-notation:render.ts/box-multiline",
+   "params": {
+    "type": "box",
+    "color": "#FFD45E",
+    "sw": 5,
+    "rgh": 1.5,
+    "bow": 1,
+    "off": 2.2,
+    "pad": 10,
+    "passes": 1,
+    "at": 0.55,
+    "dur": 1.1,
+    "overlap": 0.85,
+    "z": 6
+   },
+   "use": "两行都得单独标出来时",
+   "avoid": "超过两行（每行一个框会很吵）",
+   "needs": [
+    "text"
+   ],
+   "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t || !window.kit || !kit.anno) return;\n  kit.anno(timeline, _t, { type: '{{type}}', color: '{{color}}', sw: {{sw}}, pad: {{pad}}, passes: {{passes}}, rgh: {{rgh}}, bow: {{bow}}, off: {{off}}, dur: {{dur}}, overlap: {{overlap}}, z: {{z}}, at: {{at}} });\n})();"
+  },
+  {
+   "id": "K65",
+   "name": "三处依次标注",
+   "family": "字形",
+   "role": "decoration",
+   "layer": "element",
+   "status": "ready",
+   "cap": "三个词依次划上，前一笔收住再落下一笔",
+   "src": "rough-notation:annotationGroup",
+   "params": {
+    "type": "underline",
+    "color": "#86F0C0",
+    "sw": 6,
+    "rgh": 1.4,
+    "bow": 1.2,
+    "off": 2.2,
+    "pad": 14,
+    "passes": 1,
+    "dur": 0.55,
+    "z": 6,
+    "gap": 0.16
+   },
+   "use": "一句话里三个重点按口播顺序逐个划",
+   "avoid": "超过三处（节奏会散）",
+   "needs": [
+    "text"
+   ],
+   "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t || !window.kit || !kit.annoSeq) return;\n  var _h = (_t.closest && _t.closest('.scene')) || document.getElementById('stage');\n  var _kids = (_t.children && _t.children.length) ? [].slice.call(_t.children) : [_t];\n  kit.annoSeq(timeline, _h, _kids, {\n    type: '{{type}}', color: '{{color}}', sw: {{sw}}, pad: {{pad}}, passes: {{passes}}, rgh: {{rgh}}, bow: {{bow}}, off: {{off}}, dur: {{dur}}, z: {{z}}, at: {{at}}, gap: {{gap}}\n  });\n})();"
+  },
+  {
+   "id": "K72",
+   "name": "圈加叉",
+   "family": "字形",
+   "role": "decoration",
+   "layer": "element",
+   "status": "ready",
+   "cap": "先绕一圈圈住，再两道叉压上去",
+   "src": "rough-notation:circle+crossed-off",
+   "params": {
+    "rgh": 1.5,
+    "bow": 1.1,
+    "off": 2.2,
+    "at": 0.45,
+    "dur": 1.1,
+    "overlap": 0.5,
+    "z": 6,
+    "sw": 5,
+    "color": "#FFD45E",
+    "sw2": 6,
+    "color2": "#FF5D6C",
+    "type": "circle"
+   },
+   "use": "圈出来的东西恰好是错的，一屏说两层意思",
+   "avoid": "已经很负面的画面（再加叉会过头）",
+   "needs": [
+    "text"
+   ],
+   "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t || !window.kit || !kit.anno) return;\n  kit.anno(timeline, _t, { parts: [\n    { type: 'circle', sw: {{sw}}, color: '{{color}}', passes: 2, rxK: 0.60, ryK: 0.58 },\n    { type: 'cross', sw: {{sw2}}, color: '{{color2}}', passes: 2, pad: 6 }\n  ], rgh: {{rgh}}, bow: {{bow}}, off: {{off}}, at: {{at}}, dur: {{dur}}, overlap: 0.5, z: {{z}} });\n})();"
+  },
+  {
+   "id": "K75",
+   "name": "高亮加下划",
+   "family": "字形",
+   "role": "decoration",
+   "layer": "element",
+   "status": "ready",
+   "cap": "先涂一道荧光，再在下沿补一笔实线",
+   "src": "rough-notation:highlight+underline",
+   "params": {
+    "rgh": 1.5,
+    "bow": 1.2,
+    "off": 2.2,
+    "at": 0.45,
+    "dur": 1.0,
+    "overlap": 0.5,
+    "z": 6,
+    "sw": 92,
+    "color": "#FFD45E",
+    "sw2": 6,
+    "color2": "#FF5D6C",
+    "type": "highlight"
+   },
+   "use": "一个结论既要被涂亮又要被画住",
+   "avoid": "两者颜色相同（会糊成一块）",
+   "needs": [
+    "text"
+   ],
+   "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t || !window.kit || !kit.anno) return;\n  kit.anno(timeline, _t, { parts: [\n    { type: 'highlight', sw: {{sw}}, op: 0.32, color: '{{color}}', passes: 1 },\n    { type: 'underline', sw: {{sw2}}, color: '{{color2}}', passes: 2, pad: 16 }\n  ], rgh: {{rgh}}, bow: {{bow}}, off: {{off}}, at: {{at}}, dur: {{dur}}, overlap: 0.5, z: {{z}} });\n})();"
+  },
+  {
+   "id": "K66",
+   "name": "划掉再写",
+   "family": "字形",
+   "role": "decoration",
+   "layer": "element",
+   "status": "ready",
+   "cap": "旧说法先被一道斜划压住，新说法随后落进来",
+   "src": "rough-notation:strike+rewrite",
+   "params": {
+    "type": "strike",
+    "color": "#FF5D6C",
+    "sw": 5,
+    "rgh": 1.4,
+    "bow": 1,
+    "off": 2.2,
+    "pad": 10,
+    "passes": 1,
+    "angle": 5,
+    "at": 0.45,
+    "dur": 0.55,
+    "z": 6
+   },
+   "use": "推翻旧做法，同屏给替代方案",
+   "avoid": "新词不出现时（只剩否定，没出口）",
+   "needs": [
+    "text"
+   ],
+   "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t || !window.kit || !kit.anno) return;\n  kit.anno(timeline, _t, { type: '{{type}}', color: '{{color}}', sw: {{sw}}, pad: {{pad}}, passes: {{passes}}, rgh: {{rgh}}, bow: {{bow}}, off: {{off}}, dur: {{dur}}, z: {{z}}, angle: 5, at: {{at}} });\n})();"
+  },
+  {
+   "id": "K76",
+   "name": "星光点缀",
+   "family": "字形",
+   "role": "decoration",
+   "layer": "element",
+   "status": "ready",
+   "cap": "sparkle",
+   "src": "magicui:sparkles-text",
+   "params": {
+    "count": 14,
+    "size": 13,
+    "dur": 1.2,
+    "stagger": 0.045,
+    "peak": 0.85,
+    "low": 0.4,
+    "z": 6,
+    "seed": 20261118,
+    "color": "#FFE9A3"
+   },
+   "use": "文字四周撒一圈小星星，先亮后收；高光、亮点、点睛、值得被记住的一句",
+   "avoid": "和 K42 漫画字同屏（两个都在抢注意力）；字块要够大，小字上星星会挤成一团",
+   "needs": [
+    "text"
+   ],
+   "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t) return;\n  if (getComputedStyle(_t).position === 'static') { _t.style.position = 'relative'; }\n  var _box = document.createElement('div');\n  _box.style.cssText = 'position:absolute;left:-14%;top:-34%;width:128%;height:168%;pointer-events:none;z-index:{{z}};';\n  var _s = {{seed}};\n  var _r = function () { _s = (_s * 9301 + 49297) % 233280; return _s / 233280; };\n  var _n = {{count}}, _stars = [];\n  for (var i = 0; i < _n; i++) {\n    var _d = document.createElement('i');\n    var _sz = {{size}} * (0.6 + _r() * 0.8);\n    _d.style.cssText = 'position:absolute;left:' + (_r() * 96).toFixed(2) + '%;top:' +\n      (_r() * 92).toFixed(2) + '%;width:' + _sz.toFixed(1) + 'px;height:' + _sz.toFixed(1) + 'px;' +\n      'background:{{color}};opacity:0;' +\n      'clip-path:polygon(50% 0%,61% 39%,100% 50%,61% 61%,50% 100%,39% 61%,0% 50%,39% 39%);';\n    _box.appendChild(_d);\n    _stars.push(_d);\n  }\n  _t.appendChild(_box);\n  timeline.to(_stars, { opacity: {{peak}}, scale: 1, duration: {{dur}} * 0.32, ease: 'back.out(3)',\n    stagger: {{stagger}} }, {{at}});\n  timeline.to(_stars, { opacity: {{low}}, duration: {{dur}} * 0.22, ease: 'none',\n    stagger: {{stagger}} }, {{at}} + {{dur}} * 0.42);\n})();",
+   "sample": {
+    "sel": "[data-anim=\"subject\"]",
+    "stage": "<div style=\"position:absolute;left:80px;right:80px;top:780px;text-align:center\"><div data-anim=\"subject\" style=\"display:inline-block;font-size:118px;line-height:1.16;font-weight:700;letter-spacing:-.04em\">点亮这一句</div></div>"
+   }
+  },
+  {
+   "id": "B53",
+   "name": "蜂巢网格",
+   "family": "背景",
+   "role": "bg",
+   "layer": "overlay",
+   "status": "ready",
+   "cap": "canvas-t",
+   "src": "magicui:hexagon-pattern",
+   "params": {
+    "r": 34,
+    "lw": 1.6
+   },
+   "use": "六边形蜂巢按距离中心远近一波波亮起；结构、组织、材料、细胞、底层架构",
+   "avoid": "和 B32 棋盘同屏；字落在蜂窝最亮那圈会花，把 r 调大让它变疏",
+   "surface": "opaque",
+   "tone": "dark",
+   "base": "#070a0a",
+   "impl": {
+    "kind": "canvas",
+    "name": "B53"
+   },
+   "ink": {
+    "primary": "#eaf7f1",
+    "secondary": "#8fa79c",
+    "accent": "#86F0C0"
+   },
+   "tunable": [
+    "brightness",
+    "hue",
+    "invert",
+    "lw",
+    "r",
+    "saturate"
+   ],
+   "params_note": "可调：r 六边形半径 / lw 线宽 / invert / hue / saturate / brightness",
+   "bg_family": "line",
+   "keywords": [
+    "蜂巢",
+    "六边形",
+    "结构",
+    "组织",
+    "材料",
+    "细胞",
+    "架构",
+    "网格"
+   ],
+   "note": "六边形网格从中心向外一波波亮起，冷青线；科技、结构类话题",
+   "code": "/* canvas 背景：由 H02SX 调 bgkit.bind/draw，不展开 GSAP */"
+  },
+  {
+   "id": "B54",
+   "name": "纵深粒子",
+   "family": "背景",
+   "role": "bg",
+   "layer": "overlay",
+   "status": "ready",
+   "cap": "canvas-t",
+   "src": "magicui:floating-3d-particles",
+   "params": {
+    "count": 220,
+    "speed": 0.22,
+    "focal": 0.9
+   },
+   "use": "点云向镜头漂过来、近大远小；进入、深入、星空、数据纵深",
+   "avoid": "和 B35 浮尘同屏（都是点，看不出谁在动）；别配高密度文案",
+   "surface": "opaque",
+   "tone": "dark",
+   "base": "#05070a",
+   "impl": {
+    "kind": "canvas",
+    "name": "B54"
+   },
+   "ink": {
+    "primary": "#eef6ff",
+    "secondary": "#8fa0b8",
+    "accent": "#9BD8FF"
+   },
+   "tunable": [
+    "brightness",
+    "count",
+    "focal",
+    "hue",
+    "invert",
+    "saturate",
+    "speed"
+   ],
+   "params_note": "可调：count 点数 / speed 前移速度 / focal 焦距(越小越聚) / invert / hue / saturate",
+   "bg_family": "dot",
+   "keywords": [
+    "纵深",
+    "深入",
+    "星空",
+    "数据",
+    "进入",
+    "空间",
+    "点云",
+    "前景"
+   ],
+   "note": "伪 3D 点云往镜头漂，近的点更大更亮；适合讲纵深与进入",
+   "code": "/* canvas 背景：由 H02SX 调 bgkit.bind/draw，不展开 GSAP */"
   }
  ],
  "schema_note": "契约字段：surface=opaque|transparent（是否自带底色）；tone=dark|light|any（适配明暗）；base=底色；needs=[text|img|ui]（DOM 前提）；impl=实现入口；缺字段的卡不许进选卡池。"

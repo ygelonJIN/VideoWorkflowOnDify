@@ -16,14 +16,16 @@ REPO = pathlib.Path(__file__).resolve().parent.parent.parent
 YAML = REPO / "Dify工作流" / "04_黑帧口播_分组生成.yml"
 
 
-def read_yaml_text() -> str:
-    return YAML.read_text(encoding="utf-8")
+def read_yaml_text(path=None) -> str:
+    path = path or YAML
+    return path.read_text(encoding="utf-8")
 
 
-def write_yaml_text(text: str) -> None:
+def write_yaml_text(text: str, path=None) -> None:
+    path = path or YAML
     import yaml as _yaml
     _yaml.safe_load(text)          # 写之前先确认整份 YAML 还能解析
-    YAML.write_text(text, encoding="utf-8")
+    path.write_text(text, encoding="utf-8")
 
 
 def _node(data: dict, node_id: str) -> dict:
@@ -33,19 +35,19 @@ def _node(data: dict, node_id: str) -> dict:
     raise SystemExit("找不到节点 " + node_id)
 
 
-def load_node(node_id: str) -> dict:
+def load_node(node_id: str, path=None) -> dict:
     import yaml as _yaml
-    data = _yaml.safe_load(read_yaml_text())
+    data = _yaml.safe_load(read_yaml_text(path))
     return _node(data, node_id)
 
 
-def get_code(node_id: str) -> str:
-    return load_node(node_id)["data"]["code"]
+def get_code(node_id: str, path=None) -> str:
+    return load_node(node_id, path)["data"]["code"]
 
 
-def get_prompt_text(node_id: str) -> str:
+def get_prompt_text(node_id: str, path=None) -> str:
     """prompt_template 是 [{role, text}]；只改 role=system 那一条的 text。"""
-    parts = load_node(node_id)["data"]["prompt_template"]
+    parts = load_node(node_id, path)["data"]["prompt_template"]
     for part in parts:
         if part.get("role") == "system":
             return part["text"]
@@ -75,18 +77,18 @@ def _replace_once(raw: str, old: str, new: str, what: str, node_id: str = "") ->
     raise SystemExit("%s 命中 %d 处，但没有一处属于节点 %s" % (what, len(starts), node_id))
 
 
-def set_code(node_id: str, new_code: str) -> None:
-    raw = read_yaml_text()
-    old = get_code(node_id)
+def set_code(node_id: str, new_code: str, path=None) -> None:
+    raw = read_yaml_text(path)
+    old = get_code(node_id, path)
     if old == new_code:
         return
     compile(new_code, node_id, "exec")
-    write_yaml_text(_replace_once(raw, old, new_code, node_id + " 的代码", node_id))
+    write_yaml_text(_replace_once(raw, old, new_code, node_id + " 的代码", node_id), path)
 
 
-def set_prompt_text(node_id: str, new_text: str) -> None:
-    raw = read_yaml_text()
-    old = get_prompt_text(node_id)
+def set_prompt_text(node_id: str, new_text: str, path=None) -> None:
+    raw = read_yaml_text(path)
+    old = get_prompt_text(node_id, path)
     if old == new_text:
         return
-    write_yaml_text(_replace_once(raw, old, new_text, node_id + " 的提示词", node_id))
+    write_yaml_text(_replace_once(raw, old, new_text, node_id + " 的提示词", node_id), path)

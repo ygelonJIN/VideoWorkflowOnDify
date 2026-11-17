@@ -334,6 +334,277 @@
     return { strokes: strokes, fills: fills };
   }
 
+
+  /* ---------- 手绘标注（rough 风格）：类型几何 + 逐行 + 按长度揭示 ----------
+   * 来源：rough-notation@0.5.1 src/render.ts 的类型翻译（MIT），曲线按 roughjs 的
+   * bowing / offset 思路重写。与上方旧的 rough(type, rect, seed, passes) 并存，
+   * 旧签名不动（K13–K16 仍在用）；新卡一律走 kit.anno。
+   *
+   * 契约：动画只落在 timeline 的 strokeDashoffset 上，任意帧可 seek；
+   * 目标框由 getClientRects / Range 取视觉行，不写死坐标。 */
+  function _annoNorm(o) {
+    var d = { rgh: 1.5, bow: 1, off: 2, sw: 6, pad: 8 };
+    for (var k in (o || {})) if (o[k] != null) d[k] = o[k];
+    return d;
+  }
+  function _annoF(n) { return Math.round(n * 10) / 10; }
+
+  /* 一条手绘直线：两段三次贝塞尔，中段弓形，两端各带随机外扩 */
+  function _annoLine(r, x1, y1, x2, y2, o) {
+    var sq = (x1 - x2) * (x1 - x2) + (y1 - y2) * (y1 - y2);
+    var len = Math.sqrt(sq) || 1;
+    var gain = len < 200 ? 1 : (len > 500 ? 0.4 : (-0.0016668 * len + 1.233334));
+    var off = o.off;
+    if (off * off * 100 > sq) off = len / 10;
+    var hv = off / 2;
+    function jit(k) { return (r() * 2 - 1) * k * gain * (o.rgh / 1.5); }
+    var dp = 0.2 + r() * 0.2;
+    var mdx = o.bow * off * (y2 - y1) / 200 + jit(off);
+    var mdy = o.bow * off * -(x2 - x1) / 200 + jit(off);
+    var sx = x1 + jit(hv), sy = y1 + jit(hv);
+    var ex = x2 + jit(hv), ey = y2 + jit(hv);
+    var mxp = x1 + (x2 - x1) * dp, myp = y1 + (y2 - y1) * dp;
+    return 'M' + _annoF(sx) + ' ' + _annoF(sy)
+      + 'C' + _annoF(sx + mdx * 0.6) + ' ' + _annoF(sy + mdy * 0.6)
+      + ' ' + _annoF(mxp + mdx) + ' ' + _annoF(myp + mdy)
+      + ' ' + _annoF(mxp) + ' ' + _annoF(myp)
+      + 'C' + _annoF(mxp + (x2 - x1) * 0.18 + mdx * 0.5) + ' ' + _annoF(myp + (y2 - y1) * 0.18 + mdy * 0.5)
+      + ' ' + _annoF(ex - mdx * 0.35) + ' ' + _annoF(ey - mdy * 0.35)
+      + ' ' + _annoF(ex) + ' ' + _annoF(ey);
+  }
+  function _annoPoly(r, pts, o) {
+    var d = 'M' + _annoF(pts[0][0]) + ' ' + _annoF(pts[0][1]);
+    for (var i = 1; i < pts.length; i++) {
+      d += ' ' + _annoLine(r, pts[i - 1][0], pts[i - 1][1], pts[i][0], pts[i][1], o).replace(/^M[^C]*/, '');
+    }
+    return d;
+  }
+  /* 开放椭圆：起笔与收笔重叠一小段 */
+  function _annoLoop(r, cx, cy, rx, ry, o) {
+    var N = 30, pts = [], i, t, a0 = -0.20, a1 = Math.PI * 2 + 0.16;
+    for (i = 0; i <= N; i++) {
+      t = a0 + (a1 - a0) * (i / N);
+      var wob = 1 + (r() - 0.5) * 0.05 * (o.rgh / 1.5);
+      pts.push([cx + Math.cos(t) * rx * wob, cy + Math.sin(t) * ry * wob]);
+    }
+    var d = 'M' + _annoF(pts[0][0]) + ' ' + _annoF(pts[0][1]);
+    for (i = 0; i < N; i++) {
+      var p0 = pts[i], p1 = pts[i + 1];
+      d += 'Q' + _annoF(p0[0]) + ' ' + _annoF(p0[1]) + ' '
+        + _annoF((p0[0] + p1[0]) / 2) + ' ' + _annoF((p0[1] + p1[1]) / 2);
+    }
+    return d;
+  }
+
+  /* rect + 类型 → 若干 path 的 d */
+  function _annoShapes(type, rc, o, passes) {
+    var r = seeded(o.seed == null ? (type || 'anno') : o.seed);
+    var pad = o.pad == null ? 8 : o.pad;
+    var out = [], i, p;
+    var x = rc.x, y = rc.y, w = rc.w, h = rc.h;
+    var x2 = x + w, y2 = y + h, my = y + h / 2;
+
+    if (type === 'underline') {
+      var uy = y2 + pad * 0.5;
+      for (i = 0; i < passes; i++) {
+        var oo = _annoNorm(o); oo.off = o.off + i * 1.2;
+        if ((i % 2) !== (o.rtl ? 1 : 0)) out.push(_annoLine(r, x2 + 6, uy + i * 5, x - 8, uy - i * 5 + 2, oo));
+        else out.push(_annoLine(r, x - 8, uy + i * 5, x2 + 6, uy - i * 5 + 2, oo));
+      }
+    } else if (type === 'strike') {
+      var ang = (o.angle || 0) * Math.PI / 180;
+      var dy = Math.tan(ang) * w / 2;
+      for (i = 0; i < passes; i++) {
+        var o2 = _annoNorm(o); o2.off = o.off + i * 1.2;
+        var s5 = i * 5;
+        if (i % 2) out.push(_annoLine(r, x2 + 10, my + 2 + s5 - dy, x - 10, my + 4 - s5 + dy, o2));
+        else out.push(_annoLine(r, x - 10, my - 3 - s5 - dy, x2 + 10, my - 1 + s5 + dy, o2));
+      }
+    } else if (type === 'box') {
+      var ex = pad * 1.6;
+      var X1 = x - ex, Y1 = y - ex, X2 = x2 + ex, Y2 = y2 + ex;
+      for (i = 0; i < passes; i++) {
+        var b = _annoNorm(o); b.off = o.off + i * 1.4;
+        var g = i * 1.8;
+        out.push(_annoLine(r, X1 - 4 + g, Y1 - 2 - g, X2 + 5, Y1 + 2 + g, b));
+        out.push(_annoLine(r, X2 + 2 + g, Y1 - 4, X2 - 2 - g, Y2 + 5, b));
+        out.push(_annoLine(r, X2 + 5 - g, Y2 + 2 + g, X1 - 5, Y2 - 2 - g, b));
+        out.push(_annoLine(r, X1 - 2 - g, Y2 + 4, X1 + 2 + g, Y1 - 5, b));
+      }
+    } else if (type === 'corners') {
+      var cl = Math.min(w, h) * (o.armK == null ? 0.34 : o.armK);
+      var quad = [[x, y, 1, 1], [x2, y, -1, 1], [x2, y2, -1, -1], [x, y2, 1, -1]];
+      for (var q = 0; q < 4; q++) {
+        var cq = _annoNorm(o); cq.off = o.off + q * 0.5;
+        var P = quad[q];
+        out.push(_annoLine(r, P[0], P[1], P[0] + cl * P[2], P[1] + 1, cq));
+        out.push(_annoLine(r, P[0], P[1], P[0] + 1, P[1] + cl * P[3], cq));
+      }
+    } else if (type === 'circle') {
+      for (i = 0; i < passes; i++) {
+        var c = _annoNorm(o); c.off = o.off + i * 1.6;
+        out.push(_annoLoop(r, x + w / 2 + (i ? 1.5 : -1), y + h * 0.5,
+          w * (o.rxK == null ? 0.62 : o.rxK) + i * 3,
+          h * (o.ryK == null ? 0.60 : o.ryK) + i * 3, c));
+      }
+    } else if (type === 'cross') {
+      var ix = o.inset == null ? 0 : o.inset * w;
+      var iy = o.insetY == null ? (o.inset == null ? 0 : o.inset * h) : o.insetY * h;
+      var qx1 = x + ix, qy1 = y + iy, qx2 = x2 - ix, qy2 = y2 - iy;
+      for (i = 0; i < passes; i++) {
+        var cr = _annoNorm(o); cr.off = o.off + i * 1.3;
+        if (i % 2) {
+          out.push(_annoLine(r, qx2 - 2, qy2 + 3, qx1 - 3, qy1 - 2, cr));
+          out.push(_annoLine(r, qx1 + 2, qy2 + 2, qx2 - 3, qy1 - 3, cr));
+        } else {
+          out.push(_annoLine(r, qx1 - 3, qy1 - 2, qx2 + 2, qy2 + 3, cr));
+          out.push(_annoLine(r, qx2 - 2, qy1 - 3, qx1 + 3, qy2 + 2, cr));
+        }
+      }
+    } else if (type === 'bracket') {
+      var dirs = [].concat(o.dir || 'right');
+      var lx = x - pad * 2, rx = x2 + pad * 2;
+      var ty = y - pad * 1.2, by = y2 + pad * 1.2;
+      for (var k2 = 0; k2 < dirs.length; k2++) {
+        var bb = _annoNorm(o); bb.off = o.off + k2 * 0.8;
+        p = null;
+        if (dirs[k2] === 'right') p = [[x2, ty], [rx, ty], [rx, by], [x2, by]];
+        else if (dirs[k2] === 'left') p = [[x, ty], [lx, ty], [lx, by], [x, by]];
+        else if (dirs[k2] === 'top') p = [[lx, y], [lx, ty], [rx, ty], [rx, y]];
+        else if (dirs[k2] === 'bottom') p = [[lx, y2], [lx, by], [rx, by], [rx, y2]];
+        if (p) out.push(_annoPoly(r, p, bb));
+      }
+    } else if (type === 'highlight') {
+      for (i = 0; i < passes; i++) {
+        var hl = _annoNorm(o); hl.off = o.off + i * 1.5; hl.sw = o.sw;
+        if (i % 2) out.push(_annoLine(r, x2 + pad * 1.4, my + i * 2.2, x - pad * 1.2, my - i * 2.2, hl));
+        else out.push(_annoLine(r, x - pad * 1.2, my - i * 2.2, x2 + pad * 1.4, my + i * 2.2, hl));
+      }
+    }
+    return out;
+  }
+
+  var _ANNO_NS = 'http://www.w3.org/2000/svg';
+
+  /* 逐行取框：inline-block 只有一个盒子，靠 Range 拿 line box */
+  function _annoRects(host, target) {
+    var hb = host.getBoundingClientRect();
+    var rs = null;
+    try {
+      var range = document.createRange();
+      range.selectNodeContents(target);
+      rs = range.getClientRects();
+    } catch (e) { rs = null; }
+    if (!rs || !rs.length) rs = target.getClientRects();
+    var out = [], r, i;
+    if (!rs || !rs.length) {
+      r = target.getBoundingClientRect();
+      return [{ x: r.left - hb.left, y: r.top - hb.top, w: r.width, h: r.height }];
+    }
+    for (i = 0; i < rs.length; i++) {
+      r = rs[i];
+      if (!r.width || !r.height) continue;
+      out.push({ x: r.left - hb.left, y: r.top - hb.top, w: r.width, h: r.height });
+    }
+    if (!out.length) {
+      r = target.getBoundingClientRect();
+      out.push({ x: r.left - hb.left, y: r.top - hb.top, w: r.width, h: r.height });
+    }
+    return out;
+  }
+
+  function _annoSvg(host, cfg) {
+    var svg = document.createElementNS(_ANNO_NS, 'svg');
+    svg.setAttribute('viewBox', '0 0 1080 1920');
+    svg.setAttribute('preserveAspectRatio', 'none');
+    svg.style.cssText = 'position:absolute;left:0;top:0;width:100%;height:100%;'
+      + 'overflow:visible;pointer-events:none;z-index:' + (cfg.z == null ? 6 : cfg.z);
+    host.appendChild(svg);
+    return svg;
+  }
+
+  function _annoBuild(svg, host, target, cfg, tag) {
+    var rects = _annoRects(host, target);
+    var parts = cfg.parts || [cfg];
+    var paths = [], i, m, j, ds, rc, o, part, key;
+    for (i = 0; i < rects.length; i++) {
+      rc = rects[i];
+      for (m = 0; m < parts.length; m++) {
+        part = parts[m];
+        o = _annoNorm(part);
+        for (key in cfg) if (o[key] == null) o[key] = cfg[key];
+        o.seed = (part.seed || cfg.seed || 'anno') + ':' + (tag || 0) + ':' + i + ':' + m;
+        o.pad = o.pad == null ? 8 : o.pad;
+        ds = _annoShapes(part.type, rc, o, o.passes || 2);
+        for (j = 0; j < ds.length; j++) {
+          var pe = document.createElementNS(_ANNO_NS, 'path');
+          pe.setAttribute('d', ds[j]);
+          pe.setAttribute('fill', 'none');
+          pe.setAttribute('stroke', part.color || cfg.color || '#FFD45E');
+          pe.setAttribute('stroke-width', part.sw || cfg.sw || 6);
+          pe.setAttribute('stroke-linecap', 'round');
+          pe.setAttribute('stroke-linejoin', 'round');
+          pe.setAttribute('opacity', (part.op == null ? (cfg.op == null ? 1 : cfg.op) : part.op));
+          svg.appendChild(pe);
+          paths.push(pe);
+        }
+      }
+    }
+    return paths;
+  }
+
+  /* 按路径长度分配时长揭示，返回末笔结束时间 */
+  function _annoPlay(tl, paths, at, span, cfg) {
+    if (!paths.length) return at;
+    var lens = [], total = 0, i, L, t = at, dd;
+    var ov = cfg.overlap == null ? 0.92 : cfg.overlap;
+    for (i = 0; i < paths.length; i++) {
+      L = 1;
+      try { L = paths[i].getTotalLength() || 1; } catch (e) { L = 1; }
+      lens.push(L); total += L;
+    }
+    for (i = 0; i < paths.length; i++) {
+      dd = Math.max(total ? span * lens[i] / total : span / paths.length, 0.10);
+      paths[i].style.strokeDasharray = lens[i];
+      paths[i].style.strokeDashoffset = lens[i];
+      tl.to(paths[i], { strokeDashoffset: 0, duration: dd, ease: cfg.ease || 'power1.inOut' }, t);
+      t += dd;
+      if (i < paths.length - 1) t -= dd * (1 - ov);
+    }
+    return t;
+  }
+
+  /* 单目标标注：cfg.parts 可给多组（同一目标叠几种类型） */
+  function anno(tl, target, cfg) {
+    if (!tl || !target) return null;
+    cfg = cfg || {};
+    var host = target.closest ? (target.closest('.scene') || document.getElementById('stage')) : null;
+    host = host || document.getElementById('stage');
+    if (!host) return null;
+    var svg = _annoSvg(host, cfg);
+    var paths = _annoBuild(svg, host, target, cfg, 0);
+    _annoPlay(tl, paths, cfg.at == null ? 0.7 : cfg.at, cfg.dur == null ? 0.9 : cfg.dur, cfg);
+    return svg;
+  }
+
+  /* 多目标依次：items 可以是元素数组或选择器数组 */
+  function annoSeq(tl, host, items, opt) {
+    if (!tl || !items || !items.length) return null;
+    opt = opt || {};
+    host = host || document.getElementById('stage');
+    if (!host) return null;
+    var t = opt.at == null ? 0.5 : opt.at;
+    var gap = opt.gap == null ? 0.12 : opt.gap;
+    var svg = _annoSvg(host, opt);
+    for (var i = 0; i < items.length; i++) {
+      var el = typeof items[i] === 'string' ? document.querySelector(items[i]) : items[i];
+      if (!el) continue;
+      t = _annoPlay(tl, _annoBuild(svg, host, el, opt, i),
+        t, opt.dur == null ? 0.7 : opt.dur, opt) + gap;
+    }
+    return svg;
+  }
+
   /* ---------- 按视觉行量矩形（不改 DOM；相对元素左上角） ---------- */
   function lines(el) {
     if (!el) return [];
@@ -500,6 +771,8 @@
     drawPath: drawPath,
     cursorSVG: cursorSVG,
     rough: rough,
+    anno: anno,
+    annoSeq: annoSeq,
     lines: lines,
     fitLines: fitLines,
     captionTokens: captionTokens,

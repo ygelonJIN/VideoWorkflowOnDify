@@ -127,6 +127,26 @@ def main() -> None:
             errors.append("数字人模式必须保留 avatar 视频角色和媒体占位")
         if 'data-render-mode="full"' not in doc and 'data-render-mode="black-frame"' in doc:
             errors.append("数字人模式不得误标为无数字人 black-frame")
+        # 小窗合同：位置和尺寸的唯一定义是 #stage 上的 --pip-* 变量，版面靠它们算文字让位。
+        pip = {}
+        for name in ("top", "right", "width", "height"):
+            hit = re.search(r'--pip-%s\s*:\s*(-?\d+(?:\.\d+)?)\s*px' % name, doc)
+            if hit:
+                pip[name] = float(hit.group(1))
+            else:
+                errors.append("数字人模式缺少 --pip-%s：小窗没有可读的位置/尺寸，版面不会让位" % name)
+        if len(pip) == 4:
+            if pip["top"] < 0 or pip["right"] < 0:
+                errors.append("小窗固定在右上角：--pip-top / --pip-right 不能为负数")
+            if pip["width"] < 180 or pip["height"] < 240:
+                warnings.append("小窗只有 %dx%d：数字人会被压成头像条，建议 ≥ 240x420"
+                                % (pip["width"], pip["height"]))
+            if pip["right"] + pip["width"] > 1080:
+                errors.append("小窗超出画布右边界：--pip-right + --pip-width > 1080")
+            if pip["top"] + pip["height"] > 1920 * 0.5:
+                warnings.append("小窗下沿超过画布一半：文字可用区会被压得太窄")
+        if "avatar-window" not in doc:
+            errors.append("数字人模式缺少 .avatar-window：小窗没有定位与裁切规则")
 
     if "data-start" not in doc or "data-duration" not in doc:
         errors.append("缺少时间片段属性")

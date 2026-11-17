@@ -3,8 +3,11 @@
  * 只允许改 CSS 变量（--ui-*），不改结构。
  *
  * 出处（2026-11-17 登记）：本项目自建，2026-09 起随 U01–U57 一起长出来的，无外部来源。
- * presets.json 里 28 张组件卡的 src 写的是 `components.css`，指的正是这份文件；
- * 将来若引入外部样式库，在这里写仓库名 + 版本，并同步改那 28 张卡的 src。
+ * presets.json 里 28 张组件卡的 src 写的是 `components.css`，指的正是这份文件。
+ *
+ * 例外：文末「设备外壳 U58–U64」一节来自 devices.css v0.2.0（MIT，
+ * github.com/picturepan2/devices.css），那 7 张卡的 src 写 `devicecss:<机型>`，
+ * 不写 `components.css`。改动清单见该节头注释。
  */
 /* 组件一律 border-box（2026-11-17）：.ui-card 是 width:fit-content + max-width:100% +
    padding:28px 30px，默认 content-box 下"100% + 60px"就顶出栏宽——482 的竖栏里
@@ -140,6 +143,9 @@
 /* U12 表格 */
 .ui-table{width:100%;border-collapse:collapse;font-size:calc(24px * var(--ui-scale,1));}
 .ui-table th,.ui-table td{padding:16px 8px;text-align:left;border-bottom:1px solid var(--ui-border);}
+/* td 必须自己上色（2026-11-17）：只给 th 写了 color，td 继承到文档默认黑，
+   深底上整张表只剩表头——成片里就是"组件列表是空的"。 */
+.ui-table td{color:var(--ui-ink);}
 .ui-table th{color:var(--ui-muted);font-weight:500;font-size:calc(20px * var(--ui-scale,1));letter-spacing:.08em;}
 
 /* U13 柱状图 */
@@ -223,3 +229,242 @@
 .ui-tags .g{padding:10px 18px;border-radius:999px;font-size:calc(21px * var(--ui-scale,1));
   border:1px solid var(--ui-border);background:var(--ui-surface);}
 .ui-tags .g.big{font-size:calc(28px * var(--ui-scale,1));padding:12px 22px;}
+
+/* ══ 设备外壳 U58–U64 ════════════════════════════════════════════════════
+ * 出处：devices.css v0.2.0（MIT，github.com/picturepan2/devices.css），2026-11-17 移植。
+ * presets.json 里 U58–U64 的 src 写 `devicecss:<机型>`，指的就是这一段。
+ *
+ * **配色一律照上游，不做"黑底适配"**：机身颜色、金属带宽度、深色屏幕都是原样。
+ * 2026-11-17 试过一轮把机身改成浅金属、屏幕改成浅色界面来提对比度，
+ * 结果和整片的暗调主题不符、也不是这台手机本来的样子，已整体回退。
+ * 需要更显眼就两条路：换更亮的背景卡托住机身，或者调 --dv-z 放大。
+ *
+ * 只改了四处，都是结构性的，不改外观：
+ *   1. 去掉上游 `_reset.scss` 的 `.device *{display:block}` —— 那条全局块级化会压塌框内 ui-* 的行内排版；
+ *   2. `.device-screen` 上游是 `<img>`+object-fit:cover，这里换成 flex 容器，框内只放 ui-* 组件；
+ *   3. 尺寸走 --dv-* 变量，高度用 aspect-ratio（layout_composer 会给 .scene-copy 的直接子元素
+ *      打 height:auto!important，写死 height 会被它打断）；
+ *   4. 类名统一 ui-device-*：门禁只校验 ui-*，且机型名不能带数字——门禁正则 `\.(ui-[a-z-]+)`
+ *      抓不到 14/8，会误判成"css 里没有这个类"。
+ *
+ * 框的真实像素宽：手机 428 / 平板 560 / 手表 360。.scene-copy 最窄 482，手机框刚好放得下；
+ * 平板 560 放不进窄栏，要整屏当主视觉再用。要放大改 --dv-z（1 = 实机像素）。
+ */
+.ui-device{position:relative;flex:none;margin:0 auto;zoom:var(--dv-z,1);
+  width:calc(var(--dv-w) * 1px);aspect-ratio:var(--dv-w) / var(--dv-h);}
+.ui-device,.ui-device *{box-sizing:border-box;}
+.ui-device-frame{position:absolute;inset:var(--dv-bleed,0);background:var(--dv-panel);
+  border-radius:calc(var(--dv-r) * 1px);box-shadow:var(--dv-ring);}
+.ui-device-screen{position:absolute;
+  left:calc(var(--dv-sl) * 1px);top:calc(var(--dv-st) * 1px);
+  width:calc(var(--dv-sw) * 1px);height:calc(var(--dv-sh) * 1px);
+  border-radius:calc(var(--dv-sr) * 1px);overflow:hidden;background:#000;
+  display:flex;flex-direction:column;justify-content:center;align-items:stretch;
+  gap:calc(var(--dv-gap,16) * 1px);padding:calc(var(--dv-sp,22) * 1px);
+  /* 框内字号要比整屏小一档：layout_composer 给 `.scene-copy [class*="ui-"]` 打的是
+     --ui-scale:1.55–1.8，那条 (0,3,0) 会命中 .ui-device-screen 自己，框里就成了砖头。 */
+  --ui-scale:var(--dv-ui,.75) !important;
+  /* .ui-row 不吃 --ui-scale，走自己的 --ui-row-k/-v（34/40px），不跟着收就顶满整行 */
+  --ui-row-k:calc(34px * var(--dv-ui,.75));
+  --ui-row-v:calc(40px * var(--dv-ui,.75));}
+.ui-device-screen > .ui-chip{align-self:flex-start;}
+/* 机身是定量容器，网格列数由机身决定：layout_composer 在栏宽 <560 时会把 .ui-grid 退成单列，
+   那条同样会命中机身内的网格，560 宽的平板屏里排一列就没法看。 */
+.ui-device-screen .ui-grid{grid-template-columns:repeat(2,1fr) !important;}
+.ui-device-mark,.ui-device-btns,.ui-device-power{position:absolute;}
+.ui-device-mark{z-index:3;background:var(--dv-mark,#010101);}
+.ui-device-btns,.ui-device-power{background:var(--dv-edge,#2a2333);}
+
+/* U58 灵动岛手机 · iPhone 14 Pro（428×868，屏 390×830 / 2556×1179，紫色） */
+.ui-device-iphone-island{
+  --dv-w:428;--dv-h:868;--dv-r:68;--dv-panel:#222;--dv-edge:#c4c5c6;--dv-mark:#222;
+  --dv-ring:inset 0 0 3px 2px #c4c5c6, inset 0 0 0 7px #e2e3e4;
+  --dv-sl:19;--dv-st:19;--dv-sw:390;--dv-sh:830;--dv-sr:49;}
+.ui-device-iphone-island .ui-device-mark{left:50%;top:29px;margin-left:-60px;
+  width:120px;height:35px;border-radius:20px;}
+.ui-device-iphone-island .ui-device-btns{left:-2px;top:115px;width:3px;height:32px;border-radius:2px;}
+.ui-device-iphone-island .ui-device-btns::after,
+.ui-device-iphone-island .ui-device-btns::before{content:"";position:absolute;left:0;
+  width:3px;height:62px;border-radius:2px;background:var(--dv-edge);}
+.ui-device-iphone-island .ui-device-btns::after{top:60px;}
+.ui-device-iphone-island .ui-device-btns::before{top:140px;}
+.ui-device-iphone-island .ui-device-power{right:-2px;top:200px;width:3px;height:100px;border-radius:2px;}
+
+/* U59 刘海手机 · iPhone 14（428×868，屏 390×830 / 2532×1170，午夜色） */
+.ui-device-iphone-notch{
+  --dv-w:428;--dv-h:868;--dv-r:68;--dv-panel:#222;--dv-edge:#bdb7b1;--dv-mark:#222;
+  --dv-ring:inset 0 0 3px 2px #cbc9c5, inset 0 0 0 7px #d3cdc7;
+  --dv-sl:19;--dv-st:19;--dv-sw:390;--dv-sh:830;--dv-sr:49;}
+.ui-device-iphone-notch .ui-device-mark{left:50%;top:20px;margin-left:-80px;
+  width:160px;height:30px;border-radius:0 0 20px 20px;}
+.ui-device-iphone-notch .ui-device-mark::after,
+.ui-device-iphone-notch .ui-device-mark::before{content:"";position:absolute;top:0;
+  width:10px;height:10px;}
+.ui-device-iphone-notch .ui-device-mark::after{left:-10px;
+  background:radial-gradient(circle at bottom left, transparent 0, transparent 75%, #010101 75%, #010101 100%);}
+.ui-device-iphone-notch .ui-device-mark::before{right:-10px;
+  background:radial-gradient(circle at bottom right, transparent 0, transparent 75%, #010101 75%, #010101 100%);}
+.ui-device-iphone-notch .ui-device-btns{left:-2px;top:115px;width:3px;height:32px;border-radius:2px;}
+.ui-device-iphone-notch .ui-device-btns::after,
+.ui-device-iphone-notch .ui-device-btns::before{content:"";position:absolute;left:0;
+  width:3px;height:62px;border-radius:2px;background:var(--dv-edge);}
+.ui-device-iphone-notch .ui-device-btns::after{top:60px;}
+.ui-device-iphone-notch .ui-device-btns::before{top:140px;}
+.ui-device-iphone-notch .ui-device-power{right:-2px;top:200px;width:3px;height:100px;border-radius:2px;}
+
+/* U60 旧款刘海 · iPhone X（428×868，屏 375×812 / 2436×1125，银色，宽刘海） */
+.ui-device-iphone-legacy{
+  --dv-w:428;--dv-h:868;--dv-r:68;--dv-panel:#222;--dv-edge:#c4c5c6;--dv-mark:#222;
+  --dv-ring:inset 0 0 2px 2px #c4c5c6, inset 0 0 0 7px #e2e3e4;
+  --dv-sl:27;--dv-st:28;--dv-sw:375;--dv-sh:812;--dv-sr:40;}
+.ui-device-iphone-legacy .ui-device-mark{left:50%;top:28px;margin-left:-102px;
+  width:204px;height:30px;border-radius:0 0 20px 20px;}
+.ui-device-iphone-legacy .ui-device-mark::after,
+.ui-device-iphone-legacy .ui-device-mark::before{content:"";position:absolute;top:0;
+  width:10px;height:10px;}
+.ui-device-iphone-legacy .ui-device-mark::after{left:-10px;
+  background:radial-gradient(circle at bottom left, transparent 0, transparent 75%, #222 75%, #222 100%);}
+.ui-device-iphone-legacy .ui-device-mark::before{right:-10px;
+  background:radial-gradient(circle at bottom right, transparent 0, transparent 75%, #222 75%, #222 100%);}
+.ui-device-iphone-legacy .ui-device-btns{left:-3px;top:115px;width:3px;height:32px;}
+.ui-device-iphone-legacy .ui-device-btns::after,
+.ui-device-iphone-legacy .ui-device-btns::before{content:"";position:absolute;left:0;
+  width:3px;height:62px;background:var(--dv-edge);}
+.ui-device-iphone-legacy .ui-device-btns::after{top:60px;}
+.ui-device-iphone-legacy .ui-device-btns::before{top:140px;}
+.ui-device-iphone-legacy .ui-device-power{right:-3px;top:200px;width:3px;height:100px;}
+
+/* U61 直板安卓 · Google Pixel 6 Pro（404×862，屏 376×816 / 3120×1440，白色，居中打孔） */
+.ui-device-pixel{
+  --dv-w:404;--dv-h:862;--dv-r:28;--dv-panel:#262626;--dv-edge:#b8b8b5;--dv-bleed:0 2px;
+  --dv-ring:inset 0 0 12px #a6a6a4, inset 0 8px 0 3px #e8e8e6, inset 0 -7px 0 3px #e8e8e6;
+  --dv-sl:14;--dv-st:20;--dv-sw:376;--dv-sh:816;--dv-sr:27;--dv-gap:14;}
+.ui-device-pixel .ui-device-mark{left:50%;top:39px;margin-left:-11px;margin-top:-11px;
+  width:22px;height:22px;border-radius:50%;}
+.ui-device-pixel .ui-device-mark::before{content:"";position:absolute;left:7px;top:7px;
+  width:8px;height:8px;border-radius:50%;box-shadow:0 0 1px 1px rgba(255,255,255,.05);
+  background:radial-gradient(farthest-corner at 20% 20%, #6074BF 0, transparent 40%),
+             radial-gradient(farthest-corner at 80% 80%, #513785 0, #24555E 20%, transparent 50%);}
+.ui-device-pixel .ui-device-power{right:0;top:194px;width:3px;height:58px;}
+.ui-device-pixel .ui-device-btns{right:0;top:306px;width:3px;height:102px;}
+
+/* U62 曲面安卓 · Galaxy S8（380×828，屏 360×740 / 2960×1440，上下留边） */
+.ui-device-galaxy{
+  --dv-w:380;--dv-h:828;--dv-r:55;--dv-panel:#222;--dv-edge:#a6a6a6;
+  --dv-ring:inset 0 7px 0 0 #cfcfcf, inset 0 -7px 0 0 #cfcfcf, inset 0 0 0 2px #a6a6a6;
+  --dv-sl:10;--dv-st:48;--dv-sw:360;--dv-sh:740;--dv-sr:34;--dv-gap:14;}
+.ui-device-galaxy .ui-device-mark{left:50%;top:32px;margin-left:-24px;margin-top:-3px;
+  width:48px;height:6px;border-radius:3px;background:#666;}
+.ui-device-galaxy .ui-device-btns{left:-3px;top:144px;width:3px;height:116px;border-radius:3px 0 0 3px;}
+.ui-device-galaxy .ui-device-btns::after{content:"";position:absolute;left:0;top:164px;
+  width:3px;height:54px;border-radius:3px 0 0 3px;background:var(--dv-edge);}
+.ui-device-galaxy .ui-device-power{right:-3px;top:260px;width:3px;height:54px;border-radius:0 3px 3px 0;}
+
+/* U63 平板 · iPad Pro（560×778，屏 506×724 / 2732×2048，银色） */
+.ui-device-ipad{
+  --dv-w:560;--dv-h:778;--dv-r:36;--dv-panel:#242424;--dv-edge:#c0c2c4;
+  --dv-ring:inset 0 0 0 1px #c0c2c4, inset 0 0 1px 4px #e2e3e4;
+  --dv-sl:27;--dv-st:27;--dv-sw:506;--dv-sh:724;--dv-sr:11;--dv-gap:18;--dv-sp:26;--dv-ui:.8;}
+.ui-device-ipad .ui-device-mark{left:50%;top:12px;margin-left:-5px;width:10px;height:10px;
+  border-radius:50%;background:#1a1a1a;}
+.ui-device-ipad .ui-device-mark::before{content:"";position:absolute;left:2px;top:2px;
+  width:6px;height:6px;border-radius:50%;
+  background:radial-gradient(farthest-corner at 20% 20%, #6074BF 0, transparent 40%),
+             radial-gradient(farthest-corner at 80% 80%, #513785 0, #24555E 20%, transparent 50%);}
+.ui-device-ipad .ui-device-btns::after{content:"";position:absolute;right:40px;top:-2px;
+  width:36px;height:2px;background:var(--dv-edge);}
+.ui-device-ipad .ui-device-power{right:-2px;top:63px;width:2px;height:32px;background:var(--dv-edge);
+  box-shadow:0 37px 0 var(--dv-edge);}
+
+/* ── magicui 批 U65–U68（2026-11-17）：终端 / 文件树 / 浏览器 / 推文卡 ──
+ * 来源 magicui（MIT），只取结构思路，样式按本项目变量重写；presets.json 的 src 写 `magicui:*`。
+ */
+
+/* U65 终端窗口 */
+.ui-term{width:100%;max-width:100%;border-radius:14px;overflow:hidden;text-align:left;
+  border:1px solid var(--ui-border);background:#0b0f0e;}
+.ui-term-bar{display:flex;align-items:center;gap:10px;
+  padding:calc(14px * var(--ui-scale,1)) calc(18px * var(--ui-scale,1));
+  background:rgba(255,255,255,.055);border-bottom:1px solid var(--ui-border);}
+.ui-term-bar .dot{width:calc(13px * var(--ui-scale,1));height:calc(13px * var(--ui-scale,1));
+  border-radius:50%;background:#ff5f57;flex:none;}
+.ui-term-bar .dot:nth-child(2){background:#febc2e;}
+.ui-term-bar .dot:nth-child(3){background:#28c840;}
+.ui-term-bar .ttl{margin-left:8px;font-family:"SF Mono",Menlo,monospace;
+  font-size:calc(18px * var(--ui-scale,1));color:var(--ui-muted);letter-spacing:.04em;}
+.ui-term-body{padding:calc(20px * var(--ui-scale,1)) calc(22px * var(--ui-scale,1)) calc(26px * var(--ui-scale,1));
+  font-family:"SF Mono",Menlo,monospace;font-size:calc(23px * var(--ui-scale,1));
+  line-height:1.9;color:#c9d3cc;}
+.ui-term-ln{white-space:nowrap;overflow:hidden;}
+.ui-term-ln b{color:#7BE8BE;font-weight:400;}
+.ui-term-ln.ok{color:#7BE8BE;}
+.ui-term-ln.dim{color:var(--ui-muted);}
+.ui-term-cur{display:inline-block;width:.55em;height:1.05em;background:#7BE8BE;
+  vertical-align:-.14em;margin-left:.18em;}
+
+/* U66 文件树 */
+.ui-tree{width:100%;max-width:100%;text-align:left;border-radius:14px;
+  border:1px solid var(--ui-border);background:var(--ui-surface);
+  padding:calc(20px * var(--ui-scale,1)) calc(22px * var(--ui-scale,1));}
+.ui-tree-row{display:flex;align-items:center;gap:calc(10px * var(--ui-scale,1));
+  height:calc(50px * var(--ui-scale,1));
+  font-family:"SF Mono",Menlo,monospace;font-size:calc(21px * var(--ui-scale,1));color:var(--ui-muted);}
+.ui-tree-row .ic{width:calc(20px * var(--ui-scale,1));text-align:center;font-size:calc(15px * var(--ui-scale,1));}
+.ui-tree-row.dir{color:var(--ui-ink);}
+.ui-tree-row.dir .ic{color:#7BE8BE;}
+.ui-tree-row.l2{padding-left:calc(26px * var(--ui-scale,1));}
+.ui-tree-row.l3{padding-left:calc(52px * var(--ui-scale,1));}
+.ui-tree-row .tag{margin-left:auto;padding:calc(3px * var(--ui-scale,1)) calc(10px * var(--ui-scale,1));
+  border-radius:999px;background:rgba(123,232,190,.18);color:#7BE8BE;
+  font-family:"PingFang SC",sans-serif;font-size:calc(15px * var(--ui-scale,1));letter-spacing:.06em;}
+
+/* U67 浏览器窗口 */
+.ui-browser{width:100%;max-width:100%;text-align:left;border-radius:14px;overflow:hidden;
+  border:1px solid var(--ui-border);background:#0b0e0d;}
+.ui-browser-bar{display:flex;align-items:center;gap:10px;
+  padding:calc(12px * var(--ui-scale,1)) calc(16px * var(--ui-scale,1));
+  background:rgba(255,255,255,.055);border-bottom:1px solid var(--ui-border);}
+.ui-browser-bar .dot{width:calc(12px * var(--ui-scale,1));height:calc(12px * var(--ui-scale,1));
+  border-radius:50%;background:#ff5f57;flex:none;}
+.ui-browser-bar .dot:nth-child(2){background:#febc2e;}
+.ui-browser-bar .dot:nth-child(3){background:#28c840;}
+.ui-browser-url{flex:1;margin-left:6px;padding:calc(7px * var(--ui-scale,1)) calc(14px * var(--ui-scale,1));
+  border-radius:999px;background:rgba(255,255,255,.06);overflow:hidden;white-space:nowrap;
+  font-family:"SF Mono",Menlo,monospace;font-size:calc(17px * var(--ui-scale,1));color:var(--ui-muted);}
+.ui-browser-url b{color:#7BE8BE;font-weight:400;}
+.ui-browser-body{display:flex;gap:calc(16px * var(--ui-scale,1));
+  padding:calc(18px * var(--ui-scale,1));}
+.ui-browser-side{width:calc(84px * var(--ui-scale,1));display:flex;flex-direction:column;
+  gap:calc(9px * var(--ui-scale,1));flex:none;}
+.ui-browser-side .i{height:calc(22px * var(--ui-scale,1));border-radius:6px;background:rgba(255,255,255,.055);}
+.ui-browser-side .i.on{background:rgba(123,232,190,.22);}
+.ui-browser-main{flex:1;display:flex;flex-direction:column;gap:calc(12px * var(--ui-scale,1));min-width:0;}
+.ui-browser-kpi{display:flex;gap:calc(10px * var(--ui-scale,1));}
+.ui-browser-kpi .k{flex:1;padding:calc(10px * var(--ui-scale,1)) calc(12px * var(--ui-scale,1));
+  border-radius:10px;background:rgba(255,255,255,.045);border:1px solid var(--ui-border);}
+.ui-browser-kpi .k b{display:block;font-family:Georgia,serif;
+  font-size:calc(26px * var(--ui-scale,1));color:var(--ui-ink);}
+.ui-browser-kpi .k span{font-size:calc(13px * var(--ui-scale,1));color:var(--ui-muted);}
+.ui-browser-chart{position:relative;flex:1;min-height:calc(150px * var(--ui-scale,1));
+  border-radius:10px;background:rgba(255,255,255,.035);border:1px solid var(--ui-border);overflow:hidden;}
+.ui-browser-chart .bar{position:absolute;bottom:0;width:calc(9% * 1);border-radius:5px 5px 0 0;
+  background:rgba(123,232,190,.5);}
+
+/* U68 推文卡（示例数据一律标"场景演示"） */
+.ui-tweet{width:100%;max-width:100%;text-align:left;border-radius:var(--ui-radius);
+  border:1px solid var(--ui-border);background:var(--ui-surface);
+  padding:calc(24px * var(--ui-scale,1)) calc(24px * var(--ui-scale,1));}
+.ui-tweet-hd{display:flex;align-items:center;gap:calc(14px * var(--ui-scale,1));}
+.ui-tweet-av{width:calc(48px * var(--ui-scale,1));height:calc(48px * var(--ui-scale,1));
+  border-radius:50%;flex:none;background:linear-gradient(140deg,#7BE8BE,#2f7f66 62%,#123a30);}
+.ui-tweet-name{font-size:calc(21px * var(--ui-scale,1));font-weight:640;color:var(--ui-ink);}
+.ui-tweet-handle{font-family:"SF Mono",Menlo,monospace;
+  font-size:calc(14px * var(--ui-scale,1));color:var(--ui-muted);margin-top:2px;}
+.ui-tweet-body{margin-top:calc(16px * var(--ui-scale,1));
+  font-size:calc(22px * var(--ui-scale,1));line-height:1.65;color:var(--ui-ink);}
+.ui-tweet-meta{margin-top:calc(14px * var(--ui-scale,1));
+  font-family:"SF Mono",Menlo,monospace;font-size:calc(13px * var(--ui-scale,1));color:var(--ui-muted);}
+.ui-tweet-line{height:1px;background:var(--ui-border);margin:calc(14px * var(--ui-scale,1)) 0 calc(12px * var(--ui-scale,1));}
+.ui-tweet-stats{display:flex;gap:calc(24px * var(--ui-scale,1));
+  font-family:"SF Mono",Menlo,monospace;font-size:calc(14px * var(--ui-scale,1));color:var(--ui-muted);}
+.ui-tweet-stats b{color:var(--ui-ink);font-weight:600;}

@@ -23,7 +23,9 @@ import sys
 
 ROOT = pathlib.Path(__file__).resolve().parent
 REPO = ROOT.parent.parent
-YAML = REPO / "Dify工作流" / "04_黑帧口播_分组生成.yml"
+# 两份共用能力层（01 = 04 + 数字人小窗），H02SX 的 TPL/DEFAULTS/UNSAFE_TEXT 必须一起变。
+YAMLS = [REPO / "Dify工作流" / "04_黑帧口播_分组生成.yml",
+         REPO / "Dify工作流" / "01_有数字人完整视频工作流.yml"]
 
 sys.path.insert(0, str(ROOT))
 import build_presets as bp  # noqa: E402
@@ -33,6 +35,7 @@ def build_blocks():
     cards = [
         c for c in bp.load()["presets"]
         if c.get("status") == "ready" and not c["id"].startswith("B")
+        and c.get("role") != "bg"
         and c.get("cap") not in ("component-html", "page-transition")
     ]
     tpl = ["    TPL = {"]
@@ -113,22 +116,7 @@ def main():
     ap.add_argument("--check", action="store_true")
     args = ap.parse_args()
 
-    raw = YAML.read_text(encoding="utf-8")
     import yaml
-    data = yaml.safe_load(raw)
-    node = None
-    for n in data["workflow"]["graph"]["nodes"]:
-        if n.get("data", {}).get("title", "").startswith("H02SX"):
-            node = n
-            break
-    if not node:
-        print("找不到 H02SX 节点")
-        return 1
-
-    code = node["data"]["code"]
-    new_code, ids = splice(code)
-    compile(new_code, "h02sx", "exec")
-
     bad = audit_params()
     if bad:
         print("参数不全的卡：")
@@ -136,22 +124,42 @@ def main():
             print("  %s  %s" % (cid, msg))
         return 1
 
-    if new_code == code:
-        print("已同步：%d 张卡" % len(ids))
+    pending, ids = [], []
+    for path in YAMLS:
+        raw = path.read_text(encoding="utf-8")
+        data = yaml.safe_load(raw)
+        node = None
+        for n in data["workflow"]["graph"]["nodes"]:
+            if n.get("data", {}).get("title", "").startswith("H02SX"):
+                node = n
+                break
+        if not node:
+            print("找不到 H02SX 节点：%s" % path.name)
+            return 1
+        code = node["data"]["code"]
+        new_code, ids = splice(code)
+        compile(new_code, "h02sx", "exec")
+        if new_code == code:
+            print("已同步：%s（%d 张卡）" % (path.name, len(ids)))
+            continue
+        pending.append((path, raw, code, new_code))
+
+    if not pending:
         return 0
     if args.check:
-        print("未同步：展开器与 presets.json 不一致，请运行 sync_expander.py")
+        print("未同步：%s 与 presets.json 不一致，请运行 sync_expander.py"
+              % "、".join(p.name for p, _, _, _ in pending))
         return 1
 
-    esc_old = json.dumps(code, ensure_ascii=False)[1:-1]
-    esc_new = json.dumps(new_code, ensure_ascii=False)[1:-1]
-    if raw.count(esc_old) != 1:
-        print("YAML 里的代码块定位失败，未写入")
-        return 1
-    YAML.write_text(raw.replace(esc_old, esc_new), encoding="utf-8")
-
-    yaml.safe_load(YAML.read_text(encoding="utf-8"))
-    print("已写入：%d 张卡" % len(ids))
+    for path, raw, code, new_code in pending:
+        esc_old = json.dumps(code, ensure_ascii=False)[1:-1]
+        esc_new = json.dumps(new_code, ensure_ascii=False)[1:-1]
+        if raw.count(esc_old) != 1:
+            print("YAML 里的代码块定位失败：%s" % path.name)
+            return 1
+        path.write_text(raw.replace(esc_old, esc_new), encoding="utf-8")
+        yaml.safe_load(path.read_text(encoding="utf-8"))
+        print("已写入：%s（%d 张卡）" % (path.name, len(ids)))
     return 0
 
 

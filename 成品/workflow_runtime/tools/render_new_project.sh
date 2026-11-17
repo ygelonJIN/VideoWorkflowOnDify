@@ -18,18 +18,26 @@ normalize_path() {
   printf '%s' "$value"
 }
 
-if [ "$#" -eq 3 ]; then
+if [ "$#" -eq 3 ] || [ "$#" -eq 4 ]; then
   PROJECT_NAME="$1"
   HTML_INPUT="$2"
   RESPONSE_INPUT="$3"
+  PLAN_INPUT="${4:-}"
 else
-  echo "用法：bash render_new_project.sh 项目名 /path/to/html_document.html /path/to/heygen_response.json"
+  echo "用法：bash render_new_project.sh 项目名 /path/to/html_document.html /path/to/heygen_response.json [/path/to/image_plan.json]"
   echo "workflow_runtime/ 是通用运行资产目录，不是可复用的项目文件夹。"
   exit 2
 fi
 
 HTML_INPUT="$(normalize_path "$HTML_INPUT")"
 RESPONSE_INPUT="$(normalize_path "$RESPONSE_INPUT")"
+if [ -n "$PLAN_INPUT" ]; then
+  PLAN_INPUT="$(normalize_path "$PLAN_INPUT")"
+  if [ ! -f "$PLAN_INPUT" ]; then
+    echo "找不到图像计划文件：$PLAN_INPUT（数字人版的 HTML 里有 {{IMG:...}} 时必须有它）"
+    exit 1
+  fi
+fi
 
 if [[ "$PROJECT_NAME" == *"/path/to/"* || "$HTML_INPUT" == *"/path/to/"* || "$RESPONSE_INPUT" == *"/path/to/"* ]]; then
   echo "检测到示例占位符。请替换成真实项目名和文件路径，或不带参数运行本脚本进入交互模式。"
@@ -61,6 +69,8 @@ mkdir -p "$PROJECT_DIR/媒体" "$PROJECT_DIR/成片" "$PROJECT_DIR/字幕"
 cp "$TEMPLATE_DIR/hyperframes.json" "$PROJECT_DIR/"
 cp "$TEMPLATE_DIR/render.sh" "$PROJECT_DIR/"
 cp -R "$TEMPLATE_DIR/scripts" "$PROJECT_DIR/脚本"
+# 私人配置与缓存绝不进项目（`不推送/` 只待在工作区根）
+rm -rf "$PROJECT_DIR/脚本/不推送" "$PROJECT_DIR/脚本/__pycache__"
 cp -R "$TEMPLATE_DIR/assets" "$PROJECT_DIR/素材"
 cp "$TEMPLATE_DIR/docs/视频说明.md" "$PROJECT_DIR/"
 cp "$TEMPLATE_DIR/docs/项目说明.md" "$PROJECT_DIR/"
@@ -68,6 +78,9 @@ cp "$HTML_INPUT" "$PROJECT_DIR/index.html"
 cp "$RESPONSE_INPUT" "$PROJECT_DIR/heygen_response.json"
 if [ -f "$(dirname "$HTML_INPUT")/voiceover_script.txt" ]; then
   cp "$(dirname "$HTML_INPUT")/voiceover_script.txt" "$PROJECT_DIR/口播文案.txt"
+fi
+if [ -n "$PLAN_INPUT" ]; then
+  cp "$PLAN_INPUT" "$PROJECT_DIR/媒体/图像计划.json"
 fi
 
 echo "已创建独立项目：$PROJECT_DIR"
@@ -77,4 +90,11 @@ if [ "${SKIP_RENDER:-0}" = "1" ]; then
 fi
 
 cd "$PROJECT_DIR"
+# 数字人版走的是 04 派生的 HTML（有 {{IMG:...}}），这里补齐"生图 + 换占位"；
+# 黑帧线的同一步在 build_black_frame_project.py 里。缺图只警告，不拦渲染。
+if [ -f 媒体/图像计划.json ]; then
+  echo "准备图片（图像计划 → 生图 → 替换 {{IMG:...}}）..."
+  python3 "$BASE_DIR/prepare_images.py" --html index.html --plan 媒体/图像计划.json \
+    || echo "⚠️ 图片准备失败，继续渲染（缺图的屏会缺画面）"
+fi
 bash render.sh

@@ -26,8 +26,10 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import pathlib
 import re
+import shutil
 import subprocess
 import sys
 
@@ -37,10 +39,23 @@ PRESETS = HERE / "presets.json"
 CSS = WORK / "成品" / "workflow_runtime" / "assets" / "vendor" / "components.css"
 SYNC_VIDEO = WORK / "成品" / "workflow_runtime" / "scripts" / "sync_video.py"
 REELS = HERE / "样片" / "全卡审阅"
+BATCH_ROOT = HERE / "样片" / "待筛"
 
+
+def approved(batch_dir: pathlib.Path, cid: str) -> bool:
+    """批次里有 通过.tsv 且点名了这个编号，才算人看过。只有人被点名通过后才写这个文件。"""
+    f = batch_dir / "通过.tsv"
+    if not f.is_file():
+        return False
+    for line in f.read_text(encoding="utf-8").splitlines()[1:]:
+        if line.split("\t")[0].strip() == cid:
+            return True
+    return False
+
+# 2026-11-17：none / archive / special_dom 三个"在表但选不到"的 role 已整族删除。
+# 现在表里每张卡都必须落进下面某一格，否则 gen_catalog 的目录里就没有它，等于白做。
 ROLES = {"bg", "component", "entrance_text", "entrance_block", "state_text",
-         "state_block", "component_motion", "decoration", "page_transition",
-         "special_dom", "archive", "none"}
+         "state_block", "component_motion", "decoration", "page_transition"}
 BG_FAMILIES = {"dot", "line", "ring", "block", "light", "noise"}
 STATUSES = {"ready", "needs-work", "skip", "archived"}
 REQUIRED = ["id", "name", "family", "role", "status", "cap", "use", "avoid"]
@@ -130,7 +145,10 @@ def validate(card, existing, kinds, classes):
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("json_file")
-    ap.add_argument("--render", action="store_true", help="没有样片就现场渲一张")
+    ap.add_argument("--render", action="store_true",
+                    help="这批卡还没有待筛候选片时，先出候选片到 样片/待筛/ 再停（不转正）")
+    ap.add_argument("--jobs", type=int, default=4, help="--render 时的并发路数，默认 4")
+    ap.add_argument("--batch", default="", help="从哪个待筛批次取片（该批次必须有 通过.tsv 点名）")
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
 
@@ -154,38 +172,72 @@ def main() -> int:
         print("校验通过，可以加：%s" % "、".join(c["id"] for c in cards))
         return 0
 
+    # ── 审阅闸门（必须在写表之前）：片得先在 样片/待筛/<批次>/ 里被人点名通过 ──
+    # 以前是"没片就现场渲一张到 全卡审阅"，等于绕过人审；候选片和审过的片混在一处，
+    # 审阅就失效了。现在只有两条路：已在全卡审阅（复查重渲），或待筛里有 通过.tsv 点名的候选片。
+    todo, pending_batch = [], {}
+    for card in cards:
+        if card["role"] == "page_transition":
+            continue
+        if list((REELS / card["family"]).glob(card["id"] + "-*.mp4")):
+            print("✓ 样片已在全卡审阅：%s" % card["id"])
+            continue
+        cand = [c for c in sorted(BATCH_ROOT.glob("*/" + card["id"] + "-*.mp4"))
+                if approved(c.parent, card["id"])]
+        if args.batch:
+            narrowed = [c for c in cand if c.parent.name == args.batch]
+            if narrowed:
+                cand = narrowed
+        if cand:
+            pending_batch[card["id"]] = cand[0]
+            continue
+        todo.append(card["id"])
+
+    if todo:
+        if args.render:
+            batch = args.batch or (__import__("datetime").date.today().strftime("%Y%m%d")
+                                   + "-" + pathlib.Path(args.json_file).stem)
+            print("这批卡还没有待筛候选片，先出候选片给人审（落 样片/待筛/%s/）：" % batch)
+            run(["bash", str(HERE / "render_candidates.sh"), batch, args.json_file])
+            print("\n候选片已出，表没有改动。人审完写 待筛/%s/通过.tsv 再跑一次。" % batch)
+            return 1
+        print("不能加（表未改动）：这些卡没有\"人已点名通过\"的候选片：")
+        for cid in todo:
+            print("  -", cid)
+        print("\n正确顺序：")
+        print("  1) bash 能力库/动效库/render_candidates.sh <批次> %s" % args.json_file)
+        print("  2) 人看 样片/待筛/<批次>/ 里的片 → 点名通过后写 待筛/<批次>/通过.tsv")
+        print("  3) python3 能力库/动效库/add_card.py %s --batch <批次>" % args.json_file)
+        return 1
+
+    # ── 写表；生成/同步任一步失败就整体回滚，不留半生效状态 ──
+    old_text = PRESETS.read_text(encoding="utf-8")
     data["presets"].extend(cards)
     data["updated"] = __import__("datetime").date.today().isoformat()
     PRESETS.write_text(json.dumps(data, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
     print("✓ presets.json：%d → %d 张" % (len(existing), len(data["presets"])))
 
-    if run([sys.executable, str(HERE / "gen_catalog.py")]) != 0:
-        raise SystemExit("gen_catalog 失败")
-    if run([sys.executable, str(HERE / "sync_expander.py")]) != 0:
-        raise SystemExit("sync_expander 失败")
-    if run([sys.executable, str(HERE / "sync_expander.py"), "--check"]) != 0:
-        raise SystemExit("同步检查没过")
-
-    missing = []
-    for card in cards:
-        if card["role"] in ("archive", "none", "special_dom", "page_transition"):
-            continue
-        hit = list((REELS / card["family"]).glob(card["id"] + "-*.mp4"))
-        if hit:
-            print("✓ 样片已存在：%s" % hit[0].relative_to(WORK))
-            continue
-        if args.render:
-            if run(["bash", str(HERE / "render_card.sh"), card["id"]]) != 0:
-                missing.append(card["id"])
-        else:
-            missing.append(card["id"])
-
-    print()
-    if missing:
-        print("这些卡还没有样片（规则是没样片不入表）：" + "、".join(missing))
-        print("补法：bash 能力库/动效库/render_card.sh <编号>，或重跑本脚本加 --render")
+    ok = (run([sys.executable, str(HERE / "gen_catalog.py")]) == 0
+          and run([sys.executable, str(HERE / "sync_expander.py")]) == 0
+          and run([sys.executable, str(HERE / "sync_expander.py"), "--check"]) == 0)
+    if not ok:
+        PRESETS.write_text(old_text, encoding="utf-8")
+        subprocess.run([sys.executable, str(HERE / "gen_catalog.py")], cwd=str(WORK),
+                       capture_output=True, text=True)
+        subprocess.run([sys.executable, str(HERE / "sync_expander.py")], cwd=str(WORK),
+                       capture_output=True, text=True)
+        print("生成/同步失败，已回滚 presets.json 与派生文件；没有留下半生效状态。")
         return 1
-    print("加卡完成。别忘了一条：如果这是一批外部来源的效果，在 能力库/动效库/来源台账.md 补一行结论。")
+
+    # 把审过的候选片从待筛搬进 全卡审阅：审阅物只留一处，搬完待筛里就少一条
+    for cid, src_mp4 in pending_batch.items():
+        fam = next(c["family"] for c in cards if c["id"] == cid)
+        dest_dir = REELS / fam
+        dest_dir.mkdir(parents=True, exist_ok=True)
+        shutil.move(str(src_mp4), str(dest_dir / src_mp4.name))
+        print("✓ 样片从待筛搬入：%s" % (dest_dir / src_mp4.name).relative_to(WORK))
+
+    print("加卡完成。外部来源的批次记得在 能力库/动效库/来源台账.md 补一行结论。")
     return 0
 
 

@@ -571,7 +571,11 @@ def main() -> None:
         (project_dir / "媒体" / "图片").mkdir(parents=True, exist_ok=True)
         shutil.copy2(RUNTIME_DIR / "hyperframes.json", project_dir / "hyperframes.json")
         shutil.copy2(RUNTIME_DIR / "render.sh", project_dir / "render.sh")
-        shutil.copytree(RUNTIME_DIR / "scripts", project_dir / "脚本")
+        shutil.copytree(
+            RUNTIME_DIR / "scripts",
+            project_dir / "脚本",
+            ignore=shutil.ignore_patterns("不推送", "__pycache__", ".DS_Store"),
+        )
         shutil.copytree(RUNTIME_DIR / "assets", project_dir / "素材")
         shutil.copy2(RUNTIME_DIR / "docs" / "视频说明.md", project_dir / "视频说明.md")
         shutil.copy2(RUNTIME_DIR / "docs" / "项目说明.md", project_dir / "项目说明.md")

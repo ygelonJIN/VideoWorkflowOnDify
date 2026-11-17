@@ -277,6 +277,17 @@ def main() -> None:
     if voiceover:
         (staging / "voiceover_script.txt").write_text(voiceover + "\n", encoding="utf-8")
 
+    # 数字人版是 04 派生的 HTML：里面有 {{IMG:...}}，渲染前要按图像计划生图并换占位。
+    plan_value = data.get("image_plan_json", data.get("image_plan"))
+    plan_data = decode_json_value(plan_value) if plan_value is not None else None
+    plan_path = staging / "image_plan.json"
+    if isinstance(plan_data, dict) and plan_data:
+        plan_path.write_text(json.dumps(plan_data, ensure_ascii=False, indent=2), encoding="utf-8")
+    elif plan_path.exists():
+        plan_path.unlink()
+    else:
+        print("警告：Dify 输出没有 image_plan_json：HTML 里的 {{IMG:...}} 不会被替换（01 需要这个字段）")
+
     def response_path_value(payload, *path):
         value = payload
         for key in path:
@@ -316,10 +327,13 @@ def main() -> None:
         print(f"旧项目已备份到：{backup_dir}")
 
     try:
-        subprocess.run([
+        render_command = [
             "bash", str(tools_dir / "render_new_project.sh"),
             args.project_name, str(html_path), str(response_path),
-        ], check=True)
+        ]
+        if plan_path.exists():
+            render_command.append(str(plan_path))
+        subprocess.run(render_command, check=True)
     except Exception:
         failed_root = base / "失败项目"
         if project_dir.exists():
