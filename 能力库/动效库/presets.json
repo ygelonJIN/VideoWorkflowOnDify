@@ -1,6 +1,6 @@
 {
  "version": 2,
- "updated": "2026-11-16",
+ "updated": "2026-11-17",
  "note": "每行 = 一个动作预设。status: ready=可直接用 / archived=有实现有样片但不接生产 / needs-work=先改成确定性 / skip=不入管线。role: bg|component|entrance_text|entrance_block|state_text|state_block|component_motion|decoration|special_dom|page_transition|archive|none —— 选择层只认 role，不再手写目录。",
  "presets": [
   {
@@ -164,7 +164,7 @@
    "family": "结构",
    "status": "ready",
    "cap": "frame",
-   "src": "自建（样张二）",
+   "src": "自建:样张二",
    "params": {
     "r": 26,
     "dur": 0.6
@@ -822,7 +822,7 @@
    "layer": "media",
    "status": "ready",
    "cap": "camera",
-   "src": "camera-push",
+   "src": "自建:camera-push",
    "params": {
     "to": 1.06,
     "dur": 4.0
@@ -840,7 +840,7 @@
    "layer": "media",
    "status": "ready",
    "cap": "camera",
-   "src": "camera-pull",
+   "src": "自建:camera-pull",
    "params": {
     "from": 1.08,
     "dur": 4.0
@@ -858,7 +858,7 @@
    "layer": "media",
    "status": "ready",
    "cap": "camera",
-   "src": "camera-pan",
+   "src": "自建:camera-pan",
    "params": {
     "from": -3,
     "to": 3,
@@ -877,7 +877,7 @@
    "layer": "element",
    "status": "ready",
    "cap": "split+seeded",
-   "src": "type-offset",
+   "src": "自建:type-offset",
    "params": {
     "rot": 4,
     "dur": 0.62,
@@ -922,7 +922,7 @@
    "layer": "element",
    "status": "ready",
    "cap": "stagger-out",
-   "src": "out-up",
+   "src": "自建:out-up",
    "params": {
     "dist": 40,
     "dur": 0.42,
@@ -940,7 +940,7 @@
    "layer": "element",
    "status": "ready",
    "cap": "stagger-out",
-   "src": "out-side",
+   "src": "自建:out-side",
    "params": {
     "dist": 90,
     "dur": 0.4,
@@ -958,7 +958,7 @@
    "layer": "element",
    "status": "ready",
    "cap": "scale-settle",
-   "src": "type-settle",
+   "src": "自建:type-settle",
    "params": {
     "from": 1.22,
     "y": 12,
@@ -979,7 +979,7 @@
    "layer": "element",
    "status": "ready",
    "cap": "tracking",
-   "src": "type-tracking",
+   "src": "自建:type-tracking",
    "params": {
     "from": "0.14em",
     "to": "-0.02em",
@@ -1000,7 +1000,7 @@
    "layer": "element",
    "status": "ready",
    "cap": "inject+draw",
-   "src": "type-underline",
+   "src": "自建:type-underline",
    "params": {
     "h": 6,
     "color": "#D8452C",
@@ -1023,7 +1023,7 @@
    "layer": "element",
    "status": "ready",
    "cap": "inject+draw",
-   "src": "type-circle",
+   "src": "自建:type-circle",
    "params": {
     "w": 3,
     "color": "#D8452C",
@@ -1045,7 +1045,7 @@
    "layer": "element",
    "status": "ready",
    "cap": "vertical+mask",
-   "src": "type-vertical",
+   "src": "自建:type-vertical",
    "params": {
     "dur": 0.8
    },
@@ -1065,7 +1065,7 @@
    "layer": "element",
    "status": "ready",
    "cap": "inject+draw",
-   "src": "type-strike",
+   "src": "自建:type-strike",
    "params": {
     "h": 5,
     "color": "#D8452C",
@@ -1087,7 +1087,7 @@
    "layer": "element",
    "status": "ready",
    "cap": "inject+width",
-   "src": "state-progress",
+   "src": "自建:state-progress",
    "params": {
     "to": 72,
     "h": 6,
@@ -1106,7 +1106,7 @@
    "layer": "element",
    "status": "ready",
    "cap": "inject+spring",
-   "src": "state-check",
+   "src": "自建:state-check",
    "params": {
     "size": 22,
     "color": "#7BE8BE"
@@ -1123,7 +1123,7 @@
    "layer": "element",
    "status": "ready",
    "cap": "sequence",
-   "src": "state-type",
+   "src": "自建:state-type",
    "params": {
     "speed": 0.045,
     "cursor": "#7BE8BE"
@@ -1140,7 +1140,7 @@
    "layer": "element",
    "status": "ready",
    "cap": "inject+ripple",
-   "src": "state-click",
+   "src": "自建:state-click",
    "params": {
     "size": 18,
     "color": "#7BE8BE",
@@ -1158,7 +1158,7 @@
    "layer": "element",
    "status": "ready",
    "cap": "hover",
-   "src": "state-hover",
+   "src": "自建:state-hover",
    "params": {
     "from": 0.55,
     "dur": 0.45,
@@ -1176,7 +1176,7 @@
    "layer": "element",
    "status": "ready",
    "cap": "card+stagger",
-   "src": "ui-card-enter",
+   "src": "自建:ui-card-enter",
    "params": {
     "y": 26,
     "dur": 0.55,
@@ -1197,7 +1197,7 @@
    "layer": "element",
    "status": "ready",
    "cap": "row-stagger",
-   "src": "ui-rows",
+   "src": "自建:ui-rows",
    "params": {
     "x": -18,
     "dur": 0.5,
@@ -1218,7 +1218,7 @@
    "layer": "element",
    "status": "ready",
    "cap": "chip-stagger",
-   "src": "ui-chips",
+   "src": "自建:ui-chips",
    "params": {
     "dur": 0.45,
     "stagger": 0.1,
@@ -1329,7 +1329,7 @@
    "layer": "element",
    "status": "ready",
    "cap": "bars",
-   "src": "ui-bars",
+   "src": "自建:ui-bars",
    "params": {
     "dur": 0.7,
     "stagger": 0.06
@@ -1349,7 +1349,7 @@
    "layer": "element",
    "status": "ready",
    "cap": "sequence",
-   "src": "ui-timeline",
+   "src": "自建:ui-timeline",
    "params": {
     "dur": 0.45,
     "stagger": 0.16
@@ -1369,7 +1369,7 @@
    "layer": "element",
    "status": "ready",
    "cap": "scale-y",
-   "src": "state-expand",
+   "src": "自建:state-expand",
    "params": {
     "dur": 0.5,
     "ease": "power3.out"
@@ -1386,7 +1386,7 @@
    "layer": "element",
    "status": "ready",
    "cap": "indicator",
-   "src": "state-tab",
+   "src": "自建:state-tab",
    "params": {
     "dur": 0.45,
     "ease": "power2.inOut"
@@ -1403,7 +1403,7 @@
    "layer": "element",
    "status": "ready",
    "cap": "drag",
-   "src": "state-drag",
+   "src": "自建:state-drag",
    "params": {
     "from": -46,
     "rot": -3,
@@ -1497,7 +1497,7 @@
    "layer": "element",
    "status": "ready",
    "cap": "data-bars",
-   "src": "data-bars",
+   "src": "自建:data-bars",
    "params": {
     "heights": "24,86,52,100",
     "dur": 0.55,
@@ -1519,7 +1519,7 @@
    "layer": "element",
    "status": "ready",
    "cap": "row-add",
-   "src": "data-rows",
+   "src": "自建:data-rows",
    "params": {
     "dur": 0.45,
     "ease": "power3.out"
@@ -1540,7 +1540,7 @@
    "layer": "element",
    "status": "ready",
    "cap": "swap",
-   "src": "data-swap",
+   "src": "自建:data-swap",
    "params": {
     "text": "已成交",
     "dur": 0.5
@@ -6964,6 +6964,211 @@
    "needs": [
     "media"
    ]
+  },
+  {
+   "id": "T45",
+   "name": "扫描线揭示",
+   "family": "入场",
+   "role": "entrance_block",
+   "layer": "element",
+   "status": "ready",
+   "cap": "clip+line",
+   "src": "ui2v:hero-barcode-scan",
+   "params": {
+    "h": 8,
+    "color": "rgba(134,240,192,.85)",
+    "dur": 0.8,
+    "ease": "power1.inOut"
+   },
+   "use": "内容被一条扫描线一道道读出来；档案、识别、核验",
+   "avoid": "和 M30 扫描线下移同屏（会花）",
+   "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t) return;\n  if (getComputedStyle(_t).position === 'static') { _t.style.position = 'relative'; }\n  _t.style.overflow = 'hidden';\n  var _l = document.createElement('i');\n  _l.style.cssText = 'position:absolute;left:0;right:0;top:0;height:{{h}}px;background:linear-gradient(180deg,transparent,{{color}},transparent);opacity:0;pointer-events:none;z-index:5;';\n  _t.appendChild(_l);\n  timeline.fromTo(_t, {clipPath: 'inset(0% 0% 100% 0%)'}, {clipPath: 'inset(0% 0% 0% 0%)', duration: {{dur}}, ease: '{{ease}}'}, {{at}});\n  timeline.fromTo(_l, {top: '0%', opacity: 0}, {top: '100%', opacity: 1, duration: {{dur}}, ease: '{{ease}}'}, {{at}});\n  timeline.to(_l, {opacity: 0, duration: {{dur}} * 0.3}, {{at}} + {{dur}} * 0.85);\n})();",
+   "needs": [
+    "block"
+   ]
+  },
+  {
+   "id": "T46",
+   "name": "线框描出",
+   "family": "入场",
+   "role": "entrance_block",
+   "layer": "element",
+   "status": "ready",
+   "cap": "border-draw",
+   "src": "ui2v:hero-blueprint-draw",
+   "params": {
+    "w": 3,
+    "color": "rgba(134,240,192,.8)",
+    "dur": 0.9
+   },
+   "use": "四条边依次画出来，像蓝图定稿",
+   "avoid": "和 X50 边缘收边同时用",
+   "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t) return;\n  if (getComputedStyle(_t).position === 'static') { _t.style.position = 'relative'; }\n  function _mk(css) {\n    var _i = document.createElement('i');\n    _i.style.cssText = 'position:absolute;background:{{color}};pointer-events:none;' + css;\n    _t.appendChild(_i);\n    return _i;\n  }\n  var _top = _mk('left:0;top:0;height:{{w}}px;width:100%;transform-origin:0% 50%;transform:scaleX(0);');\n  var _right = _mk('right:0;top:0;width:{{w}}px;height:100%;transform-origin:50% 0%;transform:scaleY(0);');\n  var _bottom = _mk('left:0;bottom:0;height:{{w}}px;width:100%;transform-origin:100% 50%;transform:scaleX(0);');\n  var _left = _mk('left:0;top:0;width:{{w}}px;height:100%;transform-origin:50% 100%;transform:scaleY(0);');\n  var _q = {{dur}} / 4;\n  timeline.to(_top, {scaleX: 1, duration: _q, ease: 'none'}, {{at}});\n  timeline.to(_right, {scaleY: 1, duration: _q, ease: 'none'}, {{at}} + _q);\n  timeline.to(_bottom, {scaleX: 1, duration: _q, ease: 'none'}, {{at}} + _q * 2);\n  timeline.to(_left, {scaleY: 1, duration: _q, ease: 'none'}, {{at}} + _q * 3);\n})();",
+   "needs": [
+    "block"
+   ]
+  },
+  {
+   "id": "UA38",
+   "name": "柱赛跑",
+   "family": "UI",
+   "role": "component_motion",
+   "layer": "element",
+   "status": "ready",
+   "cap": "bars-race",
+   "src": "ui2v:bar-chart-race",
+   "params": {
+    "child": ".ui-bars b, [data-anim=\"bar\"]",
+    "base": 22,
+    "step": 14,
+    "dur": 0.7,
+    "stagger": 0.09,
+    "ease": "power2.out"
+   },
+   "use": "U13 柱状图：柱子一根根往上追，像在比",
+   "avoid": "超过 8 根柱子",
+   "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t) return;\n  var _k = _t.querySelectorAll('{{child}}');\n  if (!_k.length) return;\n  Array.prototype.forEach.call(_k, function (_el, _i) {\n    timeline.fromTo(_el, {height: '6%', opacity: 0.5}, {height: ({{base}} + _i * {{step}}) + '%', opacity: 1, duration: {{dur}}, ease: '{{ease}}'}, {{at}} + _i * {{stagger}});\n  });\n})();",
+   "needs": [
+    "ui"
+   ],
+   "sample": {
+    "sel": "#bars",
+    "stage": "<div class=\"paper\" style=\"padding:40px\"><div class=\"kick\">柱赛跑</div><div id=\"bars\" style=\"margin-top:60px;display:flex;align-items:flex-end;gap:26px;height:620px\"><b style=\"flex:1;height:26%;border-radius:8px 8px 0 0;background:rgba(134,240,192,.55)\"></b><b style=\"flex:1;height:38%;border-radius:8px 8px 0 0;background:rgba(134,240,192,.55)\"></b><b style=\"flex:1;height:52%;border-radius:8px 8px 0 0;background:rgba(134,240,192,.55)\"></b><b style=\"flex:1;height:70%;border-radius:8px 8px 0 0;background:rgba(134,240,192,.55)\"></b><b style=\"flex:1;height:88%;border-radius:8px 8px 0 0;background:rgba(134,240,192,.55)\"></b></div></div>"
+   }
+  },
+  {
+   "id": "UA39",
+   "name": "排名条卷动",
+   "family": "UI",
+   "role": "component_motion",
+   "layer": "element",
+   "status": "ready",
+   "cap": "h-bars",
+   "src": "ui2v:bar-chart-race",
+   "params": {
+    "child": "i",
+    "dur": 0.8,
+    "stagger": 0.1,
+    "ease": "power2.out"
+   },
+   "use": "横向排名条从短到长卷出来；讲差距",
+   "avoid": "和 UA26 列表重排同屏",
+   "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t) return;\n  var _k = _t.querySelectorAll('{{child}}');\n  if (!_k.length) return;\n  Array.prototype.forEach.call(_k, function (_el, _i) {\n    timeline.fromTo(_el, {scaleX: 0, transformOrigin: '0% 50%', opacity: 0.4},\n      {scaleX: 1, opacity: 1, duration: {{dur}} * (1 - _i * 0.12), ease: '{{ease}}'}, {{at}} + _i * {{stagger}});\n  });\n})();",
+   "needs": [
+    "ui"
+   ],
+   "sample": {
+    "sel": "#rows",
+    "stage": "<div class=\"paper\" style=\"padding:40px\"><div class=\"kick\">排名</div><div id=\"rows\" style=\"margin-top:50px;display:flex;flex-direction:column;gap:26px\"><div style=\"height:64px;border-radius:12px;background:rgba(255,255,255,.05);display:flex;align-items:center;padding:0 24px\"><i style=\"width:88%;height:26px;border-radius:8px;background:rgba(134,240,192,.6)\"></i></div><div style=\"height:64px;border-radius:12px;background:rgba(255,255,255,.05);display:flex;align-items:center;padding:0 24px\"><i style=\"width:72%;height:26px;border-radius:8px;background:rgba(134,240,192,.6)\"></i></div><div style=\"height:64px;border-radius:12px;background:rgba(255,255,255,.05);display:flex;align-items:center;padding:0 24px\"><i style=\"width:54%;height:26px;border-radius:8px;background:rgba(134,240,192,.6)\"></i></div><div style=\"height:64px;border-radius:12px;background:rgba(255,255,255,.05);display:flex;align-items:center;padding:0 24px\"><i style=\"width:40%;height:26px;border-radius:8px;background:rgba(134,240,192,.6)\"></i></div></div></div>"
+   }
+  },
+  {
+   "id": "UA40",
+   "name": "代码行落位",
+   "family": "UI",
+   "role": "component_motion",
+   "layer": "element",
+   "status": "ready",
+   "cap": "code-lines",
+   "src": "ui2v:code-diff",
+   "params": {
+    "y": 16,
+    "dur": 0.34,
+    "stagger": 0.1,
+    "ease": "power2.out"
+   },
+   "use": "U23 代码块：一行一行落下来",
+   "avoid": "和 UA09–UA16 的 diff 卡同屏",
+   "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t) return;\n  var _k = _t.querySelectorAll('[data-line], pre div, .mono > div');\n  if (!_k.length) { _k = [_t]; }\n  timeline.fromTo(_k, {opacity: 0, y: {{y}}}, {opacity: 1, y: 0, duration: {{dur}}, ease: '{{ease}}', stagger: {{stagger}}}, {{at}});\n})();",
+   "needs": [
+    "ui"
+   ],
+   "sample": {
+    "sel": "#code",
+    "stage": "<div class=\"paper\" style=\"padding:36px\"><div class=\"kick\">代码</div><div id=\"code\" class=\"mono\" style=\"margin-top:26px;font-size:30px;line-height:1.8;color:#C9D3CC\"><div>def run(q):</div><div>    leads = search.run(q)</div><div>    leads = leads.enrich()</div><div>    return leads</div></div></div>"
+   }
+  },
+  {
+   "id": "UA41",
+   "name": "频谱推进",
+   "family": "UI",
+   "role": "component_motion",
+   "layer": "element",
+   "status": "ready",
+   "cap": "wave",
+   "src": "ui2v:voice-waveform",
+   "params": {
+    "child": "b",
+    "seed": 1.7,
+    "amp": 78,
+    "dur": 0.3,
+    "stagger": 0.03,
+    "ease": "sine.inOut"
+   },
+   "use": "U05 频谱、音量条：柱子按索引起伏",
+   "avoid": "柱数超过 24（时长会散）",
+   "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t) return;\n  var _k = _t.querySelectorAll('{{child}}');\n  if (!_k.length) return;\n  Array.prototype.forEach.call(_k, function (_el, _i) {\n    var _h = 14 + Math.abs(Math.sin((_i + 1) * {{seed}})) * {{amp}};\n    timeline.fromTo(_el, {height: '6%', opacity: 0.5},\n      {height: _h + '%', opacity: 1, duration: {{dur}}, ease: '{{ease}}'}, {{at}} + _i * {{stagger}});\n  });\n})();",
+   "needs": [
+    "ui"
+   ],
+   "sample": {
+    "sel": "#wave",
+    "stage": "<div class=\"paper\" style=\"padding:40px\"><div class=\"kick\">频谱</div><div id=\"wave\" style=\"margin-top:60px;display:flex;align-items:center;gap:12px;height:520px\"><b style=\"flex:1;height:12%%;border-radius:6px;background:rgba(134,240,192,.5)\"></b><b style=\"flex:1;height:12%%;border-radius:6px;background:rgba(134,240,192,.5)\"></b><b style=\"flex:1;height:12%%;border-radius:6px;background:rgba(134,240,192,.5)\"></b><b style=\"flex:1;height:12%%;border-radius:6px;background:rgba(134,240,192,.5)\"></b><b style=\"flex:1;height:12%%;border-radius:6px;background:rgba(134,240,192,.5)\"></b><b style=\"flex:1;height:12%%;border-radius:6px;background:rgba(134,240,192,.5)\"></b><b style=\"flex:1;height:12%%;border-radius:6px;background:rgba(134,240,192,.5)\"></b><b style=\"flex:1;height:12%%;border-radius:6px;background:rgba(134,240,192,.5)\"></b><b style=\"flex:1;height:12%%;border-radius:6px;background:rgba(134,240,192,.5)\"></b><b style=\"flex:1;height:12%%;border-radius:6px;background:rgba(134,240,192,.5)\"></b><b style=\"flex:1;height:12%%;border-radius:6px;background:rgba(134,240,192,.5)\"></b><b style=\"flex:1;height:12%%;border-radius:6px;background:rgba(134,240,192,.5)\"></b><b style=\"flex:1;height:12%%;border-radius:6px;background:rgba(134,240,192,.5)\"></b><b style=\"flex:1;height:12%%;border-radius:6px;background:rgba(134,240,192,.5)\"></b><b style=\"flex:1;height:12%%;border-radius:6px;background:rgba(134,240,192,.5)\"></b><b style=\"flex:1;height:12%%;border-radius:6px;background:rgba(134,240,192,.5)\"></b></div></div>"
+   }
+  },
+  {
+   "id": "G26",
+   "name": "三档并排",
+   "family": "版面",
+   "role": "decoration",
+   "layer": "element",
+   "status": "ready",
+   "cap": "tier",
+   "src": "ui2v:kallaway-t1-overview-tiercompare",
+   "params": {
+    "child": ".gtile, .ui-card",
+    "dur": 0.46,
+    "stagger": 0.1,
+    "lift": 26,
+    "ease": "power2.out"
+   },
+   "use": "三档价格/三套方案并排，中间那档被抬起",
+   "avoid": "两档或四档（会不对称）",
+   "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t) return;\n  var _k = _t.querySelectorAll('{{child}}');\n  if (!_k.length) return;\n  timeline.fromTo(_k, {opacity: 0.25, scale: 0.94}, {opacity: 1, scale: 1, duration: {{dur}}, ease: '{{ease}}', stagger: {{stagger}}}, {{at}});\n  var _mid = _k[Math.floor(_k.length / 2)];\n  if (_mid) {\n    timeline.fromTo(_mid, {y: {{lift}}}, {y: 0, duration: {{dur}}, ease: '{{ease}}'}, {{at}} + {{dur}} * 0.55);\n  }\n})();",
+   "needs": [
+    "block"
+   ],
+   "sample": {
+    "sel": "#tiers",
+    "stage": "<div class=\"paper\" style=\"padding:40px\"><div class=\"kick\">三档</div><div id=\"tiers\" style=\"margin-top:50px;display:grid;grid-template-columns:repeat(3,1fr);gap:22px\"><div class=\"ui-card\" style=\"height:520px;border-radius:18px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1)\"></div><div class=\"ui-card\" style=\"height:520px;border-radius:18px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1)\"></div><div class=\"ui-card\" style=\"height:520px;border-radius:18px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1)\"></div></div></div>"
+   }
+  },
+  {
+   "id": "X54",
+   "name": "清单列缩进",
+   "family": "结构",
+   "role": "decoration",
+   "layer": "element",
+   "status": "ready",
+   "cap": "indent",
+   "src": "ui2v:kallaway-t1-overview-checklist",
+   "params": {
+    "child": ".row",
+    "x": 28,
+    "dur": 0.4,
+    "stagger": 0.08,
+    "ease": "power2.out"
+   },
+   "use": "条目逐行缩进到位，像在归档；清单、检查项",
+   "avoid": "超过 6 条",
+   "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t) return;\n  var _k = _t.querySelectorAll('{{child}}');\n  if (!_k.length) return;\n  Array.prototype.forEach.call(_k, function (_el, _i) {\n    timeline.fromTo(_el, {x: {{x}} * (_i + 1), opacity: 0}, {x: 0, opacity: 1, duration: {{dur}}, ease: '{{ease}}'}, {{at}} + _i * {{stagger}});\n  });\n})();",
+   "needs": [
+    "block"
+   ],
+   "sample": {
+    "sel": "#list",
+    "stage": "<div class=\"paper\" style=\"padding:40px\"><div class=\"kick\">清单</div><div id=\"list\" style=\"margin-top:50px;display:flex;flex-direction:column;gap:24px\"><div class=\"row\" style=\"height:70px;border-radius:12px;background:rgba(255,255,255,.04);display:flex;align-items:center;padding:0 26px;font-size:32px\">01 项</div><div class=\"row\" style=\"height:70px;border-radius:12px;background:rgba(255,255,255,.04);display:flex;align-items:center;padding:0 26px;font-size:32px\">02 项</div><div class=\"row\" style=\"height:70px;border-radius:12px;background:rgba(255,255,255,.04);display:flex;align-items:center;padding:0 26px;font-size:32px\">03 项</div><div class=\"row\" style=\"height:70px;border-radius:12px;background:rgba(255,255,255,.04);display:flex;align-items:center;padding:0 26px;font-size:32px\">04 项</div></div></div>"
+   }
   }
  ],
  "schema_note": "契约字段：surface=opaque|transparent（是否自带底色）；tone=dark|light|any（适配明暗）；base=底色；needs=[text|img|ui]（DOM 前提）；impl=实现入口；缺字段的卡不许进选卡池。"

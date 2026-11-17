@@ -1,7 +1,15 @@
 /* components.css — 界面组件样式库（U 系列）
  * 由 sync_video.py 在渲染前注入；场景组只用类名，不写样式。
  * 只允许改 CSS 变量（--ui-*），不改结构。
+ *
+ * 出处（2026-11-17 登记）：本项目自建，2026-09 起随 U01–U57 一起长出来的，无外部来源。
+ * presets.json 里 28 张组件卡的 src 写的是 `components.css`，指的正是这份文件；
+ * 将来若引入外部样式库，在这里写仓库名 + 版本，并同步改那 28 张卡的 src。
  */
+/* 组件一律 border-box（2026-11-17）：.ui-card 是 width:fit-content + max-width:100% +
+   padding:28px 30px，默认 content-box 下"100% + 60px"就顶出栏宽——482 的竖栏里
+   卡片实测 61px 出安全区。窄栏（inset / portrait 侧栏）全靠这一条才不溢出。 */
+[class^="ui-"],[class*=" ui-"]{box-sizing:border-box;}
 :root{
   --ui-radius: 16px;
   --ui-border: rgba(255,255,255,.10);

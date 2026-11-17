@@ -193,6 +193,7 @@ def build_scene_css(scene_id: str, zone: str, align: str, scale: str, tone: str,
     CANVAS_W, CANVAS_H = 1080, 1920
     MIN_TEXT = 480        # 文字栏最窄宽度：420 时 8 字标题 60px 会折成 7+1（单字成行）
     TARGET_TEXT = 760     # 没有照片冲突时的常规栏宽
+    MIN_TEXT_BAND = 520   # 横带照片让开之后，文字区至少还能剩这么高，否则不算"分带"
     COPY_TOP = 200
     COPY_BOTTOM = CANVAS_H - 300          # 底部 300 留给字幕
     rect = media or {}
@@ -204,7 +205,10 @@ def build_scene_css(scene_id: str, zone: str, align: str, scale: str, tone: str,
         "full":   {"left": 0, "right": 1080, "top": 0, "bottom": 1920},
     }
     slot = rect.get("slot")
-    if slot in SLOT_RECTS:
+    # 2026-11-17：行内矩形是 H02SK 按 role 算出来的（large 840 / inset 620×1280 /
+    # portrait 460×1100 各不相同），只有老页面没写行内数值时才退回这张表覆盖。
+    if slot in SLOT_RECTS and None in (rect.get("left"), rect.get("right"),
+                                      rect.get("top"), rect.get("bottom")):
         rect = dict(SLOT_RECTS[slot])
     m_left = rect.get("left")
     m_right = rect.get("right")
@@ -216,7 +220,15 @@ def build_scene_css(scene_id: str, zone: str, align: str, scale: str, tone: str,
     right_edge = CANVAS_W - SAFE
     # 照片整块落在下方/上方带里（和文字不在同一条水平带上）时不算抢地：
     # 这种版式文字区可以让满宽度，只把纵向让开。
-    band_split = (m_top is not None and m_top >= 880) or (m_bottom is not None and m_bottom <= 900)
+    # 2026-11-17：判据从"top>=880 / bottom<=900"两个死阈值改成"让开之后还剩多少字位"。
+    # 死阈值下，按 role 算出来的 large 横带（例如 720–1560）两头都不满足，会被判成
+    # "照片抢满整宽"，文字被压成 480 窄栏——这是"图片位置放不好"的另一半原因。
+    space_above = space_below = 0
+    band_split = False
+    if None not in (m_left, m_right, m_top, m_bottom) and (m_right - m_left) >= CANVAS_W * 0.95:
+        space_above = m_top - COPY_TOP
+        space_below = COPY_BOTTOM - m_bottom
+        band_split = max(space_above, space_below) >= MIN_TEXT_BAND
     if m_left is not None and m_right is not None and not band_split:
         # 按照片实际占的那半边让位，不要按 zone 猜。
         # 2026-11-15 踩过：zone=right-middle（文字该在右）碰上照片放在左边，
@@ -237,6 +249,7 @@ def build_scene_css(scene_id: str, zone: str, align: str, scale: str, tone: str,
     # 照片和文字真的抢同一块地时：**等比缩小照片**（保比例、保外沿），
     # 不再把它压成一条窄边——2026-11-16 s01 的 930×1280 就是被压成了 397 宽。
     media_fix = ""
+    align_next_to_photo = ""
     if (rect.get("cls") and not band_split
             and None not in (m_left, m_right, m_top, m_bottom)
             and copy_right > m_left and copy_left < m_right):
@@ -277,15 +290,27 @@ def build_scene_css(scene_id: str, zone: str, align: str, scale: str, tone: str,
                          % (sid, rect["cls"], left_new, top_new, w_new, h_new))
 
     # 照片占了下半屏/上半屏时，文字区跟着让到另一半，别在中间和照片对着压。
-    # 让位之后还要把这一半的"内容中心"留在构图硬边界内（640–1160），
-    # 否则文字会被顶到画面顶部、中心掉到 616（2026-11-16 s09 实测）。
-    CENTER_FLOOR = 640
-    if band_split and m_top is not None and m_top >= 880:
-        bottom_px = max(300, CANVAS_H - m_top + GAP)
-        top_px = max(COPY_TOP, CENTER_FLOOR * 2 - bottom_px)
+    # 让位之后还要把这一半的"内容中心"留在构图舒适区内（700–1100）。
+    # 2026-11-17：从 640 抬到 700——抬到硬边界下沿的时候文字虽然没越界，但成片里
+    # 明显偏上（s02 实测 640），舒适区下沿才是应该守的那条线。
+    # 两种方向统一用 space_above / space_below 判，不再各写一条死条件。
+    CENTER_FLOOR = 700
+    if band_split:
+        if space_above >= space_below:                 # 照片在下半，文字在上
+            bottom_px = max(300, CANVAS_H - m_top + GAP)
+            top_px = max(COPY_TOP, CENTER_FLOOR * 2 - (CANVAS_H - bottom_px))
+            # 抬 top 是为了把内容中心拉回 640 以上；只有当空间还够时才能抬，
+            # 否则 780–1620 这种"照片抬高的下带"会被压成 184px 一条（2026-11-17 实测）。
+            if CANVAS_H - top_px - bottom_px < MIN_TEXT_BAND:
+                top_px = COPY_TOP
+        else:                                          # 照片在上半，文字在下
+            top_px = max(COPY_TOP, m_bottom + GAP)
+            bottom_px = CANVAS_H - COPY_BOTTOM
         copy_top, copy_bottom = "%dpx" % top_px, "%dpx" % bottom_px
-    elif band_split and m_bottom is not None and m_bottom <= 900:
-        copy_top = "%dpx" % max(COPY_TOP, m_bottom + GAP)
+        # 文字块贴着自己那张照片，留白放在画面外侧（2026-11-17）：
+        # 居中放的时候，照片在上带的屏文字会一路掉到底、贴住字幕（s07 实测中心 1284），
+        # 照片在下带的屏文字又悬在上方。贴图排之后两行字和图片是一组，外沿留白更像版式。
+        align_next_to_photo = "flex-end" if space_above >= space_below else "flex-start"
 
     # 组件的调色板跟着"这一屏"的 tone 走。
     # components.css 的同一套变量挂在 :root / #stage[data-bg-tone] 上，
@@ -305,7 +330,8 @@ def build_scene_css(scene_id: str, zone: str, align: str, scale: str, tone: str,
 
     fs = _downgrade(SCALES[s], int(chars or 0), width, int(line_chars or 0))
 
-    parts.append("  display:flex;flex-direction:column;justify-content:center;gap:26px;")
+    parts.append("  display:flex;flex-direction:column;justify-content:%s;gap:26px;"
+                 % (align_next_to_photo or "center"))
     parts.append("  text-align:%s;" % a)
     parts.append("  --ui-scale:%s;" % {"hero": "1.8", "large": "1.5", "medium": "1.3", "small": "1.15"}[s])
     if s == "small" and re.search(r"竖排", str(scale or "")):
@@ -328,6 +354,30 @@ def build_scene_css(scene_id: str, zone: str, align: str, scale: str, tone: str,
         parts.append('[data-scene="%s"] .scene-copy .ui-grid{grid-template-columns:1fr;}\n' % sid)
         parts.append('[data-scene="%s"] .scene-copy .ui-steps{flex-direction:column;gap:18px;}\n' % sid)
         parts.append('[data-scene="%s"] .scene-copy .ui-step{padding-top:0;}\n' % sid)
+        # 竖栏只有 480 时，width:fit-content 的组件照内容撑宽就顶出安全区
+        # （2026-11-17 s06 实测：.ui-card 右缘 1044，安全区 990）。窄栏里一律按栏宽排。
+        parts.append('[data-scene="%s"] .scene-copy .ui-card,\n'
+                     '[data-scene="%s"] .scene-copy .ui-grid,\n'
+                     '[data-scene="%s"] .scene-copy .ui-bento,\n'
+                     '[data-scene="%s"] .scene-copy .ui-masonry,\n'
+                     '[data-scene="%s"] .scene-copy .ui-swipe,\n'
+                     '[data-scene="%s"] .scene-copy .ui-timeline,\n'
+                     '[data-scene="%s"] .scene-copy .ui-file,\n'
+                     '[data-scene="%s"] .scene-copy .ui-form,\n'
+                     '[data-scene="%s"] .scene-copy .ui-toc,\n'
+                     '[data-scene="%s"] .scene-copy .ui-price,\n'
+                     '[data-scene="%s"] .scene-copy .ui-map'
+                     '{width:100%%!important;max-width:100%%!important;min-width:0;}\n'
+                     % ((sid,) * 11))
+    # 网格/弹性容器的子项默认 min-width:auto，内容一长就顶破栏宽：
+    # 482 的竖栏里 .ui-card 的正文把整块撑到 632，"退成单列"也救不回来（2026-11-17 s06 实测）。
+    # 子项允许收缩，文字才会按栏宽换行。
+    parts.append('[data-scene="%s"] .scene-copy .ui-grid > *,\n'
+                 '[data-scene="%s"] .scene-copy .ui-bento > *,\n'
+                 '[data-scene="%s"] .scene-copy .ui-masonry > *,\n'
+                 '[data-scene="%s"] .scene-copy .ui-swipe > *,\n'
+                 '[data-scene="%s"] .scene-copy .ui-timeline > *{min-width:0;}\n'
+                 % (sid, sid, sid, sid, sid))
     parts.append('[data-scene="%s"]{--font-stack:"PingFang SC","Microsoft YaHei","Noto Sans CJK SC","Source Han Sans SC","Hiragino Sans GB",sans-serif;}\n' % sid)
 
     def rule(role, size, weight, color, extra=""):

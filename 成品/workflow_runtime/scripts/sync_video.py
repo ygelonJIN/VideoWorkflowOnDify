@@ -2087,10 +2087,11 @@ def inject_layout_composer(document: str) -> str:
         tag = media_tag.group(0)
         # 2026-11-16：新版渲染器把照片框写成行内 style + data-media-slot，
         # 不再有 CSS 类规则可反查。先认这两种，别让版面以为"没有照片"。
-        slot = re.search(r'data-media-slot="(top|bottom|left|right|full|texture)"', tag)
-        if slot:
-            return {"slot": slot.group(1), "cls": None,
-                    "left": None, "right": None, "top": None, "bottom": None}
+        # 2026-11-17：行内矩形优先。以前先把槽位名交出去、由 layout_composer 查表覆盖，
+        # 等于把 H02SK 按 role 算出的矩形丢掉，large/inset/portrait 全落回 1080×760 通栏。
+        # 现在槽位名只留两个用途：没有行内数值时退回查表、判断要不要做边缘渐隐。
+        slot = re.search(r'data-media-slot="([a-zA-Z-]+)"', tag)
+        slot_name = slot.group(1) if slot else None
         inline = re.search(r'style="([^"]*)"', tag)
         if inline:
             style = inline.group(1)
@@ -2101,7 +2102,10 @@ def inject_layout_composer(document: str) -> str:
             w, h = num_attr("width"), num_attr("height")
             if None not in (left, top, w, h):
                 return {"cls": None, "left": left, "right": left + w,
-                        "top": top, "bottom": top + h, "slot": None}
+                        "top": top, "bottom": top + h, "slot": slot_name}
+        if slot_name:
+            return {"slot": slot_name, "cls": None,
+                    "left": None, "right": None, "top": None, "bottom": None}
         cls = re.search(r'class="([^"]+)"', tag)
         if not cls:
             return None
