@@ -207,7 +207,13 @@ const report = await page.evaluate(() => {
       const style=getComputedStyle(el);
       return style.display !== 'none' && style.visibility !== 'hidden' && Number(style.opacity) > 0.05;
     });
-    const mainRects = [...textLeaves.map(rect), ...components.map(rect)];
+    // 2026-11-18：照片也要量。以前 bounds 只含文字和带底色的组件，
+    // 照片贴着画布边、甚至出画布，报告永远是干净的。
+    const mediaEls = [...scene.querySelectorAll('[data-anim="media"]')].filter(el => {
+      const r = rect(el);
+      return r.width > 2 && r.height > 2;
+    });
+    const mainRects = [...textLeaves.map(rect), ...components.map(rect), ...mediaEls.map(rect)];
     if (mainRects.length) {
       const bounds = {
         top:Math.min(...mainRects.map(r=>r.top)), bottom:Math.max(...mainRects.map(r=>r.bottom)),
@@ -220,8 +226,11 @@ const report = await page.evaluate(() => {
         offCanvasScenes.push(scene.dataset.scene || scene.id);
         warnings.push(`${scene.dataset.scene || scene.id}: 内容出画布（上 ${bounds.top.toFixed(0)}、下 ${bounds.bottom.toFixed(0)}，画布 0–1920）`);
       }
-      const safeMissed = bounds.left < 90 - 1 || bounds.right > 1080 - 90 + 1 || bounds.top < 200 - 1 || bounds.bottom > 1920 - 300 + 1;
-      if (safeMissed) warnings.push(`${scene.dataset.scene}: 内容越出安全区（左 ${bounds.left.toFixed(0)}、右 ${bounds.right.toFixed(0)}、上 ${bounds.top.toFixed(0)}、下 ${bounds.bottom.toFixed(0)}；安全区 左右 90–990、上 200、下 1620）`);
+      // 一栏式安全区（2026-11-18 定）：左右 120（120–960）、上 150、内容底线 1533。
+      // 字幕带 1549–1670 不参与判定——字幕本来就在内容之外。
+      const SAFE_L = 120, SAFE_R = 960, SAFE_T = 150, SAFE_B = 1533;
+      const safeMissed = bounds.left < SAFE_L - 1 || bounds.right > SAFE_R + 1 || bounds.top < SAFE_T - 1 || bounds.bottom > SAFE_B + 1;
+      if (safeMissed) warnings.push(`${scene.dataset.scene}: 内容越出安全区（左 ${bounds.left.toFixed(0)}、右 ${bounds.right.toFixed(0)}、上 ${bounds.top.toFixed(0)}、下 ${bounds.bottom.toFixed(0)}；安全区 左右 120–960、上 150、下 1533）`);
       sceneMetrics.push({scene:scene.dataset.scene, top:Number(bounds.top.toFixed(1)), bottom:Number(bounds.bottom.toFixed(1)), center:Number(center.toFixed(1))});
     } else {
       sceneMetrics.push({scene:scene.dataset.scene, top:null, bottom:null, center:null});

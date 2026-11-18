@@ -28,16 +28,19 @@ INK = {
 
 # left/right/top/bottom/width/transform/text-align 的来源
 ZONES = {
-    "top":             {"left": 90, "top": "200px", "width": 900},
-    "upper-left":      {"left": 90, "top": "22%",   "width": 780},
-    "left-middle":     {"left": 90, "top": "50%",   "width": 780, "ty": "-50%"},
-    "lower-left":      {"left": 90, "bottom": "28%", "width": 780},
-    "bottom-band":     {"left": 90, "bottom": "22%", "width": 900},
-    "right-middle":    {"right": 90, "top": "50%",  "width": 700, "ty": "-50%"},
-    "upper-right":     {"right": 90, "top": "22%",  "width": 700},
-    "lower-right":     {"right": 90, "bottom": "28%", "width": 700},
-    "center":          {"left": 90, "top": "50%",   "width": 900, "ty": "-50%"},
-    "full-bleed-edge": {"left": 90, "top": "20%",   "width": 900},
+    # 一栏式（2026-11-18 定）：所有版面只有一栏，左 120、宽 840。
+    # zone 不再决定宽度和左右摆放，只保留名字给上游继续写；
+    # 真正生效的是「照片在上还是在下」+「整块在 150–1533 之间垂直居中」。
+    "top":             {"left": 120, "top": "150px", "width": 840},
+    "upper-left":      {"left": 120, "top": "150px", "width": 840},
+    "left-middle":     {"left": 120, "top": "150px", "width": 840},
+    "lower-left":      {"left": 120, "top": "150px", "width": 840},
+    "bottom-band":     {"left": 120, "top": "150px", "width": 840},
+    "right-middle":    {"left": 120, "top": "150px", "width": 840},
+    "upper-right":     {"left": 120, "top": "150px", "width": 840},
+    "lower-right":     {"left": 120, "top": "150px", "width": 840},
+    "center":          {"left": 120, "top": "150px", "width": 840},
+    "full-bleed-edge": {"left": 120, "top": "150px", "width": 840},
 }
 
 # 组件（U 系列）的调色板：跟着"这一屏"的明暗走，不跟根节点。
@@ -70,17 +73,25 @@ UI_VARS = {
 PRIMARY_ORDER = ("title", "num", "lead", "body", "note", "label", "accent")
 
 # 单条文字的设计上限（px）。不是档位，是"再大就成海报了"的常识边界。
-ROLE_CEIL = {"title": 200, "num": 260, "lead": 132, "body": 104,
-             "note": 76, "label": 76, "accent": 116}
+ROLE_CEIL = {"title": 150, "num": 150, "lead": 120, "body": 80,
+             "note": 60, "label": 60, "accent": 100}
 # 可读下沿。竖屏字幕 45px，任何正文都不能比它小。
-ROLE_FLOOR = {"title": 76, "num": 76, "lead": 48, "body": 46,
-              "note": 42, "label": 42, "accent": 48}
+ROLE_FLOOR = {"title": 80, "num": 80, "lead": 60, "body": 50,
+              "note": 46, "label": 46, "accent": 60}
 # 主副关系：副字号 = 主字号 × 相对比例。缺 title 时主角色自动变成 lead/body，
 # 所以"模型漏写 title → 整屏只有 36px"这条路径不存在了。
-ROLE_REL = {"title": 1.00, "num": 1.00, "lead": 1.00, "body": 0.80,
-            "note": 0.66, "label": 0.66, "accent": 0.90}
+ROLE_REL = {"title": 1.00, "num": 1.00, "lead": 0.90, "body": 0.60,
+            "note": 0.50, "label": 0.50, "accent": 0.70}
+
+# 标题档位（2026-11-18 定）：150 → 80 六档。一屏一档，装不下就降一档，
+# 不再由栏宽连续反算——栏宽永远是一栏 840，字号只跟内容多少有关。
+# 120 是标准档；短标题（≤8 字）先试 150；装不下就 105→90→80 往下降，
+# 内容少不放大——「再空也用这个」。
+TITLE_STEPS = (120, 105, 90, 80)
+TITLE_BIG = 150
+TITLE_BIG_LIMIT = 8   # 几个字以内才允许上 150
 GAP = 26                      # 与 .scene-copy 的 gap 一致
-ANCHOR_FLOOR = 88             # 整屏视觉锚的下沿：一屏里最大的字至少要这么大，否则竖屏读不出重点
+ANCHOR_FLOOR = 80             # 整屏视觉锚的下沿：一屏里最大的字至少要这么大，否则竖屏读不出重点
 
 
 
@@ -130,18 +141,26 @@ def _line_height(size: int) -> float:
     return 1.08 if size >= 120 else 1.2
 
 
-def solve_scale(roles: dict, width: int, avail_h: float) -> dict:
-    """roles: {"title": {"units": 8, "segs": []}, ...} → {"title": 112, ...}
+def _lines_needed(units: int, width: int, size: int, segs=None) -> int:
+    per = max(1, int(width / float(max(1, size))))
+    if segs:
+        return sum(max(1, -(-int(u) // per)) for u in segs)
+    return max(1, -(-int(units) // per))
 
-    步骤：每条按自己字数填满栏宽 → 主副比例压副标题 → 整块高度装不下就等比收（不低于下沿）。
-    没有一步依赖"这句话里有没有出现某个词"。
+
+def solve_scale(roles: dict, width: int, avail_h: float) -> dict:
+    """一栏式字号：在 150→80 六档里选「装得下的最大一档」。
+
+    2026-11-18 定：不再由栏宽连续反算（那会让同一部片出现 88/120/150/180 五级跳），
+    也不再叠「正文 = 标题 × 比例」和「标题 ≤ 副角色 × 2.4」两道压制。
+    唯一依据：这一屏的可用高度（已扣照片和间距）+ 文字占几个字。
     """
     items = {}
     for role, data in (roles or {}).items():
         if role not in ROLE_CEIL or not isinstance(data, dict):
             continue
         units = data.get("units")
-        if units is None:                       # 原始文案：占几个字宽由这里算，不在上游算
+        if units is None:
             units = _em_units(data.get("text") or "")
         units = int(units or 0)
         if units <= 0:
@@ -149,61 +168,59 @@ def solve_scale(roles: dict, width: int, avail_h: float) -> dict:
         segs = data.get("segs")
         if segs is None:
             segs = [_em_units(part) for part in (data.get("lines") or []) if str(part or "").strip()]
-            if len(segs) < 2:                   # 只有一段 = 没有硬换行
+            if len(segs) < 2:
                 segs = []
         segs = [int(x) for x in segs if int(x) > 0]
-        items[role] = {"units": units, "segs": segs,
-                       "seg_max": max(segs) if segs else 0}
+        items[role] = {"units": units, "segs": segs}
+
     if not items:
         return {role: ROLE_FLOOR[role] for role in ROLE_CEIL}
 
     primary = next((r for r in PRIMARY_ORDER if r in items), None) or next(iter(items))
-    out = {}
-    for role, data in items.items():
-        out[role] = _size_for(role, data["units"], data["seg_max"], width)
-    # 主字号不许把小字甩开太远：主字号 ≤ 副角色里最大的那条 × 2.4。
-    # 2026-11-17 实测：s04 的 body 写了 <br>，最长一行 10 字在 482 栏里最多 48px，
-    # 标题照算能到 200px——同一屏 200px 标题配 48px 正文，看起来就是两屏拼在一起。
-    # 这一条只压主字号，不抬副字号（副字号受几何硬约束，抬不动）。
-    out[primary] = _clamp(max(out[primary], ANCHOR_FLOOR),
-                          ROLE_FLOOR.get(primary, 76), ROLE_CEIL.get(primary, 200))
-    _others = [v for k, v in out.items() if k != primary]
-    if _others:
-        out[primary] = _clamp(min(out[primary], max(_others) * 2.4),
-                              ROLE_FLOOR.get(primary, 76), ROLE_CEIL.get(primary, 200))
-    # 主副：副字号不超过 主字号 × 相对比例，避免"引子和标题一样大"
-    base_rel = ROLE_REL.get(primary, 1.0)
-    for role in list(out):
-        if role == primary:
-            continue
-        share = out[primary] * float(ROLE_REL.get(role, 0.8)) / max(1e-6, base_rel)
-        out[role] = _clamp(min(out[role], share),
-                           ROLE_FLOOR.get(role, 46), ROLE_CEIL.get(role, 200))
-    # 高度收敛：装不下就整块收，但绝不低于可读下沿（宁可多折一行）
-    for _ in range(24):
+
+    # 一行至少放得下 5 个字：窄栏（左右并排时 472）自动降档，
+    # 不然 120px 的标题在 472 宽里每行只有 3 个字，「人生不 / 是等着 / 社会盖」这种折行没法看。
+    width_cap = max(ROLE_FLOOR.get(primary, 80), int(width // 5))
+
+    def build(title_size: int) -> dict:
+        title_size = min(title_size, width_cap)
+        out = {primary: title_size}
+        for role in items:
+            if role == primary:
+                continue
+            share = title_size * float(ROLE_REL.get(role, 0.6))
+            out[role] = _clamp(share, ROLE_FLOOR.get(role, 46), ROLE_CEIL.get(role, 200))
+        return out
+
+    def height_of(sizes: dict) -> float:
         total = GAP * max(0, len(items) - 1)
         for role, data in items.items():
-            size = out[role]
-            total += _lines_of(data["units"], data["segs"], width, size) * size * _line_height(size)
-        if total <= avail_h:
-            break
-        shrunk = False
-        for role in out:
-            floor = ROLE_FLOOR.get(role, 46)
-            nxt = _clamp(int(out[role] * 0.94), floor, ROLE_CEIL.get(role, 200))
-            if nxt < out[role]:
-                out[role] = nxt
-                shrunk = True
-        if not shrunk:
-            break
-    # 这一屏没出现的角色也给一个值：CSS 依旧按 7 个角色出规则，只是没人用到
-    base = out.get(primary) or ROLE_FLOOR["title"]
-    for role, ceil_v in ROLE_CEIL.items():
-        if role in out:
+            size = sizes[role]
+            total += _lines_needed(data["units"], width, size, data["segs"]) * size * _line_height(size)
+        return total
+
+    chosen = None
+    primary_units = items[primary]["units"] if primary in items else 0
+    if primary_units <= TITLE_BIG_LIMIT:
+        big = build(TITLE_BIG)
+        if height_of(big) <= avail_h:
+            chosen = big
+    if chosen is None:
+        for step in TITLE_STEPS:
+            candidate = build(step)
+            if height_of(candidate) <= avail_h:
+                chosen = candidate
+                break
+    if chosen is None:
+        chosen = build(ROLE_FLOOR.get(primary, 80))
+
+    base = chosen[primary]
+    for role in ROLE_CEIL:
+        if role in chosen:
             continue
-        out[role] = _clamp(base * float(ROLE_REL.get(role, 0.8)) / max(1e-6, base_rel),
-                           ROLE_FLOOR.get(role, 46), ceil_v)
-    return out
+        chosen[role] = _clamp(base * float(ROLE_REL.get(role, 0.6)),
+                              ROLE_FLOOR.get(role, 46), ROLE_CEIL.get(role, 200))
+    return chosen
 
 
 # 每个 zone 的文字框"估算顶边"。只有它落在数字人小窗的竖直范围内（< 小窗底边）时，
@@ -284,14 +301,14 @@ def build_scene_css(scene_id: str, zone: str, align: str, scale: str, tone: str,
     # 文字区占满可用高度（顶 200 / 底 300 字幕区），但要先给照片让位：
     # 照片是绝对定位的一块矩形，文字区必须落在它的另一侧，否则必然压上去。
     # 2026-11-15：s03/s04/s06 全是"文字叠在照片上"，就是因为版面不知道照片在哪。
-    SAFE = 90
+    SAFE = 120
     GAP = 48
     CANVAS_W, CANVAS_H = 1080, 1920
-    MIN_TEXT = 480        # 文字栏最窄宽度：420 时 8 字标题 60px 会折成 7+1（单字成行）
-    TARGET_TEXT = 760     # 没有照片冲突时的常规栏宽
+    MIN_TEXT = 460        # 文字栏最窄宽度（左右并排时文字栏）：420 时 8 字标题 60px 会折成 7+1（单字成行）
+    TARGET_TEXT = 840     # 一栏式：文字栏就是整条内容区
     MIN_TEXT_BAND = 520   # 横带照片让开之后，文字区至少还能剩这么高，否则不算"分带"
-    COPY_TOP = 200
-    COPY_BOTTOM = CANVAS_H - 300          # 底部 300 留给字幕
+    COPY_TOP = 150
+    COPY_BOTTOM = 1533                    # 内容底线 y=1533：字幕带 1549–1670 一律不碰
     rect = media or {}
     SLOT_RECTS = {
         "top":    {"left": 0, "right": 1080, "top": 0, "bottom": 760},
@@ -325,7 +342,8 @@ def build_scene_css(scene_id: str, zone: str, align: str, scale: str, tone: str,
     # 2026-11-17：横带判据从 95% 画幅放宽到 80%。照片档位改成小尺寸后，
     # 通栏横带是 900 宽（83%），按 95% 判就不再算"分带"，文字被推进旁边一条窄栏——
     # 图变小了、字反而更挤，正好反着。
-    if has_media and (m_right - m_left) >= CANVAS_W * 0.80:
+    # 一栏式：照片宽度就是内容栏宽 840（= 1080 - 120×2），判据按可用宽度算，不再按画幅 80%。
+    if has_media and (m_right - m_left) >= (CANVAS_W - SAFE * 2) - 2:
         space_above = m_top - COPY_TOP
         space_below = COPY_BOTTOM - m_bottom
         band_split = max(space_above, space_below) >= MIN_TEXT_BAND
@@ -449,26 +467,27 @@ def build_scene_css(scene_id: str, zone: str, align: str, scale: str, tone: str,
     # 明显偏上（s02 实测 640），舒适区下沿才是应该守的那条线。
     # 两种方向统一用 space_above / space_below 判，不再各写一条死条件。
     CENTER_FLOOR = 700
+    # 一栏式（2026-11-18 定）：文字只占「照片之外的那一段」，整块在这一段里垂直居中。
+    # 不再贴图排、不再按舒适区抬顶——上下留白由居中自动算出来。
     if band_split:
-        if space_above >= space_below:                 # 照片在下半，文字在上
-            bottom_px = max(300, CANVAS_H - m_top + GAP)
-            top_px = max(COPY_TOP, CENTER_FLOOR * 2 - (CANVAS_H - bottom_px))
-            # 抬 top 是为了把内容中心拉回 640 以上；只有当空间还够时才能抬，
-            # 否则 780–1620 这种"照片抬高的下带"会被压成 184px 一条（2026-11-17 实测）。
-            if CANVAS_H - top_px - bottom_px < MIN_TEXT_BAND:
-                top_px = COPY_TOP
-        else:                                          # 照片在上半，文字在下
-            top_px = max(COPY_TOP, m_bottom + GAP)
-            bottom_px = CANVAS_H - COPY_BOTTOM
-        copy_top, copy_bottom = "%dpx" % top_px, "%dpx" % bottom_px
-        # 数字人小窗：文字带在上方（照片在下带）时，右上角同样要让开。
+        if space_above >= space_below:                 # 照片在下带，文字在上带
+            band_top_px = COPY_TOP
+            band_bottom_px = m_top - GAP
+        else:                                          # 照片在上带，文字在下带
+            band_top_px = m_bottom + GAP
+            band_bottom_px = COPY_BOTTOM
         if pip_rect and space_above >= space_below:
             narrow_for_pip()
-        # 文字块贴着自己那张照片，留白放在画面外侧（2026-11-17）：
-        # 居中放的时候，照片在上带的屏文字会一路掉到底、贴住字幕（s07 实测中心 1284），
-        # 照片在下带的屏文字又悬在上方。贴图排之后两行字和图片是一组，外沿留白更像版式。
-        align_next_to_photo = "flex-end" if space_above >= space_below else "flex-start"
-        anchor = "bottom" if space_above >= space_below else "top"
+    else:
+        band_top_px, band_bottom_px = COPY_TOP, COPY_BOTTOM
+    band_top_px = int(round(band_top_px))
+    band_bottom_px = int(round(band_bottom_px))
+    if band_bottom_px - band_top_px < 240:             # 照片太大把文字带压没了：保底 240
+        band_bottom_px = min(COPY_BOTTOM, band_top_px + 240)
+    copy_top = "%dpx" % band_top_px
+    copy_bottom = "%dpx" % (CANVAS_H - band_bottom_px)
+    align_next_to_photo = "center"
+    anchor = "center"
 
     # 2026-11-17：文字容器不再撑满整条带。以前 top/bottom 同时钉死，容器永远是
     # 780×1420（或 760×1420），柔光底衬照着容器画，就成了"占屏 80%、字只占中间一小条"
@@ -482,13 +501,13 @@ def build_scene_css(scene_id: str, zone: str, align: str, scale: str, tone: str,
         anchor = "top"
     band_top = int(str(copy_top).replace("px", ""))
     band_bottom = int(str(copy_bottom).replace("px", ""))
-    if anchor == "top":
+    if anchor == "center":
+        # 一栏式：容器撑满文字带，内容在带内垂直居中（内容多时自动等同顶对齐）
+        copy_vpos = "  top:%dpx; height:%dpx;" % (band_top, max(240, (CANVAS_H - band_bottom) - band_top))
+    elif anchor == "top":
         copy_vpos = "  top:%dpx;" % band_top
-    elif anchor == "bottom":
-        copy_vpos = "  bottom:%dpx;" % band_bottom
     else:
-        band_center = (band_top + (CANVAS_H - band_bottom)) / 2.0
-        copy_vpos = "  top:%dpx;transform:translateY(-50%%);" % int(round(band_center))
+        copy_vpos = "  bottom:%dpx;" % band_bottom
 
     # 组件的调色板跟着"这一屏"的 tone 走。
     # components.css 的同一套变量挂在 :root / #stage[data-bg-tone] 上，

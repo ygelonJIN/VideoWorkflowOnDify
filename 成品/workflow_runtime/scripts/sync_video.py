@@ -2197,7 +2197,10 @@ def inject_layout_composer(document: str) -> str:
     # 数字人小窗：位置与尺寸的唯一定义是 H01Z 写进 #stage 的 --pip-* 变量。
     # 没有 avatar 占位就没有小窗，04 黑帧线一律拿到 None（版面逻辑一行都不变）。
     def _avatar_avoid() -> dict | None:
-        if not re.search(r'data-video-role="avatar"', document, re.I):
+        # 只认"元素上"的 avatar 属性。以前匹配任意出现，连一条 CSS 选择器
+        # `[data-video-role="avatar"]{...}` 也算命中，黑帧线被当成有数字人小窗，
+        # 每屏文字被小窗挤掉 240px 宽（2026-11-18 实测 s01 从 840 被压到 598）。
+        if not re.search(r'<[^>]+data-video-role="avatar"', document, re.I):
             return None
 
         def read(name: str, default: int) -> int:
