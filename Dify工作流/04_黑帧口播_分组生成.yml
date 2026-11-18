@@ -134,93 +134,18 @@ workflow:
       targetPosition: left
       width: 310
       height: 155
-    - id: a02
-      type: custom
-      data:
-        type: code
-        title: A02_解析整理结果
-        code_language: python3
-        code: "def main(structured_input_text: str) -> dict:\n    import json\n    import re\n\n    raw = str(structured_input_text or \"\").strip()\n    cleaned = re.sub(r\"^```(?:json)?\\s*|\\s*```$\", \"\", raw, flags=re.I)\n    data = {}\n    try:\n        parsed = json.loads(cleaned)\n        if isinstance(parsed, dict):\n            data = parsed\n    except Exception:\n        start, end = cleaned.find(\"{\"), cleaned.rfind(\"}\")\n        if start >= 0 and end > start:\n            try:\n                parsed = json.loads(cleaned[start:end + 1])\n                if isinstance(parsed, dict):\n                    data = parsed\n            except Exception:\n                data = {}\n\n    def obj(value):\n        if isinstance(value, dict):\n            return value\n        if isinstance(value, str):\n            try:\n                parsed = json.loads(value)\n                return parsed if isinstance(parsed, dict) else {}\n            except Exception:\n                return {}\n        return {}\n\n    def str_list(value):\n        if not isinstance(value, list):\n            return []\n        return [str(item).strip() for item in value if str(item).strip()]\n\n    topic_record = obj(data.get(\"topic_record\") or data.get(\"campaign\"))\n    distill_raw = obj(data.get(\"distill\"))\n    creative = obj(data.get(\"creative\"))\n    context = obj(data.get(\"context\") or data.get(\"brand\"))\n    history = obj(data.get(\"history\"))\n\n    topic = str(topic_record.get(\"topic\") or topic_record.get(\"source_text\") or raw or \"当前主题\").strip()\n    source_text = str(topic_record.get(\"source_text\") or raw or topic).strip()\n\n    arguments = []\n    for index, item in enumerate(distill_raw.get(\"arguments\") or []):\n        if not isinstance(item, dict):\n            continue\n        claim = str(item.get(\"claim\") or \"\").strip()\n        if not claim:\n            continue\n        arguments.append({\n            \"id\": str(item.get(\"id\") or \"a%d\" % (index + 1)).strip(),\n            \"claim\": claim,\n            \"evidence\": str(item.get(\"evidence\") or \"\").strip(),\n            \"support\": str(item.get(\"support\") or \"none\").strip(),\n            \"strength\": str(item.get(\"strength\") or \"medium\").strip(),\n        })\n    seen_ids = set()\n    for argument in arguments:\n        while argument[\"id\"] in seen_ids:\n            argument[\"id\"] = argument[\"id\"] + \"_dup\"\n        seen_ids.add(argument[\"id\"])\n\n    thesis = str(distill_raw.get(\"thesis\") or \"\").strip()\n    if not thesis:\n        thesis = topic\n    distill = {\n        \"source_form\": str(distill_raw.get(\"source_form\") or \"\").strip() or \"mixed\",\n        \"thesis\": thesis,\n        \"thesis_source\": str(distill_raw.get(\"thesis_source\") or \"\").strip() or \"inferred_from_facts\",\n        \"thesis_type\": str(distill_raw.get(\"thesis_type\") or \"\").strip() or \"judgment\",\n        \"arguments\": arguments,\n        \"counterpoints\": str_list(distill_raw.get(\"counterpoints\")),\n        \"dropped\": str_list(distill_raw.get(\"dropped\")),\n        \"open_questions\": str_list(distill_raw.get(\"open_questions\")),\n    }\n\n    campaign = {\n        \"topic\": topic,\n        \"source_text\": source_text,\n        \"audience_hint\": str(topic_record.get(\"audience_hint\") or topic_record.get(\"audience\") or \"\").strip(),\n        \"context\": obj(topic_record.get(\"context\")),\n        \"facts_confirmed\": topic_record.get(\"facts_confirmed\") if isinstance(topic_record.get(\"facts_confirmed\"), list) else [],\n        \"constraints\": topic_record.get(\"constraints\") if isinstance(topic_record.get(\"constraints\"), list) else [],\n        \"duration_seconds\": topic_record.get(\"duration_seconds\", 30),\n        \"distill\": distill,\n    }\n    for key in (\"brand\", \"product\", \"audience\", \"pain\", \"offer\", \"cta\", \"tone\", \"platform\", \"proof\"):\n        value = topic_record.get(key)\n        if value not in (None, \"\", [], {}):\n            campaign[key] = value\n\n    return {\n        \"campaign_json\": json.dumps(campaign, ensure_ascii=False),\n        \"creative_json\": json.dumps(creative, ensure_ascii=False),\n        \"brand_json\": json.dumps(context, ensure_ascii=False),\n        \"history_json\": json.dumps(history, ensure_ascii=False)\n    }"
-        variables:
-        - variable: structured_input_text
-          value_selector:
-          - a01
-          - text
-          value_type: string
-        outputs:
-          campaign_json:
-            type: string
-            children: null
-          creative_json:
-            type: string
-            children: null
-          brand_json:
-            type: string
-            children: null
-          history_json:
-            type: string
-            children: null
-      position:
-        x: 705
-        y: 335
-      positionAbsolute:
-        x: 705
-        y: 335
-      sourcePosition: right
-      targetPosition: left
-      width: 270
-      height: 158
     - id: a03
       type: custom
       data:
         type: code
         title: A03_标准化Brief
         code_language: python3
-        code: "def main(campaign_json: str, creative_json: str, brand_json: str, history_json: str) -> dict:\n    import json\n    import re\n\n    def load(value, fallback):\n        try:\n            parsed = json.loads(value or \"\")\n            return parsed if isinstance(parsed, dict) else fallback\n        except Exception:\n            return fallback\n\n    campaign = load(campaign_json, {})\n    creative = load(creative_json, {})\n    context = load(brand_json, {})\n    history = load(history_json, {})\n\n    topic = str(campaign.get(\"topic\") or campaign.get(\"source_text\") or campaign.get(\"product\") or campaign.get(\"brand\") or \"当前主题\").strip()\n    source_text = str(campaign.get(\"source_text\") or topic).strip()\n    audience_hint = str(campaign.get(\"audience_hint\") or campaign.get(\"audience\") or \"\").strip()\n    facts_confirmed = campaign.get(\"facts_confirmed\") if isinstance(campaign.get(\"facts_confirmed\"), list) else []\n    constraints = campaign.get(\"constraints\") if isinstance(campaign.get(\"constraints\"), list) else []\n    normalization_warnings = []\n    if not str(campaign.get(\"topic\") or \"\").strip():\n        normalization_warnings.append(\"topic 缺失，已使用 source_text/当前主题作为主题\")\n\n    distill = campaign.get(\"distill\") if isinstance(campaign.get(\"distill\"), dict) else {}\n    arguments = [item for item in (distill.get(\"arguments\") or []) if isinstance(item, dict) and str(item.get(\"claim\") or \"\").strip()]\n    thesis = str(distill.get(\"thesis\") or \"\").strip()\n    source_form = str(distill.get(\"source_form\") or \"\").strip() or \"mixed\"\n    if not thesis:\n        thesis = topic\n        normalization_warnings.append(\"distill.thesis 缺失，已回落到主题句\")\n    if not arguments:\n        normalization_warnings.append(\"distill.arguments 为空，本次只能按单一论点展开\")\n    distill = {\n        \"source_form\": source_form,\n        \"thesis\": thesis,\n        \"thesis_source\": str(distill.get(\"thesis_source\") or \"\").strip() or \"inferred_from_facts\",\n        \"thesis_type\": str(distill.get(\"thesis_type\") or \"\").strip() or \"judgment\",\n        \"arguments\": arguments,\n        \"counterpoints\": [str(item).strip() for item in (distill.get(\"counterpoints\") or []) if str(item).strip()],\n        \"dropped\": [str(item).strip() for item in (distill.get(\"dropped\") or []) if str(item).strip()],\n        \"open_questions\": [str(item).strip() for item in (distill.get(\"open_questions\") or []) if str(item).strip()],\n    }\n    argument_count = len(distill[\"arguments\"])\n    source_chars = len(re.sub(r\"\\s+\", \"\", source_text))\n\n    raw_duration = str(campaign.get(\"duration_seconds\") or \"\").strip()\n    duration = 0.0\n    if raw_duration:\n        try:\n            duration = max(1.0, float(raw_duration))\n        except Exception:\n            duration = 0.0\n    if duration <= 0:\n        duration = 30.0\n        normalization_warnings.append(\"未指定时长，编排参考时长取 30 秒；最终以真实口播为准\")\n\n    brief = {\n        \"topic\": topic,\n        \"source_text\": source_text,\n        \"source_chars\": source_chars,\n        \"audience_hint\": audience_hint,\n        \"context\": context,\n        \"facts_confirmed\": facts_confirmed,\n        \"constraints\": constraints,\n        \"creative\": creative,\n        \"history\": history,\n        \"distill\": distill,\n        \"argument_count\": argument_count,\n        \"language\": \"zh-CN\",\n        \"aspect_ratio\": \"9:16\",\n        \"resolution\": \"1080x1920\",\n        \"fps\": 25,\n        \"target_duration_seconds\": duration,\n        \"normalization_warnings\": normalization_warnings,\n        \"hard_rules\": {\n            \"one_angle_per_video\": True,\n            \"voice_chars_per_second\": 4.2,\n            \"caption_unit\": \"complete_sentence\",\n            \"content_assumptions\": \"none\",\n            \"argument_spine\": True,\n            \"no_chronology_retelling\": True,\n            \"source_text_is_material_only\": True,\n            \"duration_is_reference_only\": True,\n            \"no_length_quota\": True,\n        }\n    }\n    for key in (\"brand\", \"product\", \"audience\", \"pain\", \"offer\", \"cta\", \"tone\", \"platform\", \"proof\"):\n        value = campaign.get(key)\n        if value not in (None, \"\", [], {}):\n            brief[key] = value\n\n    normalized_text = re.sub(r\"\\s+\", \"\", source_text).lower()\n    return {\n        \"brief_json\": json.dumps(brief, ensure_ascii=False),\n        \"target_duration_seconds\": duration,\n        \"proof_fingerprint\": normalized_text,\n        \"validation_ok\": True\n    }"
+        code: "def main(structured_input_text: str) -> dict:\n    import json\n    import re\n\n    # ---- 前半：A02 的解析（原本是独立节点，2026-11-18 并进来）----\n    import json\n    import re\n\n    raw = str(structured_input_text or \"\").strip()\n    cleaned = re.sub(r\"^```(?:json)?\\s*|\\s*```$\", \"\", raw, flags=re.I)\n    data = {}\n    try:\n        parsed = json.loads(cleaned)\n        if isinstance(parsed, dict):\n            data = parsed\n    except Exception:\n        start, end = cleaned.find(\"{\"), cleaned.rfind(\"}\")\n        if start >= 0 and end > start:\n            try:\n                parsed = json.loads(cleaned[start:end + 1])\n                if isinstance(parsed, dict):\n                    data = parsed\n            except Exception:\n                data = {}\n\n    def obj(value):\n        if isinstance(value, dict):\n            return value\n        if isinstance(value, str):\n            try:\n                parsed = json.loads(value)\n                return parsed if isinstance(parsed, dict) else {}\n            except Exception:\n                return {}\n        return {}\n\n    def str_list(value):\n        if not isinstance(value, list):\n            return []\n        return [str(item).strip() for item in value if str(item).strip()]\n\n    topic_record = obj(data.get(\"topic_record\") or data.get(\"campaign\"))\n    distill_raw = obj(data.get(\"distill\"))\n    creative = obj(data.get(\"creative\"))\n    context = obj(data.get(\"context\") or data.get(\"brand\"))\n    history = obj(data.get(\"history\"))\n\n    topic = str(topic_record.get(\"topic\") or topic_record.get(\"source_text\") or raw or \"当前主题\").strip()\n    source_text = str(topic_record.get(\"source_text\") or raw or topic).strip()\n\n    arguments = []\n    for index, item in enumerate(distill_raw.get(\"arguments\") or []):\n        if not isinstance(item, dict):\n            continue\n        claim = str(item.get(\"claim\") or \"\").strip()\n        if not claim:\n            continue\n        arguments.append({\n            \"id\": str(item.get(\"id\") or \"a%d\" % (index + 1)).strip(),\n            \"claim\": claim,\n            \"evidence\": str(item.get(\"evidence\") or \"\").strip(),\n            \"support\": str(item.get(\"support\") or \"none\").strip(),\n            \"strength\": str(item.get(\"strength\") or \"medium\").strip(),\n        })\n    seen_ids = set()\n    for argument in arguments:\n        while argument[\"id\"] in seen_ids:\n            argument[\"id\"] = argument[\"id\"] + \"_dup\"\n        seen_ids.add(argument[\"id\"])\n\n    thesis = str(distill_raw.get(\"thesis\") or \"\").strip()\n    if not thesis:\n        thesis = topic\n    distill = {\n        \"source_form\": str(distill_raw.get(\"source_form\") or \"\").strip() or \"mixed\",\n        \"thesis\": thesis,\n        \"thesis_source\": str(distill_raw.get(\"thesis_source\") or \"\").strip() or \"inferred_from_facts\",\n        \"thesis_type\": str(distill_raw.get(\"thesis_type\") or \"\").strip() or \"judgment\",\n        \"arguments\": arguments,\n        \"counterpoints\": str_list(distill_raw.get(\"counterpoints\")),\n        \"dropped\": str_list(distill_raw.get(\"dropped\")),\n        \"open_questions\": str_list(distill_raw.get(\"open_questions\")),\n    }\n\n    campaign = {\n        \"topic\": topic,\n        \"source_text\": source_text,\n        \"audience_hint\": str(topic_record.get(\"audience_hint\") or topic_record.get(\"audience\") or \"\").strip(),\n        \"context\": obj(topic_record.get(\"context\")),\n        \"facts_confirmed\": topic_record.get(\"facts_confirmed\") if isinstance(topic_record.get(\"facts_confirmed\"), list) else [],\n        \"constraints\": topic_record.get(\"constraints\") if isinstance(topic_record.get(\"constraints\"), list) else [],\n        \"duration_seconds\": topic_record.get(\"duration_seconds\", 30),\n        \"distill\": distill,\n    }\n    for key in (\"brand\", \"product\", \"audience\", \"pain\", \"offer\", \"cta\", \"tone\", \"platform\", \"proof\"):\n        value = topic_record.get(key)\n        if value not in (None, \"\", [], {}):\n            campaign[key] = value\n\n    # ---- 后半：A03 的标准化 ----\n\n    topic = str(campaign.get(\"topic\") or campaign.get(\"source_text\") or campaign.get(\"product\") or campaign.get(\"brand\") or \"当前主题\").strip()\n    source_text = str(campaign.get(\"source_text\") or topic).strip()\n    audience_hint = str(campaign.get(\"audience_hint\") or campaign.get(\"audience\") or \"\").strip()\n    facts_confirmed = campaign.get(\"facts_confirmed\") if isinstance(campaign.get(\"facts_confirmed\"), list) else []\n    constraints = campaign.get(\"constraints\") if isinstance(campaign.get(\"constraints\"), list) else []\n    normalization_warnings = []\n    if not str(campaign.get(\"topic\") or \"\").strip():\n        normalization_warnings.append(\"topic 缺失，已使用 source_text/当前主题作为主题\")\n\n    distill = campaign.get(\"distill\") if isinstance(campaign.get(\"distill\"), dict) else {}\n    arguments = [item for item in (distill.get(\"arguments\") or []) if isinstance(item, dict) and str(item.get(\"claim\") or \"\").strip()]\n    thesis = str(distill.get(\"thesis\") or \"\").strip()\n    source_form = str(distill.get(\"source_form\") or \"\").strip() or \"mixed\"\n    if not thesis:\n        thesis = topic\n        normalization_warnings.append(\"distill.thesis 缺失，已回落到主题句\")\n    if not arguments:\n        normalization_warnings.append(\"distill.arguments 为空，本次只能按单一论点展开\")\n    distill = {\n        \"source_form\": source_form,\n        \"thesis\": thesis,\n        \"thesis_source\": str(distill.get(\"thesis_source\") or \"\").strip() or \"inferred_from_facts\",\n        \"thesis_type\": str(distill.get(\"thesis_type\") or \"\").strip() or \"judgment\",\n        \"arguments\": arguments,\n        \"counterpoints\": [str(item).strip() for item in (distill.get(\"counterpoints\") or []) if str(item).strip()],\n        \"dropped\": [str(item).strip() for item in (distill.get(\"dropped\") or []) if str(item).strip()],\n        \"open_questions\": [str(item).strip() for item in (distill.get(\"open_questions\") or []) if str(item).strip()],\n    }\n    argument_count = len(distill[\"arguments\"])\n    source_chars = len(re.sub(r\"\\s+\", \"\", source_text))\n\n    raw_duration = str(campaign.get(\"duration_seconds\") or \"\").strip()\n    duration = 0.0\n    if raw_duration:\n        try:\n            duration = max(1.0, float(raw_duration))\n        except Exception:\n            duration = 0.0\n    if duration <= 0:\n        duration = 30.0\n        normalization_warnings.append(\"未指定时长，编排参考时长取 30 秒；最终以真实口播为准\")\n\n    brief = {\n        \"topic\": topic,\n        \"source_text\": source_text,\n        \"source_chars\": source_chars,\n        \"audience_hint\": audience_hint,\n        \"context\": context,\n        \"facts_confirmed\": facts_confirmed,\n        \"constraints\": constraints,\n        \"creative\": creative,\n        \"history\": history,\n        \"distill\": distill,\n        \"argument_count\": argument_count,\n        \"language\": \"zh-CN\",\n        \"aspect_ratio\": \"9:16\",\n        \"resolution\": \"1080x1920\",\n        \"fps\": 25,\n        \"target_duration_seconds\": duration,\n        \"normalization_warnings\": normalization_warnings,\n        \"hard_rules\": {\n            \"one_angle_per_video\": True,\n            \"voice_chars_per_second\": 4.2,\n            \"caption_unit\": \"complete_sentence\",\n            \"content_assumptions\": \"none\",\n            \"argument_spine\": True,\n            \"no_chronology_retelling\": True,\n            \"source_text_is_material_only\": True,\n            \"duration_is_reference_only\": True,\n            \"no_length_quota\": True,\n        }\n    }\n    for key in (\"brand\", \"product\", \"audience\", \"pain\", \"offer\", \"cta\", \"tone\", \"platform\", \"proof\"):\n        value = campaign.get(key)\n        if value not in (None, \"\", [], {}):\n            brief[key] = value\n\n    normalized_text = re.sub(r\"\\s+\", \"\", source_text).lower()\n    return {\n        \"brief_json\": json.dumps(brief, ensure_ascii=False),\n        \"target_duration_seconds\": duration,\n        \"proof_fingerprint\": normalized_text,\n        \"validation_ok\": True\n    }"
         variables:
-        - variable: campaign_json
+        - variable: structured_input_text
           value_selector:
-          - a02
-          - campaign_json
-          value_type: string
-        - variable: creative_json
-          value_selector:
-          - a02
-          - creative_json
-          value_type: string
-        - variable: brand_json
-          value_selector:
-          - a02
-          - brand_json
-          value_type: string
-        - variable: history_json
-          value_selector:
-          - a02
-          - history_json
-          value_type: string
-        outputs:
-          brief_json:
-            type: string
-            children: null
-          target_duration_seconds:
-            type: number
-            children: null
-          proof_fingerprint:
-            type: string
-            children: null
-          validation_ok:
-            type: boolean
-            children: null
-      position:
-        x: 1060
-        y: 335
-      positionAbsolute:
-        x: 1060
-        y: 335
-      sourcePosition: right
-      targetPosition: left
-      width: 270
-      height: 196
+          - a01
+          - text
     - id: a03_gate
       type: custom
       data:
@@ -1148,36 +1073,6 @@ workflow:
       targetPosition: left
       width: 280
       height: 140
-    - id: h01b
-      type: custom
-      data:
-        type: code
-        title: H01b_净化HTML输出
-        code_language: python3
-        code: "def main(html_document: str) -> dict:\n    import json\n    import re\n\n    raw = str(html_document or \"\")\n    notes = []\n    text = raw.strip()\n    if text.startswith(\"```\"):\n        text = re.sub(r\"^```[a-zA-Z]*\\s*\", \"\", text)\n        text = re.sub(r\"\\s*```\\s*$\", \"\", text)\n        notes.append(\"已去除 Markdown 代码围栏\")\n    cleaned = re.sub(r\"<tool_call>[\\s\\S]*?</tool_call>\", \"\", text, flags=re.I)\n    if cleaned != text:\n        notes.append(\"已移除 tool_call 工具调用块\")\n        text = cleaned\n    low = text.lower()\n    if \"<html\" not in low and \"<!doctype\" not in low:\n        if text != raw.strip():\n            notes.append(\"未提取到 HTML，保留原始输出供校验定位\")\n            text = raw.strip()\n        low = text.lower()\n    start = low.find(\"<!doctype html>\")\n    if start < 0:\n        start = low.find(\"<html\")\n    end = low.rfind(\"</html>\")\n    if start > 0 and end > start:\n        notes.append(\"已丢弃 HTML 之前的 \" + str(start) + \" 字符\")\n        text = text[start:end + 7]\n    elif start > 0:\n        notes.append(\"已丢弃 HTML 之前的 \" + str(start) + \" 字符，但没有 </html> 收尾\")\n        text = text[start:]\n    elif end >= 0 and end + 7 < len(text):\n        notes.append(\"已丢弃 </html> 之后的 \" + str(len(text) - end - 7) + \" 字符\")\n        text = text[:end + 7]\n    html = text.strip()\n    if not html:\n        notes.append(\"没有从输出中提取到 HTML\")\n    return {\n        \"html_document\": html,\n        \"html_guard_json\": json.dumps({\n            \"applied\": notes,\n            \"input_chars\": len(raw),\n            \"output_chars\": len(html),\n            \"has_doctype\": \"<!doctype html>\" in html.lower(),\n            \"has_closing_html\": \"</html>\" in html.lower(),\n        }, ensure_ascii=False),\n    }\n"
-        variables:
-        - variable: html_document
-          value_selector:
-          - h03
-          - html_document
-          value_type: string
-        outputs:
-          html_document:
-            type: string
-            children: null
-          html_guard_json:
-            type: string
-            children: null
-      position:
-        x: 10600
-        y: 62
-      positionAbsolute:
-        x: 10600
-        y: 62
-      sourcePosition: right
-      targetPosition: left
-      width: 270
-      height: 130
     - id: h02
       type: custom
       data:
@@ -1188,7 +1083,7 @@ workflow:
         variables:
         - variable: html_document
           value_selector:
-          - h01b
+          - h03
           - html_document
           value_type: string
         - variable: production_requirements
@@ -1852,28 +1747,6 @@ workflow:
       width: 320
       height: 168
     edges:
-    - id: a01-source-a02
-      source: a01
-      sourceHandle: source
-      target: a02
-      targetHandle: target
-      type: custom
-      data:
-        sourceType: llm
-        targetType: code
-        isInIteration: false
-        isInLoop: false
-    - id: a02-source-a03
-      source: a02
-      sourceHandle: source
-      target: a03
-      targetHandle: target
-      type: custom
-      data:
-        sourceType: code
-        targetType: code
-        isInIteration: false
-        isInLoop: false
     - id: a03-source-a03_gate
       source: a03
       sourceHandle: source
@@ -2032,28 +1905,6 @@ workflow:
       source: a17
       sourceHandle: source
       target: h00
-      targetHandle: target
-      type: custom
-      data:
-        sourceType: code
-        targetType: code
-        isInIteration: false
-        isInLoop: false
-    - id: h03-source-h01b
-      source: h03
-      sourceHandle: source
-      target: h01b
-      targetHandle: target
-      type: custom
-      data:
-        sourceType: code
-        targetType: code
-        isInIteration: false
-        isInLoop: false
-    - id: h01b-source-h02
-      source: h01b
-      sourceHandle: source
-      target: h02
       targetHandle: target
       type: custom
       data:
@@ -2353,5 +2204,17 @@ workflow:
       source: a13
       sourceHandle: source
       target: a16
+      targetHandle: target
+      type: custom
+    - id: a01-source-a03
+      source: a01
+      sourceHandle: source
+      target: a03
+      targetHandle: target
+      type: custom
+    - id: h03-source-h02
+      source: h03
+      sourceHandle: source
+      target: h02
       targetHandle: target
       type: custom
