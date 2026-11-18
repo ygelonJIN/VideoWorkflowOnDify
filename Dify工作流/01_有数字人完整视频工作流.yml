@@ -2219,6 +2219,13 @@ workflow:
       width: 270
       height: 360
     edges:
+    - id: h03-source-h01z
+      source: h03
+      sourceHandle: source
+      target: h01z
+      targetHandle: target
+      type: custom
+
     - id: a03-source-a03_gate
       source: a03
       sourceHandle: source
@@ -2811,9 +2818,9 @@ workflow:
       target: a03
       targetHandle: target
       type: custom
-    - id: h03-source-h02
-      source: h03
+    - id: h01pv-source-h01x
+      source: h01pv
       sourceHandle: source
-      target: h02
+      target: h01x
       targetHandle: target
       type: custom

@@ -2218,3 +2218,9 @@ workflow:
       target: h02
       targetHandle: target
       type: custom
+    - id: h01pv-source-h01x
+      source: h01pv
+      sourceHandle: source
+      target: h01x
+      targetHandle: target
+      type: custom
