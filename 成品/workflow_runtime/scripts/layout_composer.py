@@ -80,14 +80,16 @@ ROLE_FLOOR = {"title": 80, "num": 80, "lead": 60, "body": 50,
               "note": 46, "label": 46, "accent": 60}
 # 主副关系：副字号 = 主字号 × 相对比例。缺 title 时主角色自动变成 lead/body，
 # 所以"模型漏写 title → 整屏只有 36px"这条路径不存在了。
-ROLE_REL = {"title": 1.00, "num": 1.00, "lead": 0.90, "body": 0.60,
+ROLE_REL = {"title": 1.00, "num": 1.00, "lead": 0.90, "body": 0.40,
             "note": 0.50, "label": 0.50, "accent": 0.70}
+BODY_RATIO = 0.40      # 正文 = 标题 × 0.4（2026-11-18 定，不再有上下限夹取）
+BODY_FLOOR = 24        # 唯一的物理地板：再小就糊了
 
 # 标题档位（2026-11-18 定）：150 → 80 六档。一屏一档，装不下就降一档，
 # 不再由栏宽连续反算——栏宽永远是一栏 840，字号只跟内容多少有关。
 # 120 是标准档；短标题（≤8 字）先试 150；装不下就 105→90→80 往下降，
 # 内容少不放大——「再空也用这个」。
-TITLE_STEPS = (120, 105, 90, 80)
+TITLE_STEPS = (120, 100, 90, 80)
 TITLE_BIG = 150
 TITLE_BIG_LIMIT = 8   # 几个字以内才允许上 150
 GAP = 26                      # 与 .scene-copy 的 gap 一致
@@ -188,8 +190,12 @@ def solve_scale(roles: dict, width: int, avail_h: float) -> dict:
         for role in items:
             if role == primary:
                 continue
-            share = title_size * float(ROLE_REL.get(role, 0.6))
-            out[role] = _clamp(share, ROLE_FLOOR.get(role, 46), ROLE_CEIL.get(role, 200))
+            if role == "body":
+                # 正文只按比例走，不夹上下限（2026-11-18 定）：120→48、100→40、90→36、80→32
+                out[role] = max(BODY_FLOOR, int(round(title_size * BODY_RATIO)))
+            else:
+                share = title_size * float(ROLE_REL.get(role, 0.6))
+                out[role] = _clamp(share, ROLE_FLOOR.get(role, 46), ROLE_CEIL.get(role, 200))
         return out
 
     def height_of(sizes: dict) -> float:
@@ -218,8 +224,11 @@ def solve_scale(roles: dict, width: int, avail_h: float) -> dict:
     for role in ROLE_CEIL:
         if role in chosen:
             continue
-        chosen[role] = _clamp(base * float(ROLE_REL.get(role, 0.6)),
-                              ROLE_FLOOR.get(role, 46), ROLE_CEIL.get(role, 200))
+        if role == "body":
+            chosen[role] = max(BODY_FLOOR, int(round(base * BODY_RATIO)))
+        else:
+            chosen[role] = _clamp(base * float(ROLE_REL.get(role, 0.6)),
+                                  ROLE_FLOOR.get(role, 46), ROLE_CEIL.get(role, 200))
     return chosen
 
 
@@ -260,21 +269,21 @@ def normalise_zone(zone: str | None) -> str:
 
 
 def normalise_align(align: str | None, zone: str) -> str:
-    value = str(align or "").strip().lower()
-    if value in ("left", "center", "right"):
-        return value
-    return "center" if zone == "center" else "left"
+    """一栏式只有左对齐（2026-11-18 定）。
+
+    分镜的 align 是旧构图系统的字段：写 center 就整屏居中、写 right 就右对齐，
+    同一部片子里混着三种对齐，看起来就是"有的居中有的没有"。现在一律左对齐，
+    这个值只留作兼容，不再生效。
+    """
+    return "left"
 
 
 def normalise_scale(scale: str | None) -> str:
-    """`data-composition-scale` 只认排版模式这种真枚举，不再参与字号大小。
+    """一栏式之后没有"版面模式"这回事（2026-11-18 定）：竖排也取消。
 
-    写别的（"两条大字""流程节点+大字结论"这类自由文本）一律当没写——字号由几何算，
-    读文本只是为了让"竖排"这种版面模式还能生效。
+    以前分镜写 `vertical` 就把整屏文字立起来（1145 的 s06 整页竖排就是这么来的），
+    而那一条根本不在画面规则里。现在一律返回空串，`data-composition-scale` 彻底不读。
     """
-    value = str(scale or "").strip().lower()
-    if value in ("vertical", "竖排", "竖版"):
-        return "vertical"
     return ""
 
 
@@ -542,10 +551,11 @@ def build_scene_css(scene_id: str, zone: str, align: str, scale: str, tone: str,
     # 组件字号跟着本屏主字号走：主字号 96px 时 1.55，200px 时 2.0（夹在 [1.55, 2.0]）
     _ui_scale = round(min(2.0, max(1.55, 1.55 + (_primary_size - 96) * 0.0045)), 2)
     parts.append("  --ui-scale:%s;" % _ui_scale)
-    if s == "vertical":
-        parts.append("  writing-mode:vertical-rl;")
     parts.append("}\n")
     parts.append('[data-scene="%s"] .scene-copy > :only-child{margin-top:auto;margin-bottom:auto;}\n' % sid)
+    # 一栏式只用一条左对齐的栏：卡片、组件不许自己居中（2026-11-18 定）。
+    # 以前 `width:fit-content` 的 ui-card 在 flex 里被居中，同一屏出现"标题左对齐、卡片居中"两种对齐。
+    parts.append('[data-scene="%s"] .scene-copy > *{align-self:flex-start;text-align:%s;}\n' % (sid, a))
     # 版面的唯一负责人是 composer：场景里给内容块写的绝对定位（top:1120px/left:90px 这种）
     # 一律不吃。2026-11-16 s07 的流程行就是这么双倍位移、右边界顶到 1080 的。
     parts.append('#stage [data-scene="%s"] .scene-copy > *{position:relative;top:auto;'
