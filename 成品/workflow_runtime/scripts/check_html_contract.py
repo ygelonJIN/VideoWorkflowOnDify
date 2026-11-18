@@ -4,9 +4,46 @@ from __future__ import annotations
 
 import argparse
 import html as html_lib
+import io
+import json
+import os
 import re
 import subprocess
 from pathlib import Path
+
+
+_PRESET_ROLE_CACHE = {}
+
+
+def _load_preset_roles() -> dict:
+    """从能力库读编号 → role（entrance_text / state_text / bg / decoration …）。
+
+    编号与族只认 `能力库/动效库/presets.json` 一处，检查器不再自带一份手写名单。
+    找不到就返回空字典，相关统计自动跳过（宁可少查，也不拿过时名单误判）。
+    """
+    if _PRESET_ROLE_CACHE:
+        return _PRESET_ROLE_CACHE
+    here = os.path.dirname(os.path.abspath(__file__))
+    probe = here
+    for _ in range(6):
+        candidate = os.path.join(probe, "能力库", "动效库", "presets.json")
+        if os.path.exists(candidate):
+            try:
+                with io.open(candidate, encoding="utf-8") as handle:
+                    items = json.load(handle).get("presets") or []
+                for item in items:
+                    pid = str(item.get("id") or "").strip().upper()
+                    role = str(item.get("role") or "").strip()
+                    if pid and role:
+                        _PRESET_ROLE_CACHE[pid] = role
+            except Exception:
+                pass
+            break
+        parent = os.path.dirname(probe)
+        if parent == probe:
+            break
+        probe = parent
+    return _PRESET_ROLE_CACHE
 
 
 def main() -> None:
@@ -104,8 +141,31 @@ def main() -> None:
                           % "、".join(sorted(set(_scope_miss))[:6]))
     _skipped_motion = re.findall(r'data-motion-skipped="([^"]*)"', doc)
     if _skipped_motion:
-        errors.append("动效目标已改到本屏主文字：%s（H02SM 给的 target 与这一屏的实际元素对不上，需重跑 H02SM）"
+        # 2026-11-17 起本地不再"改拍到主文字"，目标不存在就整条丢弃（见 H02SK 的 _fix_block），
+        # 所以这里报的是"这条动效已经没了"，不是"换了目标"。
+        errors.append("动效被丢弃：%s（H02SM 的 target 在本屏不存在；重跑 H02SM，把 target 逐字对齐 scene_spec）"
                       % "；".join(html_lib.unescape(item) for item in _skipped_motion[:6]))
+
+    # ---- 两句一眼能看出、却一直没人报的诊断（2026-11-17 补）----
+    # 这两条都是"H02 上游少给了东西"，但成片已经渲完才被发现：
+    #   1) 全片 0 个组件 → 纯文字片，没有视觉锚，观感就是"字小、空"；
+    #   2) 某屏没有 title → 这屏最大的字只能落在 lead/body 上，整屏小一圈。
+    _ui_count = len(re.findall(r'class="[^"]*\bui-[a-z]', doc))
+    _scene_n = len(re.findall(r'<section\b[^>]*data-scene="', doc))
+    if _scene_n >= 4 and _ui_count == 0:
+        errors.append("全片 0 个组件（H01X 的 components 全空）：竖屏会退化成纯文字片，"
+                      "先查 H01X 的组件配额（至少 ⌈屏数/2⌉ 屏要带 1 个）")
+    _no_title = []
+    for _chunk in re.split(r'(?=<section[^>]*data-scene=")', doc):
+        _hit = re.search(r'<section\b[^>]*data-scene="([^"]+)"', _chunk)
+        if not _hit:
+            continue
+        _inner = _chunk.split("</section>", 1)[0]
+        if 'data-role="title"' not in _inner:
+            _no_title.append(_hit.group(1))
+    if _no_title:
+        errors.append("这些屏没有 title：%s（最大字只能落在 lead/body 上，整屏小一圈；重跑 H02S，"
+                      "copy 必须有且只有一条 title）" % "、".join(_no_title))
 
     if black_frame:
         if 'data-render-mode="black-frame"' not in doc:
@@ -162,23 +222,47 @@ def main() -> None:
     if "data-anim=" in doc and "__sceneBuilders" in doc:
         _scene_total = len(re.findall(r'<section\b[^>]*data-scene="[^"]+"', doc))
         _builders = len(re.findall(r'__sceneBuilders\.push\s*\(', doc))
-        _markers = re.findall(r'preset:\s*(T\d+|X\d+|P\d+|W\d+|U\d+)', doc)
+        # 2026-11-17：统计口径改成"从能力库派生"，不再手写编号名单。
+        # 以前只用 `preset: (T|X|P|W|U)\\d+` 数条数，S 系列（S02/S07/S23…）全是状态卡却一条都不算，
+        # 于是"每屏 2 条"永远差一半、报"7 个场景只有 4 条"；状态类又写死了 6 个编号，
+        # S07/S23 这些真正在跑的状态卡被当成不存在，报"0 条状态变化"。
+        # 现在：条数 = 所有非背景卡；状态类 = presets.json 里 role 为 state_* 的编号。
+        _roles = _load_preset_roles()
+        _bg_ids = {k for k, v in _roles.items() if v == "bg"}
+        _state_ids = {k for k, v in _roles.items() if v in ("state_text", "state_block")}
+
+        def _content_markers(chunk):
+            ids = re.findall(r'preset:\s*([A-Z]\d+)', chunk)
+            if _bg_ids:
+                return [i for i in ids if i not in _bg_ids]
+            return [i for i in ids if not i.startswith("B")]
+
+        _markers = _content_markers(doc)
         if _scene_total and len(_markers) < _scene_total * 2:
             errors.append(
-                "动效密度不足：%d 个场景只有 %d 条 preset（每屏要求 2 条：1 入场 + 1 状态变化）。"
-                "先查 H02SM 是否每屏都给了 T/X/U 两条" % (_scene_total, len(_markers)))
+                "动效密度不足：%d 个场景只有 %d 条内容动效（每屏要求 2 条：1 入场 + 1 状态变化，"
+                "背景卡不算）。先查 H02SM 是否每屏都给了 entrance + state 两条"
+                % (_scene_total, len(_markers)))
         _chunks = re.split(r'(?=<section[^>]*data-scene=")', doc)
         _seq = []
         for _ch in _chunks:
-            _m = re.search(r'data-scene="([^"]+)"', _ch)
+            # 必须挂在 <section 上：脚本里也有 [data-scene="s01"] 这种选择器字面量，
+            # 宽匹配会把同一屏算两遍（一次空、一次有卡），点名列表就是错的
+            _m = re.search(r'<section\b[^>]*data-scene="(s[0-9A-Za-z_-]+)"', _ch)
             if _m:
-                _seq.append((_m.group(1), re.findall(r'preset:\s*([A-Z]\d+)', _ch)))
+                _seq.append((_m.group(1), _content_markers(_ch)))
         if len(_seq) >= 2:
             for (_a, _ma), (_b, _mb) in zip(_seq, _seq[1:]):
                 _same = set(_ma) & set(_mb)
                 if _same:
                     errors.append(
                         "相邻两屏用了同一个动效编号：%s 与 %s 都是 %s" % (_a, _b, "/".join(sorted(_same))))
+            _thin = [sid for sid, ms in _seq if len(ms) < 2]
+            if _thin:
+                errors.append(
+                    "这些屏只有 1 条内容动效（应为 入场 + 状态 两条）：%s。先在 H02SM 的产出里看这几屏"
+                    "是不是只给了一条，再查 H01X 的 motion_budget.state 是否为空"
+                    % "、".join(_thin))
             _count = {}
             for _sid, _ms in _seq:
                 for _x in set(_ms):
@@ -190,11 +274,14 @@ def main() -> None:
                     "动效重复度过高：%s 在全片反复出现（%s，上限 %d 屏）" % (
                         "/".join(sorted(_hot)),
                         "、".join("%s×%d" % (k, _count[k]) for k in sorted(_hot)), _limit))
-        _state_markers = re.findall(r'preset:\s*(T06|X01|X02|U01|U02|U04|U05)', doc)
-        if _scene_total and len(_state_markers) < _scene_total:
-            errors.append(
-                "缺状态变化：%d 个场景只有 %d 条状态类 preset（T06/X01/X02/U01/U02）。"
-                "只有入场没有状态变化，这一屏算没做动效" % (_scene_total, len(_state_markers)))
+        if _state_ids:
+            _state_markers = [i for i in _markers if i in _state_ids]
+            if _scene_total and len(_state_markers) < _scene_total:
+                errors.append(
+                    "缺状态变化：%d 个场景只有 %d 条状态类 preset（%s）。"
+                    "只有入场没有状态变化，这一屏算没做动效"
+                    % (_scene_total, len(_state_markers),
+                       "/".join(sorted(_state_ids)) if len(_state_ids) <= 8 else "见 presets.json 的 role=state_*"))
         if _scene_total and _builders < _scene_total:
             structure_blocking.append(
                 "逐屏动效缺失：%d 个场景只有 %d 个 scene builder（每屏应各有一个）；"

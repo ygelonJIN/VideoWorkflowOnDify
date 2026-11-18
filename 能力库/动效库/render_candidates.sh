@@ -25,7 +25,7 @@ N22="$(ls -d "$HOME"/.nvm/versions/node/v22*/bin/node 2>/dev/null | sort -V | ta
 N22="${N22:-$(command -v node)}"
 
 mkdir -p "$OUT"
-echo "候选批次：$BATCH（只写待筛，不进全卡审阅）"
+echo "候选批次：${BATCH}（只写待筛，不进全卡审阅）"
 mapfile_tsv="$(python3 "$LIB/make_review_reels.py" --cards-json "$JSON" --out "$OUT" --tsv)"
 if [ -z "$mapfile_tsv" ]; then echo "没有生成任何候选项"; exit 1; fi
 
@@ -53,7 +53,9 @@ render_one() {
 export -f render_one
 export OUT N22 HF CHROME
 
-printf '%s\n' "$mapfile_tsv" | xargs -P "$JOBS" -n1 bash -c 'render_one "$1"' _
+# 路径里带空格（本工作区在 /Volumes/TUF ESD-T1A Media）：必须 NUL 分隔，
+# 否则 xargs 按空白切，一行会被拆成好几段拿去 cd。
+printf '%s\n' "$mapfile_tsv" | tr '\n' '\0' | xargs -0 -P "$JOBS" -n1 bash -c 'render_one "$1"' _
 
 python3 - "$OUT" <<'PY'
 import json, pathlib, sys

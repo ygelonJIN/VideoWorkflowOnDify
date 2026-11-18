@@ -2020,6 +2020,12 @@ def normalize_scene_layers(document: str) -> str:
             names = set((cls.group(1) if cls else "").split())
             if "scene-copy" in names:
                 return "copy"
+            # 场景自己的层（scene-base / scene-bg / 遮罩）不是内容，留在 copy 外面。
+            # 2026-11-17 踩过：scene-base 没有 data-anim，被判成 content 收进 .scene-copy，
+            # 而且每重跑一次就多收一块（s02 攒到 6 块）；flex 的 gap 把它们之间的空档
+            # 也算成了间距，文字被顶到上半屏，检查器报"垂直中心 622 偏离 700–1100"。
+            if any(name.startswith("scene-") for name in names):
+                return "keep"
             anim = re.search(r'data-anim="([^"]+)"', head)
             if anim and anim.group(1) in KEEP_OUTSIDE_COPY:
                 return "keep"
@@ -2047,6 +2053,41 @@ def normalize_scene_layers(document: str) -> str:
         return open_tag + inner + close_tag
 
     document = pattern.sub(fix, document)
+
+    # 清理历史残留：以前被误收进 .scene-copy 的 scene-base 会一直留着并逐次累加，
+    # 它们各自占一个 flex gap，把文字块顶偏。这里把 copy 里的 scene-base 全删掉，
+    # 再确保每屏 copy 外面有一块。
+    def drop_stray_bases(match: re.Match) -> str:
+        open_tag, inner, close_tag = match.group(1), match.group(2), match.group(3)
+        blocks = _split_top_level(inner)
+        if not blocks:
+            return match.group(0)
+        cleaned = []
+        has_base = False
+        for block in blocks:
+            cls = re.search(r'class="([^"]*)"', block[:400])
+            names = set((cls.group(1) if cls else "").split())
+            if "scene-copy" in names:
+                # copy 里面被误收进来的 scene-base：直接按标签删干净（它们嵌在 copy 内层，
+                # 顶层拆分看不到，s02 攒到 6 块就是这么藏住的）
+                block = re.sub(r'\s*<div class="scene-base"></div>', "", block)
+                cleaned.append(block)
+                continue
+            if "scene-base" in names:
+                if has_base:
+                    continue                      # 重复的那几块丢掉
+                has_base = True
+            cleaned.append(block)
+        out = "".join(cleaned)
+        if not has_base:
+            out = '\n  <div class="scene-base"></div>' + out
+        return open_tag + out + close_tag
+
+    cleaned_total = document.count('class="scene-base"')
+    document = pattern.sub(drop_stray_bases, document)
+    if document.count('class="scene-base"') != cleaned_total:
+        print("版面清理：多余的 scene-base 已删除（%d → %d）"
+              % (cleaned_total, document.count('class="scene-base"')))
     if moved_total:
         print("版面归位：把 %d 块跑到 .scene-copy 外面的内容收回去了" % moved_total)
     return document
@@ -2189,16 +2230,30 @@ def inject_layout_composer(document: str) -> str:
             continue
         _sid = sid.group(1)
         _sec = re.search(r'<section[^>]*data-scene="%s"[^>]*>(.*?)</section>' % re.escape(_sid), document, re.S)
+        # 2026-11-17：字号改成"栏宽 ÷ 每行字数"之后，版面需要知道**每一条**文字有多少字，
+        # 不再只认 title。以前只量 title，模型漏写 title 的屏就只能按 lead/body 的默认字号出，
+        # 整屏 36px——"字太小"有一半是这么来的。
+        _roles = {}
+        if _sec:
+            for _rm in re.finditer(r'data-role="([a-z]+)"[^>]*>(.*?)</', _sec.group(1), re.S):
+                _role = _rm.group(1)
+                if _role in _roles:
+                    continue
+                _parts = re.split(r'<br\s*/?>', _rm.group(2), flags=re.I)
+                _texts = [re.sub(r'<[^>]+>|\s', '', _p) for _p in _parts]
+                _texts = [t for t in _texts if t]
+                if _texts:
+                    _roles[_role] = {"text": "".join(_texts), "lines": _texts}
         _title = re.search(r'data-role="title"[^>]*>(.*?)</', _sec.group(1), re.S) if _sec else None
         if _title:
             # 字号要按"最长那一行"算：标题里写了 <br> 时，整块字数算出来的每行字数
             # 和真实行对不上，124px 的 8 字行会直接顶出卡片（2026-11-15 s01 实测）。
             _raw = re.split(r'<br\s*/?>', _title.group(1), flags=re.I)
             _chars = sum(len(re.sub(r'<[^>]+>|\s', '', part)) for part in _raw)
-            # 2026-11-17：line_chars 只在**真的写了 <br>** 时才有意义。
-            # 以前没有 <br> 时它等于整句长度（17 个字的标题 → line_chars=17），
-            # _downgrade 的硬换行保护按"17 个字不许折行"去缩字号，一路缩到地板 60px——
-            # 第一页标题 60px、"字太小"就是这么来的。没有 <br> 交给 text-wrap:balance 折行。
+            # line_chars 只在**真的写了 <br>** 时才有意义：没有 <br> 时它等于整句长度，
+            # 会被当成"这一段不许折行"，字号一路缩到地板（2026-11-17 前是 60px 的标题）。
+            # 现在字号由 layout_composer.solve_scale() 按栏宽算，roles 才是主口径，
+            # chars/line_chars 只留给版面估顶边用。
             _line_chars = (max(len(re.sub(r'<[^>]+>|\s', '', part)) for part in _raw)
                            if len(_raw) > 1 else 0)
         else:
@@ -2212,6 +2267,7 @@ def inject_layout_composer(document: str) -> str:
             "tone": tone,
             "chars": _chars,
             "line_chars": _line_chars,
+            "roles": _roles,
             "media": _media_rect(_sid),
             "bg_family": (family_attr.group(1) if family_attr else ""),
         })

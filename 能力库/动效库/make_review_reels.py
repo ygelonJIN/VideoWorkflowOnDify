@@ -59,6 +59,9 @@ def _link_or_copy(src, dst):
 
 def stage_of(card):
     cid, fam = card["id"], card.get("family", "")
+    # 卡自己带 whole 舞台（外部进件的图示/形状），舞台与动效都由卡定义给
+    if (card.get("sample") or {}).get("stage"):
+        return "code"
     if card.get("cap") == "component-html":
         return "component"
     if card.get("cap") == "page-transition":
@@ -596,7 +599,8 @@ def scene_script(kind, card, sc, sel, sel2, at):
                 "timeline.to(_o,{t:6,duration:%s,ease:'none',onUpdate:function(){"
                 "bgkit.draw(_c.getContext('2d'),'%s',1080,1920,_o.t);}},%.2f);}" % (sel, SECONDS - 0.4, cid, at))
     v = default_vars(card, sel, at, sel2)
-    return expand(card["code"], v)
+    js = (card.get("sample") or {}).get("js")
+    return expand(js if js else card["code"], v)
 
 
 COMPONENTS_CSS = (VENDOR / "components.css").read_text(encoding="utf-8")
@@ -751,7 +755,8 @@ def build_one(card, out_root: pathlib.Path):
         ('<script src="./three.global.js"></script>' if cid in NEEDS_THREE else "")
         + ('<script src="./gltrans-kit.js"></script><script src="./glsl.js"></script>'
            if cid.startswith("GT") else "")
-        + "".join('<script src="./plugins/%s.min.js"></script>' % _p for _p in PLUGINS_FOR.get(cid, [])),
+        + "".join('<script src="./plugins/%s.min.js"></script>' % _p
+                  for _p in ((card.get("sample") or {}).get("plugins") or PLUGINS_FOR.get(cid, []))),
         cid, js)
 
     d = out_root / "源" / fam / cid
@@ -767,9 +772,10 @@ def build_one(card, out_root: pathlib.Path):
         import build_gltrans as _bt
         _bt.build(pathlib.Path.home() / "Downloads" / "gl-transitions-master",
                   [card.get("src", "gltrans:").split(":", 1)[-1]], d / "glsl.js")
-    if cid in PLUGINS_FOR:
+    _plugs = (card.get("sample") or {}).get("plugins") or PLUGINS_FOR.get(cid, [])
+    if _plugs:
         (d / "plugins").mkdir(exist_ok=True)
-        for _p in PLUGINS_FOR[cid]:
+        for _p in _plugs:
             shutil.copy(PLUGIN_DIR / (_p + ".min.js"), d / "plugins" / (_p + ".min.js"))
     if "photo.png" in html:
         _link_or_copy(PHOTO, d / "photo.png")
