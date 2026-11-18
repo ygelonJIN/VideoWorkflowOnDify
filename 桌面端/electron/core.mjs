@@ -264,8 +264,18 @@ export async function startBuild({ kind, action, projectName, outputs, tts = {},
   if (!/^[A-Za-z0-9._-]+$/.test(name)) throw new Error("项目名只能包含字母、数字、点、下划线、横线");
   const html = outputs?.html_document;
   const voiceover = outputs?.voiceover_script;
-  if (typeof html !== "string" || !html.trim()) throw new Error("这次运行没有 html_document，先跑完整条链路");
-  if (typeof voiceover !== "string" || !voiceover.trim()) throw new Error("这次运行没有 voiceover_script");
+  // 「准备」只落图像计划与出图提示词包，不需要 HTML 和口播（2026-11-18）。
+  // 以前这里不分动作，一律要求 html_document，于是链路停在 H01PV 时连
+  // "先看提示词、手动出图"这一步都做不了——报的是"没有 html_document"，
+  // 实际要的只是 image_plan_json。
+  if (kind === "prepare") {
+    if (typeof outputs?.image_plan_json !== "string" || !outputs.image_plan_json.trim()) {
+      throw new Error("这次运行没有 image_plan_json：先跑到 H01PV（图像计划）那一步");
+    }
+  } else {
+    if (typeof html !== "string" || !html.trim()) throw new Error("这次运行没有 html_document，先跑完整条链路");
+    if (typeof voiceover !== "string" || !voiceover.trim()) throw new Error("这次运行没有 voiceover_script");
+  }
 
   // TTS 的 Base 地址在开始节点是中文选项，真正 URL 由 A16 写进 approved_package_json
   let approvedTts = {};

@@ -145,7 +145,8 @@ def normalize_input(data: dict) -> dict:
     voiceover = str(package.get("voiceover_script", package.get("approved_voiceover_script", ""))).strip()
 
     # 先修再判：缺 doctype 由 repair 包外壳，缺口播从画面文字里抽，数字人元素剥掉。
-    if "<!doctype html>" not in html.lower():
+    has_html = bool(html.strip())
+    if has_html and "<!doctype html>" not in html.lower():
         print("警告：html_document 没有完整文档头，按分镜补外壳")
     if not voiceover:
         visible = re.sub(r"<script[\s\S]*?</script>|<style[\s\S]*?</style>", " ", html)
@@ -154,7 +155,7 @@ def normalize_input(data: dict) -> dict:
         if visible:
             voiceover = visible
             print("警告：Dify 输出没有 voiceover_script，已用画面文字当口播稿（%d 字）" % len(visible))
-    if 'data-render-mode="black-frame"' not in html:
+    if has_html and 'data-render-mode="black-frame"' not in html:
         html = html.replace('<div id="stage"', '<div id="stage" data-render-mode="black-frame"', 1)
         print("警告：HTML 缺 data-render-mode=\"black-frame\"，已补上")
     if re.search(r'data-video-role="avatar"|data-media-id="heygen_avatar"|class="[^"]*(?:avatar-window|black-frame)', html, re.I):
@@ -522,12 +523,17 @@ def main() -> None:
 
     staging = BASE / "Dify输出" / args.project_name
     staging.mkdir(parents=True, exist_ok=True)
-    (staging / "html_document.html").write_text(data["html_document"], encoding="utf-8")
-    (staging / "voiceover_script.txt").write_text(data["voiceover_script"] + "\n", encoding="utf-8")
+    # 「准备」不要求 HTML/口播（2026-11-18）：链路停在 H01PV 时也要能先落图像计划与提示词包。
+    if data["html_document"].strip():
+        (staging / "html_document.html").write_text(data["html_document"], encoding="utf-8")
+    if data["voiceover_script"].strip():
+        (staging / "voiceover_script.txt").write_text(data["voiceover_script"] + "\n", encoding="utf-8")
 
     if args.skip_render:
-        print(f"已保存：{staging / 'html_document.html'}")
-        print(f"已保存：{staging / 'voiceover_script.txt'}")
+        if (staging / "html_document.html").exists():
+            print(f"已保存：{staging / 'html_document.html'}")
+        if (staging / "voiceover_script.txt").exists():
+            print(f"已保存：{staging / 'voiceover_script.txt'}")
         return
 
     backup_dir = None
@@ -588,12 +594,15 @@ def main() -> None:
             photo_images = [item for item in images if isinstance(item, dict) and str(item.get("role") or "").lower() != "html"]
             html_images = [item for item in images if isinstance(item, dict) and str(item.get("role") or "").lower() == "html"]
             print("图像计划：%d 张照片 + %d 屏 HTML 背景，已写入 %s" % (len(photo_images), len(html_images), plan_path))
-        wanted = placeholder_ids(data["html_document"])
+        has_html = bool(data["html_document"].strip())
+        wanted = placeholder_ids(data["html_document"]) if has_html else []
         if wanted:
             if not image_plan:
                 raise SystemExit("HTML 里有 %d 个图片占位，但 Dify 输出没有 image_plan_json：H01P 没产出图像计划，重跑 Dify" % len(wanted))
             if not args.skip_images:
                 generate_images(project_dir, plan_path, args)
+        elif not has_html:
+            print("本次没有 HTML（链路没跑到落版）：只准备图像计划与出图提示词，不渲染。")
         else:
             if not re.search(r'data-visual=["\']html["\']', data["html_document"]):
                 print("警告：HTML 里没有任何 {{IMG:...}} 占位，也没有 data-visual=html 的无图屏（旧版输出）")
