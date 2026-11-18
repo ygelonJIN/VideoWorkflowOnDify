@@ -2196,7 +2196,7 @@ workflow:
         iteration_id: h02i
     - id: a09_gate-source-a12
       source: a09_gate
-      sourceHandle: source
+      sourceHandle: storyboard_valid
       target: a12
       targetHandle: target
       type: custom
