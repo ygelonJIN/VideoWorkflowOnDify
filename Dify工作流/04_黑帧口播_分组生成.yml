@@ -1380,7 +1380,7 @@ workflow:
           value_type: string
         - variable: html_document
           value_selector:
-          - h01b
+          - h03
           - html_document
           value_type: string
         - variable: html_valid
