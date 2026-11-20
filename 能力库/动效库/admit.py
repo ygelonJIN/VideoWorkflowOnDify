@@ -50,7 +50,7 @@ RE_DIM = re.compile(r"data-width\s*=\s*[\"'](\d+)[\"'][^>]*data-height\s*=\s*[\"
 RE_DUR = re.compile(r"data-duration\s*=\s*[\"']([\d.]+)[\"']")
 
 FAMILY_PREFIX = {"入场": "T", "状态": "S", "字形": "K", "版面": "G", "结构": "X", "照片": "W",
-                 "三维": "Z", "材质": "M", "绘制": "U", "组件": "U", "UI": "UA",
+                 "材质": "M", "绘制": "U", "组件": "U", "UI": "UA",
                  "离场": "X", "镜头": "C", "交互": "I", "背景": "B", "页间转场": "PT"}
 
 

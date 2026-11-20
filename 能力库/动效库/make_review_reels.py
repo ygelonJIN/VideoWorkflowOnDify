@@ -38,7 +38,7 @@ SEL_MAP = {
     "S11": ".row", "S08": ".panel", "S10": ".bars",
     "UA01": ".panel", "UA02": ".row", "UA03": ".row em", "UA04": ".bars b",
     "UA05": ".bars", "UA06": ".row", "UA07": ".row span",
-    "I01": ".ptr", "I02": ".ptr", "G03": ".morph", "W02": ".shot", "S12": ".page", "Z02": "canvas",
+    "I01": ".ptr", "I02": ".ptr", "G03": ".morph", "W02": ".shot", "S12": ".page",
 }
 
 
@@ -67,7 +67,6 @@ def stage_of(card):
     if card.get("cap") == "page-transition":
         return "none"
     # 背景 role 一律走 bg 舞台：族名只决定样片目录，不决定画法。
-    # （Z17 点阵地球族属三维但 role=bg，族判定会把它当成 three 舞台，画不出东西）
     if card.get("role") == "bg":
         return "bg"
     if cid in NEW_SVG:
@@ -88,14 +87,8 @@ def stage_of(card):
         return "scroll"
     if cid == "I02":
         return "pointer2"
-    if cid == "Z02":
-        return "three"
     if cid == "I01":
         return "pointer"
-    if cid == "Z01":
-        return "three"
-    if cid in NEEDS_THREE:
-        return "three"
     if fam == "背景":
         return "bg"
     if fam in ("材质", "镜头"):
@@ -252,8 +245,6 @@ CAND_STAGE = {
            'white-space:pre-wrap">from leadbot import search, crm\nleads = search.run("五金 出口")\nleads.push_to(crm)</pre></div>',
     "U24": '<div class="paper" style="display:grid;place-items:center;text-align:center">'
            '<span id="emo" style="font-size:230px;line-height:1">\U0001F60C</span></div>',
-    "Z03": '<div class="paper" style="display:grid;place-items:center">'
-           '<div id="big" style="font-size:190px;font-weight:820;line-height:1.1;letter-spacing:.02em">出海</div></div>',
     "U25": '<svg class="stage" viewBox="0 0 1080 1920" style="position:absolute;inset:0;width:1080px;height:1920px">'
            '<path class="line dim" d="M120 1180 C 320 900, 520 1420, 720 1080 S 900 900, 980 1160"/>'
            '<path id="p1" data-anim="subject" fill="none" stroke="#86F0C0" stroke-width="8" stroke-linecap="round"'
@@ -287,7 +278,7 @@ CAND_SEL = {
     "W11": "#shot", "W12": "#shot", "W13": "#shot", "W15": "#shot", "W18": "#shot", "W20": "#shot",
     "K13": "#sub", "K14": "#sub", "K15": "#sub", "K16": "#sub",
     "U21": "#plate", "G04": "#fit", "S13": "#cap", "S14": "#cap", "S15": "#spec",
-    "U23": "#code", "U24": "#emo", "Z03": "#big",
+    "U23": "#code", "U24": "#emo",
     "K21": "#sub", "T12": "#sub", "T13": "#sub",
     "U25": "#p1", "U26": '[data-anim="subject"]', "U27": "#shape", "U28": "#mover", "U29": "#mover",
 }
@@ -545,8 +536,6 @@ def stage_html(kind, card, sc):
                 '<div class="submit" data-anim="submit">提交</div></div>'
                 '<svg class="ptr" data-anim="ptr" data-pointer-path="pick,field,submit" width="60" height="60" '
                 'viewBox="0 0 32 40" width="72" height="90"><defs><filter id="psh" x="-50%" y="-50%" width="200%" height="200%"><feDropShadow dx="1.2" dy="2.2" stdDeviation="2.4" flood-color="#000" flood-opacity="0.55"/></filter></defs><g filter="url(#psh)"><path d="M2.67 1.78 L2.67 27.30 L9.62 21.24 L13.58 31.40 L18.02 29.46 L14.06 19.36 L23.40 19.36 Z" fill="#ffffff" stroke="#0a0a0a" stroke-width="1.55" stroke-linejoin="round"/></g></svg>')
-    if kind == "three":
-        return '<canvas class="cv" data-anim="subject" width="1080" height="1920"></canvas>'
     if kind in ("svgbox", "code", "pair"):
         return CAND_STAGE.get(cid, "")
     if kind == "bg":
@@ -558,8 +547,6 @@ def stage_html(kind, card, sc):
     return ""
 
 
-NEEDS_THREE = {"Z01", "Z04", "Z05", "Z07", "Z11", "Z13"}
-
 # 2026-11-13：插件卡要在样片工程里带上对应插件（生产由 sync_video 自动注入）
 PLUGINS_FOR = {
     "G09": ["Flip"],
@@ -569,14 +556,12 @@ PLUGINS_FOR = {
     "U32": ["MorphSVGPlugin"], "U33": ["MorphSVGPlugin"], "U34": ["MorphSVGPlugin"],
     "U35": ["MotionPathPlugin"], "U36": ["MotionPathPlugin"], "U37": ["MotionPathPlugin"],
     "T14": ["EasePack"], "T15": ["EasePack"], "T16": ["EasePack"],
-    "T17": ["CustomEase"], "T18": ["CustomEase", "CustomBounce"], "T19": ["CustomEase", "CustomBounce"],
     "T20": ["Physics2DPlugin"], "T21": ["Physics2DPlugin"],
     "S16": ["TextPlugin"], "S17": ["TextPlugin"],
     "G05": ["Flip"], "G06": ["Flip"],
 
     "K21": ["SplitText"],
     "T12": ["EasePack"],
-    "T13": ["CustomEase", "CustomBounce"],
     "U25": ["DrawSVGPlugin"],
     "U26": ["DrawSVGPlugin"],
     "U27": ["MorphSVGPlugin"],
@@ -752,8 +737,7 @@ def build_one(card, out_root: pathlib.Path):
 </script></body></html>""" % (
         cid, card["name"], CSS, cid.lower(), SECONDS, SECONDS,
         cid, card["name"], fam, stage_html(kind, card, sc),
-        ('<script src="./three.global.js"></script>' if cid in NEEDS_THREE else "")
-        + ('<script src="./gltrans-kit.js"></script><script src="./glsl.js"></script>'
+        ('<script src="./gltrans-kit.js"></script><script src="./glsl.js"></script>'
            if cid.startswith("GT") else "")
         + "".join('<script src="./plugins/%s.min.js"></script>' % _p
                   for _p in ((card.get("sample") or {}).get("plugins") or PLUGINS_FOR.get(cid, []))),
@@ -765,8 +749,6 @@ def build_one(card, out_root: pathlib.Path):
     shutil.copy(VENDOR / "gsap.min.js", d / "gsap.min.js")
     shutil.copy(VENDOR / "bg-kit.js", d / "bg-kit.js")
     shutil.copy(VENDOR / "motion-kit.js", d / "motion-kit.js")
-    if cid in NEEDS_THREE:
-        shutil.copy(VENDOR / "three.global.js", d / "three.global.js")
     if cid.startswith("GT"):
         shutil.copy(VENDOR / "gltrans-kit.js", d / "gltrans-kit.js")
         import build_gltrans as _bt

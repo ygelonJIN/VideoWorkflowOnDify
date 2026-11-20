@@ -65,8 +65,41 @@ function saveLastRun(path: string, result: RunResult): void {
   }
 }
 
-const PENDING_REVIEW_KEY = "studio.pendingReview";
+const RESUME_KEY = "studio.resumeRun";
 
+/**
+ * 中断/失败的运行也要留一份快照：重启应用后「从选中节点重跑」靠它复用前面节点的输出。
+ * 和 lastRun 不同，这里要保留 outputs——没有输出就没法复用，等于只能从头跑。
+ */
+function readResumeRun(): { path: string; at: number; result: RunResult; inputs: RunInputs } | null {
+  try {
+    const raw = localStorage.getItem(RESUME_KEY);
+    if (!raw) return null;
+    const saved = JSON.parse(raw) as { path?: string; at?: number; result?: RunResult; inputs?: RunInputs };
+    if (!saved?.result || !Array.isArray(saved.result.nodes)) return null;
+    return { path: saved.path ?? "", at: saved.at ?? 0, result: saved.result, inputs: saved.inputs ?? {} };
+  } catch {
+    return null;
+  }
+}
+
+function saveResumeRun(next: { path: string; at: number; result: RunResult; inputs: RunInputs }): void {
+  try {
+    localStorage.setItem(RESUME_KEY, JSON.stringify(next));
+  } catch {
+    /* 太大存不下：内存里那份照样能重跑，只是重启后回不来 */
+  }
+}
+
+function clearResumeRun(): void {
+  try {
+    localStorage.removeItem(RESUME_KEY);
+  } catch {
+    /* 忽略 */
+  }
+}
+
+const PENDING_REVIEW_KEY = "studio.pendingReview";
 /** 待审阅的这次运行：停在 A07，结果只在内存里等于迟早会丢，所以单独存一份。 */
 interface PendingReview {
   path: string;
@@ -255,7 +288,13 @@ export function App() {
       }
       setResult(runResult);
       // 只记成功的结果：重跑失败时别把上一次能出片的运行覆盖掉
-      if (runResult.status === "success") saveLastRun(graph.path, runResult);
+      if (runResult.status === "success") {
+        saveLastRun(graph.path, runResult);
+        clearResumeRun();
+      } else {
+        // 失败/停止也留一份：重启后能「从选中节点重跑」，不必把前面几十分钟再烧一遍
+        saveResumeRun({ path: graph.path, at: Date.now(), result: runResult, inputs: effectiveInputs });
+      }
       const produced =
         typeof runResult.outputs.html_document === "string" && typeof runResult.outputs.voiceover_script === "string";
       if (runResult.status === "success" && produced) {
@@ -332,27 +371,44 @@ export function App() {
   useEffect(() => {
     if (!graph || result || running || review) return;
     const saved = readLastRun();
-    if (!saved || saved.path !== graph.path) return;
-    setResult(saved.result);
-    const when = saved.at ? new Date(saved.at).toLocaleString() : "";
-    setNotice(`已恢复上次运行结果${when ? `（${when}）` : ""}，可直接去「出片」接着做`);
+    if (saved && saved.path === graph.path) {
+      setResult(saved.result);
+      const when = saved.at ? new Date(saved.at).toLocaleString() : "";
+      setNotice(`已恢复上次运行结果${when ? `（${when}）` : ""}，可直接去「出片」接着做`);
+      return;
+    }
+    // 上次是失败/中途停止：恢复它，让「从此节点重跑」有东西可以复用
+    const resume = readResumeRun();
+    if (resume && resume.path === graph.path) {
+      setResult(resume.result);
+      const when = resume.at ? new Date(resume.at).toLocaleString() : "";
+      setNotice(`已恢复上次中断的运行${when ? `（${when}）` : ""}：选中节点后可在右侧「从此节点重跑」`);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [graph?.path, result, running, review]);
 
-  // 别的脚本改了 YAML 时，窗口重新获得焦点就比对 sha1 并同步一次
-  const syncExternal = useCallback(async () => {
+  /** 重新读 YAML。force=true 是顶栏「重载」按钮：不看 sha1，直接把磁盘上的版本拿回来。 */
+  const reloadGraph = useCallback(async (force: boolean) => {
     if (!graph || running) return;
     try {
-      const { rev } = await api.rev(graph.path);
-      if (!rev || rev === graph.rev) return;
+      if (!force) {
+        const { rev } = await api.rev(graph.path);
+        if (!rev || rev === graph.rev) return;
+      }
       const loaded = await api.load(graph.path);
       setGraph(loaded);
       setError(null);
-      setNotice("检测到外部修改，已重新载入 YAML");
-    } catch {
-      /* 文件暂时读不到：不打断当前操作，下一次编辑/运行会给出具体错误 */
+      setNotice(force ? `已重载 YAML（rev ${loaded.rev.slice(0, 8)}）` : "检测到外部修改，已重新载入 YAML");
+    } catch (cause) {
+      // 非强制那次是后台同步：文件暂时读不到就不打断当前操作，下一次编辑/运行会给出具体错误
+      if (force) setError((cause as Error).message);
     }
   }, [graph, running]);
+
+  // 别的脚本改了 YAML 时，窗口重新获得焦点就比对 sha1 并同步一次
+  const syncExternal = useCallback(async () => {
+    await reloadGraph(false);
+  }, [reloadGraph]);
 
   useEffect(() => {
     const onFocus = () => {
@@ -380,6 +436,39 @@ export function App() {
   }, []);
 
   const fail = (cause: unknown) => setError((cause as Error).message);
+
+  /**
+   * 从选中节点重跑：把该节点**之前**已经成功的 LLM/代码节点输出原样喂回去，跳过它们。
+   * 调度器只复用顶层 LLM/代码节点（`precomputed`），所以：
+   * - 容器节点（迭代/循环）本身可以当起点，容器内部节点不行；
+   * - 起点之前的 LLM/代码节点不重新请求，省掉重跑最贵的那一段；
+   * - 上次运行没跑过该节点时，前面能复用的照样复用。
+   */
+  const runFromNode = useCallback((nodeId: string) => {
+    if (!graph || running) return;
+    const target = graph.nodes.find((node) => node.id === nodeId) ?? null;
+    if (!result) {
+      setNotice("还没有可复用的运行结果：先完整跑一次，之后才能从中途重跑。");
+      return;
+    }
+    if (target?.containerId) {
+      setNotice("这个节点在迭代/循环容器里，容器内部不能单独重跑：选中容器节点本身（例如 H02I）再重跑。");
+      return;
+    }
+    const precomputed: Record<string, Record<string, unknown>> = {};
+    // 只收顶层节点：容器内部的记录调度器根本不会命中，传过去只是白搬几 MB 的每屏 HTML
+    const topLevel = new Set(graph.nodes.filter((node) => !node.containerId).map((node) => node.id));
+    for (const record of result.nodes) {
+      if (record.nodeId === nodeId) break;
+      if (!topLevel.has(record.nodeId)) continue;
+      if ((record.type === "llm" || record.type === "code") && record.status === "success" && record.outputs) {
+        precomputed[record.nodeId] = record.outputs;
+      }
+    }
+    const reused = Object.keys(precomputed).length;
+    // 一个都复用时等于整跑，闸门照旧生效，所以不传空的 precomputed
+    void run({ inputs, ...(reused > 0 ? { precomputed } : {}) });
+  }, [graph, running, result, inputs, run]);
 
   function applyUpdate(result: { graph: WorkflowInfo; canUndo?: boolean; canRedo?: boolean }) {
     setGraph(result.graph);
@@ -530,6 +619,14 @@ export function App() {
           placeholder="选择工作流"
         />
         <button className="btn sm ghost" onClick={() => void pickWorkflow()}>打开…</button>
+        <button
+          className="btn sm ghost"
+          onClick={() => void reloadGraph(true)}
+          disabled={!graph || running}
+          title="重新读取磁盘上的 YAML（外部改过就用这个，不必切窗口触发同步）"
+        >
+          重载
+        </button>
 
         <span className="spacer" />
 
@@ -669,6 +766,7 @@ export function App() {
                 applyUpdate(updated);
               }}
               onDelete={() => void deleteNode()}
+              onRerun={runFromNode}
               onProduce={() => setView("produce")}
             />
           ) : null}

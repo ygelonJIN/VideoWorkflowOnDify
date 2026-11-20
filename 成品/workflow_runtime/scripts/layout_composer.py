@@ -69,31 +69,38 @@ UI_VARS = {
 #   2) 猜出来之后只能单向往下缩，缺 title 的屏（模型漏写）永远抬不起来；
 #   3) 于是"字号"这个视觉判断被交给了三个错误的东西：自由文本、子串匹配、单向缩字。
 # 现在的定义：**字号 = 栏宽 ÷ 每行要放几个字**，输入只有栏宽、字数、硬换行、可用高度。
+# 2026-11-19 补一条：主角色**先要一行装下**，装不下才折行（见 solve_scale 第一轮）。
 # 模型不写 px，也不写档位；本地不再读 data-composition-scale 决定大小。
 PRIMARY_ORDER = ("title", "num", "lead", "body", "note", "label", "accent")
 
 # 单条文字的设计上限（px）。不是档位，是"再大就成海报了"的常识边界。
-ROLE_CEIL = {"title": 150, "num": 150, "lead": 120, "body": 80,
+ROLE_CEIL = {"title": 110, "num": 110, "lead": 120, "body": 80,
              "note": 60, "label": 60, "accent": 100}
 # 可读下沿。竖屏字幕 45px，任何正文都不能比它小。
-ROLE_FLOOR = {"title": 80, "num": 80, "lead": 60, "body": 50,
+# lead 的下沿 2026-11-19 从 60 降到 46：60 会在标题落到 70 档时把导语顶到 60，
+# 70/60 = 0.86，主次又糊成一样大；降到 46 后 lead 永远严格是标题的 0.7。
+ROLE_FLOOR = {"title": 70, "num": 70, "lead": 46, "body": 50,
               "note": 46, "label": 46, "accent": 60}
 # 主副关系：副字号 = 主字号 × 相对比例。缺 title 时主角色自动变成 lead/body，
 # 所以"模型漏写 title → 整屏只有 36px"这条路径不存在了。
-ROLE_REL = {"title": 1.00, "num": 1.00, "lead": 0.90, "body": 0.40,
+# 2026-11-19：lead 从 0.90 降到 0.70。0.90 时 lead 和 title 只差 11px（110/99），
+# 成片里两行字看着一样大，观众会以为"这一屏有两个标题"——主次在画面上读不出来。
+# 0.70 让 lead 明确退到导语的位置（110/77），同时把 lead 的每行字数拉开，
+# 9 个字的导语在 840 栏里一行就放得下，不再和标题一起折成两行。
+ROLE_REL = {"title": 1.00, "num": 1.00, "lead": 0.70, "body": 0.40,
             "note": 0.50, "label": 0.50, "accent": 0.70}
 BODY_RATIO = 0.40      # 正文 = 标题 × 0.4（2026-11-18 定，不再有上下限夹取）
 BODY_FLOOR = 24        # 唯一的物理地板：再小就糊了
 
-# 标题档位（2026-11-18 定）：150 → 80 六档。一屏一档，装不下就降一档，
-# 不再由栏宽连续反算——栏宽永远是一栏 840，字号只跟内容多少有关。
-# 120 是标准档；短标题（≤8 字）先试 150；装不下就 105→90→80 往下降，
-# 内容少不放大——「再空也用这个」。
-TITLE_STEPS = (120, 100, 90, 80)
-TITLE_BIG = 150
-TITLE_BIG_LIMIT = 8   # 几个字以内才允许上 150
+# 标题档位（2026-11-18 晚二次改）：110 → 70 五档，一屏一档，装不下就降一档。
+# 取消"≤8 字可上 150"的特大档：150 在竖屏上已经不是标题而是海报字，
+# 和 120 摆在同一支片里像两种字号体系。现在最大 110（TITLE_BIG_LIMIT=0 关掉大档分支），
+# 标准档 100，往下 90 / 80 / 70；内容少不放大——「再空也用这个」。
+TITLE_STEPS = (110, 100, 90, 80, 70)
+TITLE_BIG = 110
+TITLE_BIG_LIMIT = 0   # 0 = 不再有"短标题先试大档"这条分支
 GAP = 26                      # 与 .scene-copy 的 gap 一致
-ANCHOR_FLOOR = 80             # 整屏视觉锚的下沿：一屏里最大的字至少要这么大，否则竖屏读不出重点
+ANCHOR_FLOOR = 70             # 整屏视觉锚的下沿：一屏里最大的字至少要这么大，否则竖屏读不出重点
 
 
 
@@ -151,11 +158,11 @@ def _lines_needed(units: int, width: int, size: int, segs=None) -> int:
 
 
 def solve_scale(roles: dict, width: int, avail_h: float) -> dict:
-    """一栏式字号：在 150→80 六档里选「装得下的最大一档」。
+    """一栏式字号：在 110→70 五档里选「一行排得满、又装得下」的最大一档。
 
     2026-11-18 定：不再由栏宽连续反算（那会让同一部片出现 88/120/150/180 五级跳），
     也不再叠「正文 = 标题 × 比例」和「标题 ≤ 副角色 × 2.4」两道压制。
-    唯一依据：这一屏的可用高度（已扣照片和间距）+ 文字占几个字。
+    依据只有两条：主角色能不能一行装下、这一屏的可用高度够不够。
     """
     items = {}
     for role, data in (roles or {}).items():
@@ -180,12 +187,27 @@ def solve_scale(roles: dict, width: int, avail_h: float) -> dict:
 
     primary = next((r for r in PRIMARY_ORDER if r in items), None) or next(iter(items))
 
-    # 一行至少放得下 5 个字：窄栏（左右并排时 472）自动降档，
-    # 不然 120px 的标题在 472 宽里每行只有 3 个字，「人生不 / 是等着 / 社会盖」这种折行没法看。
-    width_cap = max(ROLE_FLOOR.get(primary, 80), int(width // 5))
+    # 档位上限再受栏宽约束：栏宽只决定「能用到哪一档」，不够就整档往下跳。
+    # （左右并排已删，栏宽恒为 840，这条只剩小窗让位时才起作用。）
+    width_cap = max(ROLE_FLOOR.get(primary, 70), int(width // 5))
+
+    # 2026-11-19：标题带硬换行（H02SK 按标点切好的 <br>）时，字号还要受「最长那一行」约束。
+    # 以前只按整块字数算档位，8 个字的行配上 110px 就是 880px，整行顶出 840 栏，
+    # 浏览器再折一次，换行点就落到词中间（s06「取消的是强制性，不是反对努力」折成
+    # 「取消的是强 / 制性，不是 / 反对努力」）。现在 840/8 = 105 → 整档掉到 100。
+    _segs = items[primary]["segs"]
+    if _segs:
+        _seg_cap = int(width / float(max(1, max(_segs))))
+        width_cap = max(ROLE_FLOOR.get(primary, 70), min(width_cap, _seg_cap))
+
+    # 2026-11-18 晚：档位只认 110/100/90/80/70，不再"取档位再按栏宽连续缩"。
+    # 栏宽只决定**能用到哪一档**：宽度不够就整档往下跳，出片里出现的字号永远是这五个之一。
+    # （以前 min(档位, 栏宽÷5) 会算出 87、75 这种中间值，一支片里像有好几套字号。）
+    steps = [v for v in sorted(set(TITLE_STEPS), reverse=True) if v <= width_cap]
+    if not steps:
+        steps = [ROLE_FLOOR.get(primary, 70)]
 
     def build(title_size: int) -> dict:
-        title_size = min(title_size, width_cap)
         out = {primary: title_size}
         for role in items:
             if role == primary:
@@ -206,19 +228,35 @@ def solve_scale(roles: dict, width: int, avail_h: float) -> dict:
         return total
 
     chosen = None
-    primary_units = items[primary]["units"] if primary in items else 0
-    if primary_units <= TITLE_BIG_LIMIT:
-        big = build(TITLE_BIG)
-        if height_of(big) <= avail_h:
-            chosen = big
+    # 第一轮（2026-11-19）：先要「主角色一行装下」，再谈装不装得下高度。
+    # 以前只看总高度，110 在 840 栏里一行只放 7 个字，9 个字的标题折成两行
+    # 总高 527.6 远小于可用 1383，于是"装得下"直接通过、再也不会试到能一行的 90；
+    # 折出来的两行又被 text-wrap:balance 拉成 5+4，每行只用掉 550/440px，
+    # 右边空 290px —— 观众看到的就是"明明还能塞三个字却换了行"。
+    # 现在宁可降一档把一行排满：9 字→90（810/840），10 字→80，11–12 字→70。
+    def fits_one_line(size: int) -> bool:
+        data = items[primary]
+        if data["segs"]:
+            # 模型写了硬换行（<br>），折行是它自己定的版式，不在这里改它
+            return False
+        return _lines_needed(data["units"], width, size, data["segs"]) <= 1
+
+    for step in steps:
+        candidate = build(step)
+        if fits_one_line(step) and height_of(candidate) <= avail_h:
+            chosen = candidate
+            break
+
+    # 第二轮：字数超过一行上限（840 栏 @70px 最多 12 个字）或写了硬换行时，
+    # 折行是必然的，这时回到「高度装得下的最大一档」，不再追求一行。
     if chosen is None:
-        for step in TITLE_STEPS:
+        for step in steps:
             candidate = build(step)
             if height_of(candidate) <= avail_h:
                 chosen = candidate
                 break
     if chosen is None:
-        chosen = build(ROLE_FLOOR.get(primary, 80))
+        chosen = build(steps[-1])
 
     base = chosen[primary]
     for role in ROLE_CEIL:
@@ -311,9 +349,12 @@ def build_scene_css(scene_id: str, zone: str, align: str, scale: str, tone: str,
     # 照片是绝对定位的一块矩形，文字区必须落在它的另一侧，否则必然压上去。
     # 2026-11-15：s03/s04/s06 全是"文字叠在照片上"，就是因为版面不知道照片在哪。
     SAFE = 120
-    GAP = 48
+    # 2026-11-18 晚：图与字的间距 48 → 24，和 .scene-copy 的行间距分开。
+    # 2026-11-19：左右并排已删，GAP 现在只用于「照片横带与文字带之间」和
+    # 「文字块与数字人小窗之间」，不再有「图文左右间距」这回事。
+    GAP = 24
     CANVAS_W, CANVAS_H = 1080, 1920
-    MIN_TEXT = 460        # 文字栏最窄宽度（左右并排时文字栏）：420 时 8 字标题 60px 会折成 7+1（单字成行）
+    MIN_TEXT = 330        # 数字人小窗让位后文字栏的最窄宽度（左右并排已删，正常版面恒为 840）
     TARGET_TEXT = 840     # 一栏式：文字栏就是整条内容区
     MIN_TEXT_BAND = 520   # 横带照片让开之后，文字区至少还能剩这么高，否则不算"分带"
     COPY_TOP = 150
@@ -352,23 +393,16 @@ def build_scene_css(scene_id: str, zone: str, align: str, scale: str, tone: str,
     # 通栏横带是 900 宽（83%），按 95% 判就不再算"分带"，文字被推进旁边一条窄栏——
     # 图变小了、字反而更挤，正好反着。
     # 一栏式：照片宽度就是内容栏宽 840（= 1080 - 120×2），判据按可用宽度算，不再按画幅 80%。
-    if has_media and (m_right - m_left) >= (CANVAS_W - SAFE * 2) - 2:
+    # 2026-11-19：**左右并排已从落版删除**，照片只剩上下通栏横带。
+    # 所以"照片在侧 → 文字让位成窄栏"这条分支整段删掉：
+    # 有照片时一律分带（另一带不够高由下面的 240 保底处理），文字永远占整条 120–960。
+    # 满屏底纹（slot=full）不算内容，不参与分带。
+    if has_media and slot != "full" and (m_right - m_left) >= (CANVAS_W - SAFE * 2) - 2:
         space_above = m_top - COPY_TOP
         space_below = COPY_BOTTOM - m_bottom
-        band_split = max(space_above, space_below) >= MIN_TEXT_BAND
-    if m_left is not None and m_right is not None and not band_split:
-        # 按照片实际占的那半边让位，不要按 zone 猜。
-        # 2026-11-15 踩过：zone=right-middle（文字该在右）碰上照片放在左边，
-        # 旧判断只看 m_right>540 就认定"照片在右"，把文字挪到左侧压在照片上。
-        if (m_left + m_right) / 2.0 < CANVAS_W / 2.0:     # 照片在左 → 文字在右
-            left_edge = min(m_right + GAP, CANVAS_W - SAFE - MIN_TEXT)
-        else:                                             # 照片在右 → 文字在左
-            right_edge = max(m_left - GAP, SAFE + MIN_TEXT)
+        band_split = True
     avail_w = right_edge - left_edge
-    # 2026-11-17：无图屏用满安全宽度。以前无图屏也吃 zone 的 780/760，
-    # 右侧（左对齐）或左侧（右对齐）整条留白空着，字还在窄栏里自己折行——
-    # 画面里没有任何东西要避让，凭什么收窄。有图的屏才按让位后的宽度收。
-    width = avail_w if not has_media else min(max(width, min(MIN_TEXT, avail_w)), avail_w)
+    width = avail_w
     if texts_left:
         copy_left, copy_right = left_edge, left_edge + width
     else:
@@ -426,7 +460,7 @@ def build_scene_css(scene_id: str, zone: str, align: str, scale: str, tone: str,
         '[data-media-slot="%s"]' % slot if slot else "")
     if (media_target and not band_split
             and None not in (m_left, m_right, m_top, m_bottom)
-            and copy_right > m_left and copy_left < m_right):
+            and copy_right >= m_left and copy_left < m_right):
         photo_w = max(1, m_right - m_left)
         photo_h = max(1, m_bottom - m_top)
         if texts_left:
@@ -439,7 +473,7 @@ def build_scene_css(scene_id: str, zone: str, align: str, scale: str, tone: str,
             outer_edge = min(m_left, SAFE)
             avail = min(inner_edge - outer_edge, inner_edge - SAFE)
         if avail < 240:
-            # 横向挤不出 240px：放弃左右分栏，改成上下分带。
+            # 横向挤不出 240px：改成上下分带（左右并排已删，这里只作满屏图的兜底）。
             # 版面必须自己解决冲突，不能让"照片太大"变成"文字压在照片上"交给人去发现。
             band_h = min(m_bottom - m_top, 620)
             if center_y_of(m_top, m_bottom) < CANVAS_H / 2.0:
@@ -495,8 +529,22 @@ def build_scene_css(scene_id: str, zone: str, align: str, scale: str, tone: str,
         band_bottom_px = min(COPY_BOTTOM, band_top_px + 240)
     copy_top = "%dpx" % band_top_px
     copy_bottom = "%dpx" % (CANVAS_H - band_bottom_px)
-    align_next_to_photo = "center"
-    anchor = "center"
+    # 2026-11-19：照片和文字是**一组**——一起在 150–1533 里垂直居中，两者间距恒 GAP。
+    # 用 flex 排，不用绝对定位算坐标：文字块的真实高度只有浏览器知道（换行、字体度量），
+    # 自己算出来的 top 和真实高度差几十像素，就变成"规则写 24、实际 200"。
+    flex_group = bool(has_media and slot != "full")
+
+    # 2026-11-19：分带时文字**贴着照片排**，不再在带内居中。
+    # 以前恒 center 的结果是：横带与文字带之间写着 24px，实际看到的空隙是 200–300px
+    # （文字块在 863 高的空带里居中，离照片老远），"间距 24"名不副实。
+    if band_split:
+        if space_above >= space_below:      # 照片在下带 → 文字贴照片上沿
+            anchor, align_next_to_photo = "bottom", "flex-end"
+        else:                               # 照片在上带 → 文字贴照片下沿
+            anchor, align_next_to_photo = "top", "flex-start"
+    else:
+        align_next_to_photo = "center"
+        anchor = "center"
 
     # 2026-11-17：文字容器不再撑满整条带。以前 top/bottom 同时钉死，容器永远是
     # 780×1420（或 760×1420），柔光底衬照着容器画，就成了"占屏 80%、字只占中间一小条"
@@ -510,7 +558,10 @@ def build_scene_css(scene_id: str, zone: str, align: str, scale: str, tone: str,
         anchor = "top"
     band_top = int(str(copy_top).replace("px", ""))
     band_bottom = int(str(copy_bottom).replace("px", ""))
-    if anchor == "center":
+    if flex_group:
+        # 整组居中：文字块由 flex 排，不写 top/bottom/height（高度交给内容）
+        copy_vpos = "  position:relative;top:auto;bottom:auto;left:auto;right:auto;width:%dpx;" % width
+    elif anchor == "center":
         # 一栏式：容器撑满文字带，内容在带内垂直居中（内容多时自动等同顶对齐）
         copy_vpos = "  top:%dpx; height:%dpx;" % (band_top, max(240, (CANVAS_H - band_bottom) - band_top))
     elif anchor == "top":
@@ -531,13 +582,19 @@ def build_scene_css(scene_id: str, zone: str, align: str, scale: str, tone: str,
 
     parts.append('[data-scene="%s"] .scene-copy{position:absolute;z-index:5;' % sid)
     parts.append(copy_vpos)
-    parts.append("  left:%dpx;" % copy_left if texts_left else "  right:%dpx;" % (CANVAS_W - copy_right))
+    # flex 组里 .scene-copy 由容器居中放置，不能再写 left/right——
+    # 写了就会在 flex 位置之上再偏移 120px（2026-11-19 实测：整块右移 120，看着像"横向居中"）。
+    if not flex_group:
+        parts.append("  left:%dpx;" % copy_left if texts_left else "  right:%dpx;" % (CANVAS_W - copy_right))
     parts.append("  width:%dpx;" % width)
 
     # 可用高度：文字带上下沿之间，扣掉字幕区之后的净高度
     _band_top = int(str(copy_top).replace("px", ""))
     _band_bottom = int(str(copy_bottom).replace("px", ""))
-    avail_h = max(240, (CANVAS_H - _band_bottom) - _band_top)
+    if flex_group:
+        avail_h = max(240, (COPY_BOTTOM - COPY_TOP) - GAP - (m_bottom - m_top))
+    else:
+        avail_h = max(240, (CANVAS_H - _band_bottom) - _band_top)
     fs = solve_scale(roles or {}, width, avail_h)
     _primary_size = max(fs.values()) if fs else ROLE_FLOOR["title"]
 
@@ -548,10 +605,31 @@ def build_scene_css(scene_id: str, zone: str, align: str, scale: str, tone: str,
     # （.ui-table 的 td、.ui-toast 这类）以前继承到文档默认黑，深底上整行看不见——
     # 第六屏的表格行就是这么"空"的。--ui-ink 本来就是按 tone 发的，这里让继承链也对上。
     parts.append("  color:var(--ui-ink);")
-    # 组件字号跟着本屏主字号走：主字号 96px 时 1.55，200px 时 2.0（夹在 [1.55, 2.0]）
-    _ui_scale = round(min(2.0, max(1.55, 1.55 + (_primary_size - 96) * 0.0045)), 2)
+    # 组件字号跟着本屏主字号走，锚点重标（2026-11-19）：
+    # 旧公式以"标题 96px → 1.55"起算，是给 120/150 那个年代写的。标题档改成 110–70 之后，
+    # 110 只算出 1.61（.ui-card h3 = 34×1.61 ≈ 55px、正文 24×1.61 ≈ 39px），组件整体缩了一圈。
+    # 现在锚在"标题 110 → 1.80"，往下到 70 → 1.60：h3 61–54px、组件正文 43–38px，
+    # 和标题 110 / 正文 44 的层级对得上（组件是界面，要比正文大、比标题小）。
+    _ui_scale = round(min(2.0, max(1.60, 1.60 + (_primary_size - 70) * 0.005)), 2)
     parts.append("  --ui-scale:%s;" % _ui_scale)
     parts.append("}\n")
+    if flex_group:
+        # section 自己当 flex 列：padding 把可用高度锁在 150–1533，justify-content 让整组居中。
+        # 照片与文字的顺序按"照片在上带还是下带"用 order 换，不动 DOM（转场和动效都按 DOM 找元素）。
+        _pad_top = COPY_TOP
+        if pip_rect and space_above >= space_below:      # 文字在上带：让开右上角小窗
+            _pad_top = max(COPY_TOP, int(pip_rect[1]) + GAP)
+        _order_copy, _order_media = (1, 2) if space_above >= space_below else (2, 1)
+        parts.append('section[data-scene="%s"]{display:flex;flex-direction:column;'
+                     'align-items:center;justify-content:center;box-sizing:border-box;'
+                     'padding:%dpx 0 %dpx;gap:%dpx;}\n'
+                     % (sid, _pad_top, CANVAS_H - COPY_BOTTOM, GAP))
+        parts.append('[data-scene="%s"] .scene-copy{order:%d;}\n' % (sid, _order_copy))
+        parts.append('section[data-scene="%s"] .media[data-media-slot]{position:relative!important;'
+                     'left:auto!important;top:auto!important;right:auto!important;bottom:auto!important;'
+                     'inset:auto!important;flex:0 0 auto;width:%dpx!important;height:%dpx!important;'
+                     'order:%d;}\n'
+                     % (sid, m_right - m_left, m_bottom - m_top, _order_media))
     parts.append('[data-scene="%s"] .scene-copy > :only-child{margin-top:auto;margin-bottom:auto;}\n' % sid)
     # 一栏式只用一条左对齐的栏：卡片、组件不许自己居中（2026-11-18 定）。
     # 以前 `width:fit-content` 的 ui-card 在 flex 里被居中，同一屏出现"标题左对齐、卡片居中"两种对齐。
@@ -566,6 +644,12 @@ def build_scene_css(scene_id: str, zone: str, align: str, scale: str, tone: str,
     # 会撑成 142px 高的一排砖；压小到 21px 又看不清，两头都不对。
     ui_scale = _ui_scale
     parts.append('[data-scene="%s"] .scene-copy [class*="ui-"]{--ui-scale:%s;}\n' % (sid, ui_scale))
+    # 卡片字号直接锚在「本屏主字号 × 0.6 / 0.4」（2026-11-20 定）：
+    # 34:24 不是 0.6:0.4，用同一个 ui-scale 乘固定基准永远对不齐——
+    # 标题 80px 时落到 56/40（实测 0.70 / 0.495），卡片比标题的层级差看不出来。
+    # 这里按本屏主字号发两个变量，.ui-card 的 h3 / p 读它们；没有标题的屏退回旧公式。
+    parts.append('[data-scene="%s"] .scene-copy{--ui-card-title:%dpx;--ui-card-body:%dpx;}\n'
+                 % (sid, int(round(_primary_size * 0.6)), int(round(_primary_size * 0.4))))
     # 窄栏里再排 2/3 列就等于每格 100px，词只能逐字换行。
     # 栏宽不到 560 时，网格和步骤条一律退成单列（每行通栏），不再硬塞多列。
     if width < 560:

@@ -38,6 +38,7 @@ WORK = HERE.parent.parent
 PRESETS = HERE / "presets.json"
 CSS = WORK / "成品" / "workflow_runtime" / "assets" / "vendor" / "components.css"
 SYNC_VIDEO = WORK / "成品" / "workflow_runtime" / "scripts" / "sync_video.py"
+PLUGIN_DIR = WORK / "成品" / "workflow_runtime" / "assets" / "vendor" / "gsap-plugins"
 REELS = HERE / "样片" / "全卡审阅"
 BATCH_ROOT = HERE / "样片" / "待筛"
 
@@ -76,6 +77,32 @@ def component_classes():
     return set(re.findall(r"\.(ui-[a-z-]+)", CSS.read_text(encoding="utf-8")))
 
 
+def injected_plugins():
+    """运行时真正会注入的 GSAP 插件（sync_video.GSAP_PLUGINS 是唯一真值）。"""
+    text = SYNC_VIDEO.read_text(encoding="utf-8")
+    m = re.search(r"GSAP_PLUGINS\s*=\s*\(([^)]*)\)", text)
+    return set(re.findall(r'"([^"]+)"', m.group(1))) if m else set()
+
+
+def vendor_plugins():
+    """vendor 里躺着、但可能没被注入的插件名（CustomBounce / CustomEase 这类）。"""
+    if not PLUGIN_DIR.is_dir():
+        return set()
+    return {p.stem.replace(".min", "") for p in PLUGIN_DIR.glob("*.min.js")}
+
+
+def plugin_deps(card, known):
+    """这张卡依赖哪些 GSAP 插件：src 的 gsap: 前缀 + code 里的 window.XXX 守卫。"""
+    need = set()
+    m = re.match(r"gsap:([A-Za-z0-9_]+)", str(card.get("src") or "").strip())
+    if m:
+        need.add(m.group(1))
+    for name in re.findall(r"window\.([A-Za-z_$][\w$]*)", str(card.get("code") or "")):
+        if name in known:
+            need.add(name)
+    return need
+
+
 def validate(card, existing, kinds, classes):
     bad = []
     for key in REQUIRED:
@@ -94,6 +121,17 @@ def validate(card, existing, kinds, classes):
     for name in re.findall(r"\{\{(\w+)\}\}", str(card.get("code") or "")):
         if name not in params and name not in auto:
             bad.append("code 里的 {{%s}} 在 params 里没有默认值" % name)
+    # 插件依赖（2026-11-19）：卡片代码里 `if (!window.CustomBounce) return;` 这种守卫
+    # 意味着插件没注入时整张卡静默空转，只剩前面那句 `set opacity:1` —— 成片里就是
+    # "啪一下出现"，观众看到的是"这一屏根本没有动效"（2026-11-19 s02 实测）。
+    # CustomEase / CustomBounce / CustomWiggle 已于 2026-11-15 从 GSAP_PLUGINS 主动移除
+    # （CustomEase 会让逐帧 seek 崩、整片渲染失败），所以依赖它们的卡在这里就拒收。
+    injected = injected_plugins()
+    known = injected | vendor_plugins()
+    for name in sorted(plugin_deps(card, known)):
+        if name not in injected:
+            bad.append("依赖插件 %s 没有被注入（sync_video.GSAP_PLUGINS 里没有），"
+                       "这张卡在浏览器里会静默空转；改用内置 ease 重写" % name)
     # text_safe：这张卡能不能落在常驻文字节点（data-role）上。默认 true。
     # 卡结束时元素偏离原位（S21 甩出去只回来一部分）、或放大后不回落（T16 到 4 倍）的，
     # 一旦点在 title/body 上，文字就跑出画布或糊满整屏。这类卡必须显式写 false，

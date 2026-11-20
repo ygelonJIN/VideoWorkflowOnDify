@@ -44,7 +44,7 @@ YAMLS = [YAML, REPO / "Dify工作流" / "01_有数字人完整视频工作流.ym
 CARDS_MD = HERE / "能力卡.md"
 COMP_MD = HERE / "组件卡.md"
 
-FAMILY_ORDER = ["入场", "状态", "字形", "版面", "离场", "结构", "照片", "三维",
+FAMILY_ORDER = ["入场", "状态", "字形", "版面", "离场", "结构", "照片",
                 "材质", "镜头", "交互", "绘制", "UI", "背景", "页间转场", "组件"]
 
 MOTION_ROLES = ["entrance_text", "entrance_block", "state_text", "state_block",
@@ -52,7 +52,7 @@ MOTION_ROLES = ["entrance_text", "entrance_block", "state_text", "state_block",
 
 HARD_RULES = """## 四条硬规则（v2，2026-11-13）
 
-1. **字由 HTML 承载**：canvas / 三维里不放文字。
+1. **字由 HTML 承载**：canvas 里不放文字。
 2. **每屏一个主运动**，其余是次级；相邻两屏的主运动不能是同一张卡。切点前 0.3–0.5 秒要有收束（离场或自带回位），**不强制用 X 卡**。
 3. **动效由时间线驱动**，任意一帧可 seek 复现；禁 `requestAnimationFrame`、`performance.now`、`Math.random`、`yoyo`/`repeat` 无限循环（按 `t` 的周期函数不算循环）。
 4. **模型写数据不写实现**：只给编号 + 目标 `data-anim` 名 + 时序；坐标、目标框、路径一律由场景 HTML 给。
@@ -317,14 +317,19 @@ def main() -> int:
         compile(new_code, "h00", "exec")
         h02s_text = yaml_nodes.get_prompt_text("h02s", path)
         h02s_new = splice_components_prompt(h02s_text, prompt_block)
-        a10_text = yaml_nodes.get_prompt_text("a10", path)
-        a10_new = splice_inventory_prompt(a10_text, inv_block)
+        # A10 编号清单段：2026-11-18 起工作流里已经没有 a10 节点（A10/A11 并入 A12 与 A09）。
+        # 节点不在就跳过这一段，不当成错误——否则整个加删卡链路会被一个不存在的节点卡死。
+        try:
+            a10_text = yaml_nodes.get_prompt_text("a10", path)
+        except SystemExit:
+            a10_text = None
+        a10_new = splice_inventory_prompt(a10_text, inv_block) if a10_text is not None else None
         plans.append((path, code, new_code, h02s_text, h02s_new, a10_text, a10_new))
         if new_code != code:
             diffs.append("%s 的 H00 目录" % path.name)
         if h02s_new != h02s_text:
             diffs.append("%s 的 H02S 组件段" % path.name)
-        if a10_new != a10_text:
+        if a10_text is not None and a10_new != a10_text:
             diffs.append("%s 的 A10 编号清单" % path.name)
 
     if not CARDS_MD.exists() or CARDS_MD.read_text(encoding="utf-8") != md_cards:
@@ -347,7 +352,7 @@ def main() -> int:
             write_h00(new_code, path)
         if h02s_new != h02s_text:
             yaml_nodes.set_prompt_text("h02s", h02s_new, path)
-        if a10_new != a10_text:
+        if a10_text is not None and a10_new != a10_text:
             yaml_nodes.set_prompt_text("a10", a10_new, path)
     CARDS_MD.write_text(md_cards, encoding="utf-8")
     COMP_MD.write_text(md_comp, encoding="utf-8")

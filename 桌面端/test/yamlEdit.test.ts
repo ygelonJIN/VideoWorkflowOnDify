@@ -3,10 +3,74 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { parse } from "yaml";
 import { addNode, connect, moveNode, promptTextOf, removeEdge, removeNode, updateNodeField, YamlEditError } from "../src/engine/yamlEdit.js";
-import { WORKFLOW, WORKFLOW_01 } from "./paths.js";
+import { WORKFLOW } from "./paths.js";
 
 const RAW = readFileSync(WORKFLOW, "utf8");
-const RAW_01 = readFileSync(WORKFLOW_01, "utf8");
+
+// 多消息提示词和 if-else 默认条件这两条能力不绑真实工作流：04/01 里没有多消息节点，
+// 带 outputs 的只有 end 节点（从 end 后面接门禁没意义）。用一份最小 DSL 专门测这两条。
+const MINI = `version: "0.7.0"
+kind: app
+app:
+  name: 编辑测试
+  mode: workflow
+workflow:
+  graph:
+    nodes:
+    - id: s
+      type: custom
+      data:
+        type: start
+        title: S
+        variables: []
+    - id: d01
+      type: custom
+      data:
+        type: llm
+        title: 多消息
+        model:
+          provider: langgenius/opencode_go/opencode_go
+          name: gpt-6-luna
+          mode: chat
+        prompt_template:
+        - role: system
+          text: 系统提示
+        - role: user
+          text: 用户问题
+    - id: c1
+      type: custom
+      data:
+        type: code
+        title: 代码
+        code: "def main() -> dict:\\n    return {\\"text\\": \\"\\"}"
+        outputs:
+        - variable: text
+          value_selector:
+          - c1
+          - text
+          value_type: string
+    - id: e
+      type: custom
+      data:
+        type: end
+        title: E
+        outputs:
+        - variable: result_summary
+          value_selector:
+          - s
+          - x
+          value_type: string
+    edges:
+    - id: e1
+      source: s
+      target: d01
+    - id: e2
+      source: d01
+      target: c1
+    - id: e3
+      source: c1
+      target: e
+`;
 
 interface GraphShape {
   workflow: {
@@ -43,26 +107,26 @@ describe("YAML 写回", () => {
 
   it("改代码与标题", () => {
     const code = "def main(x: str) -> dict:\n    return {\"ok\": x}\n";
-    const withCode = updateNodeField(RAW, "a02", "code", code);
-    assert.equal(nodeData(withCode, "a02")["code"], code);
+    const withCode = updateNodeField(RAW, "a03", "code", code);
+    assert.equal(nodeData(withCode, "a03")["code"], code);
     const withTitle = updateNodeField(withCode, "a03", "title", "A03 新标题");
     assert.equal(nodeData(withTitle, "a03")["title"], "A03 新标题");
   });
 
   it("多消息提示词按索引只改那一条", () => {
-    const before = graphOf(RAW_01).nodes.find((node) => node.id === "d01")?.data["prompt_template"] as Array<{ role: string; text: string }>;
-    assert.equal(before.length, 2, "01 的 d01 应是 system+user 两条");
-    const next = updateNodeField(RAW_01, "d01", "prompt", "新的 user 消息", 1);
+    const before = graphOf(MINI).nodes.find((node) => node.id === "d01")?.data["prompt_template"] as Array<{ role: string; text: string }>;
+    assert.equal(before.length, 2, "d01 应是 system+user 两条");
+    const next = updateNodeField(MINI, "d01", "prompt", "新的 user 消息", 1);
     const after = graphOf(next).nodes.find((node) => node.id === "d01")?.data["prompt_template"] as Array<{ role: string; text: string }>;
     assert.equal(after.length, 2);
     assert.equal(after[0]?.text, before[0]?.text, "第一条 message 不应被动");
     assert.equal(after[1]?.text, "新的 user 消息");
-    assert.equal(graphOf(next).nodes.length, graphOf(RAW_01).nodes.length);
+    assert.equal(graphOf(next).nodes.length, graphOf(MINI).nodes.length);
     assert.equal(promptTextOf(next, "d01"), `${before[0]?.text}\n\n新的 user 消息`);
   });
 
   it("提示词索引越界直接报错", () => {
-    assert.throws(() => updateNodeField(RAW_01, "d01", "prompt", "x", 2), YamlEditError);
+    assert.throws(() => updateNodeField(MINI, "d01", "prompt", "x", 2), YamlEditError);
   });
 
   it("未知节点直接报错，不写坏文件", () => {
@@ -95,10 +159,11 @@ describe("YAML 写回", () => {
   });
 
   it("删除中间节点会把前后接上", () => {
-    const removed = removeNode(RAW, "a02");
+    // a01 夹在 a00 和 a03 之间：一进一出，删掉后应直接把 a00 接到 a03
+    const removed = removeNode(RAW, "a01");
     const graph = graphOf(removed);
     assert.equal(graph.nodes.length, BASE_NODES - 1);
-    assert.ok(graph.edges.some((edge) => edge.source === "a01" && edge.target === "a03"));
+    assert.ok(graph.edges.some((edge) => edge.source === "a00" && edge.target === "a03"));
   });
 
   it("连线与断开", () => {
@@ -122,11 +187,13 @@ describe("YAML 写回", () => {
   });
 
   it("新加 if-else 会按来源节点的输出生成默认条件", () => {
-    const added = addNode(RAW, { type: "if-else", title: "新门禁", position: { x: 0, y: 0 }, sourceId: "a03" });
+    // 默认条件读的是来源节点声明的 outputs：04/01 里只有 end 节点带 outputs，
+    // 从 end 后面接门禁没有意义，所以用 MINI 里那个带 outputs 的代码节点当来源。
+    const added = addNode(MINI, { type: "if-else", title: "新门禁", position: { x: 0, y: 0 }, sourceId: "c1" });
     const graph = graphOf(added.raw);
     const node = graph.nodes.find((item) => item.id === added.nodeId);
     const cases = node?.data["cases"] as Array<{ conditions: Array<{ variable_selector: string[]; comparison_operator: string }> }>;
-    assert.equal(cases?.[0]?.conditions[0]?.variable_selector[0], "a03");
+    assert.equal(cases?.[0]?.conditions[0]?.variable_selector[0], "c1");
     assert.equal(cases?.[0]?.conditions[0]?.comparison_operator, "is not empty");
   });
 

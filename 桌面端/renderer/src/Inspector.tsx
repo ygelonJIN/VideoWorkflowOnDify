@@ -24,6 +24,7 @@ interface Props {
   status: string;
   onUpdate: (field: EditableField, value: string, messageIndex?: number) => Promise<void>;
   onDelete: () => void;
+  onRerun?: (nodeId: string) => void;
   onProduce?: () => void;
 }
 
@@ -39,7 +40,7 @@ function Section({ title, action, children }: { title: string; action?: React.Re
   );
 }
 
-export function Inspector({ graph, node, result, status, onUpdate, onDelete, onProduce }: Props) {
+export function Inspector({ graph, node, result, status, onUpdate, onDelete, onRerun, onProduce }: Props) {
   const [editor, setEditor] = useState<{ field: EditableField; value: string; index?: number } | null>(null);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -229,6 +230,23 @@ export function Inspector({ graph, node, result, status, onUpdate, onDelete, onP
                   {runNode.error && <tr><td>错误</td><td className="bad-text">{runNode.error}</td></tr>}
                 </tbody>
               </table>
+            </Section>
+          )}
+
+          {onRerun && (
+            <Section title="重跑">
+              <div className="hint-text">
+                从「{node.title}」开始跑：它之前的 LLM/代码节点直接复用上次输出，不再请求模型。
+                改过代码的节点也会用旧输出，所以改完节点就从更早的位置重跑或整跑。
+                {node.containerId ? "这个节点在迭代/循环容器里，容器内部不能单独重跑，请选中容器节点本身。" : ""}
+              </div>
+              <button
+                className="btn"
+                onClick={() => onRerun(node.id)}
+                disabled={!result || Boolean(node.containerId)}
+              >
+                从此节点重跑
+              </button>
             </Section>
           )}
 

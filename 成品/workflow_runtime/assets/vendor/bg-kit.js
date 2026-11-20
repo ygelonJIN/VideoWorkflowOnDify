@@ -488,7 +488,7 @@
 
   Object.assign(P, EX);
 
-  /* ── magicui 批（2026-11-17，MIT）：B49 抖动网点 / B50 透视网格 / B51 流星 / Z17 点阵地球 ──
+  /* ── magicui 批（2026-11-17，MIT）：B49 抖动网点 / B50 透视网格 / B51 流星 ──
    * 全部是 t 的纯函数：同一个 t 画出来永远一样，可 seek、可复现，不用 Math.random。 */
   var BAYER8 = [0,32,8,40,2,34,10,42, 48,16,56,24,50,18,58,26,
                 12,44,4,36,14,46,6,38, 60,28,52,20,62,30,54,22,
@@ -637,54 +637,6 @@
     }
   };
 
-  /* Z17 点阵地球：fibonacci 球面取点，正交投影自转，节点按 t 脉冲 */
-  var _globePts = null;
-  P.globe = function (c, w, h, t, o) {
-    var N = o.count || 2400, cx = w * 0.5, cy = h * (o.cy || 0.46);
-    var R = Math.min(w * 0.36, h * 0.2), tilt = (o.tilt == null ? 0.34 : o.tilt);
-    var rot = t / (o.per || 6) * TAU;
-    if (!_globePts || _globePts.length !== N) {
-      _globePts = [];
-      var gp = 2.399963229728653;
-      for (var i = 0; i < N; i++) {
-        var yy = 1 - (i / (N - 1)) * 2, rr = Math.sqrt(Math.max(0, 1 - yy * yy)), ph = i * gp;
-        _globePts.push([Math.cos(ph) * rr, yy, Math.sin(ph) * rr]);
-      }
-    }
-    c.clearRect(0, 0, w, h);
-    var rg = c.createRadialGradient(cx - R * 0.3, cy - R * 0.34, R * 0.06, cx, cy, R * 1.18);
-    rg.addColorStop(0, 'rgba(56,120,110,.26)');
-    rg.addColorStop(0.72, 'rgba(20,40,38,.14)');
-    rg.addColorStop(1, 'rgba(10,11,11,0)');
-    c.fillStyle = rg; c.beginPath(); c.arc(cx, cy, R * 1.04, 0, TAU); c.fill();
-    var ct = Math.cos(tilt), st = Math.sin(tilt), cr = Math.cos(rot), sr = Math.sin(rot);
-    for (var k = 0; k < N; k++) {
-      var p = _globePts[k];
-      var x = p[0] * cr + p[2] * sr;
-      var z = -p[0] * sr + p[2] * cr;
-      var y2 = p[1] * ct - z * st, z2 = p[1] * st + z * ct;
-      if (z2 < -0.15) continue;
-      var front = (z2 + 1) / 2, s = 1.4 + 2.3 * front;
-      c.fillStyle = 'rgba(134,240,192,' + (0.06 + 0.62 * front * front).toFixed(3) + ')';
-      c.fillRect(cx + x * R - s / 2, cy + y2 * R - s / 2, s, s);
-    }
-    var CITIES = o.cities || [[0.62, 2.05], [0.30, 0.45], [-0.12, 1.75], [0.85, -0.2], [-0.55, -0.9]];
-    for (var q = 0; q < CITIES.length; q++) {
-      var la = CITIES[q][0], lo = CITIES[q][1];
-      var cyl = Math.sin(la), crl = Math.cos(la);
-      var gx = Math.cos(lo) * crl, gz = Math.sin(lo) * crl;
-      var gx2 = gx * cr + gz * sr, gz2 = -gx * sr + gz * cr;
-      var gy2 = cyl * ct - gz2 * st, gz3 = cyl * st + gz2 * ct;
-      if (gz3 < -0.05) continue;
-      var al = (gz3 + 1) / 2, pulse = 0.5 + 0.5 * Math.sin(t * 2.6 + q * 1.3);
-      var px = cx + gx2 * R, py = cy + gy2 * R;
-      c.strokeStyle = 'rgba(255,210,120,' + (0.5 * pulse * al).toFixed(3) + ')';
-      c.lineWidth = 2; c.beginPath(); c.arc(px, py, 6 + 16 * pulse, 0, TAU); c.stroke();
-      c.fillStyle = 'rgba(255,226,160,' + (0.85 * al).toFixed(3) + ')';
-      c.beginPath(); c.arc(px, py, 4.6, 0, TAU); c.fill();
-    }
-  };
-
   var NAMES = {
     B23: ["halftone", { step: 13 }],
     B24: ["scanlines", { gap: 4 }],
@@ -705,7 +657,6 @@
     B49: ["dither", { cell: 8, lv: 0.62 }],
     B50: ["retrogrid", { hz: 0.61, speed: 0.55 }],
     B51: ["meteor", { count: 18, seed: 77 }],
-    Z17: ["globe", { count: 2400, per: 6, cy: 0.46, tilt: 0.34 }],
     B53: ["hexgrid", { r: 34, lw: 1.6 }],
     B54: ["depthdust", { count: 220, speed: 0.22, focal: 0.9 }]
   };

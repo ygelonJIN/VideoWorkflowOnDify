@@ -105,7 +105,7 @@ def main() -> None:
                 elif not re.search(r'class="[^"]*\b' + re.escape(token[1:]) + r'\b', doc):
                     return False
             return True
-        # 有 canvas/three 场景时，动效由 hf-seek 里的时间函数驱动，DOM 选择器不适用，跳过这条门禁
+        # 有 canvas 背景时，动效由 hf-seek 里的时间函数驱动，DOM 选择器不适用，跳过这条门禁
         if "hf-seek" not in doc:
             _resolved = sum(1 for _sel in _selectors if _resolves(_sel))
             if _resolved == 0:
@@ -472,9 +472,8 @@ def main() -> None:
         blocking.append("这些场景没有图片，也没有 data-visual=\"html\"：" + "、".join(scenes_without_image[:8]))
     if html_scenes and not image_refs:
         errors.append("全片都是无图屏（%d 屏）：至少保留一张真实照片" % len(html_scenes))
-    _photo_in_3d = ('data-visual="3d-photo"' in doc) or ("data-visual='3d-photo'" in doc)
-    if re.search(r"<canvas\b", doc, re.I) and image_refs and not _photo_in_3d:
-        errors.append("HTML 里同时有 canvas 和照片：默认不许同屏；要\"照片进三维\"必须在根节点声明 data-visual=\"3d-photo\"")
+    if re.search(r"<canvas\b", doc, re.I) and image_refs:
+        errors.append("HTML 里同时有 canvas 和照片：canvas 背景卡与照片不许同屏")
 
     body = doc[doc.lower().find("<body"):] if "<body" in doc.lower() else doc
     text = re.sub(r"<script.*?</script>|<style.*?</style>", " ", body, flags=re.I | re.S)

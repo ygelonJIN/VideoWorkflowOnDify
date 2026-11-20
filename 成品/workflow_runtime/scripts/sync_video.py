@@ -1433,20 +1433,39 @@ SCENE_OFFSET_SCRIPT = """
           watchIncomingWrite(args);
           return original.apply(timeline, args);
         }
-        var start = sceneStartOf(args[0]);
+        var sceneEl = sceneOfTarget(args[0]);
+        var start = sceneEl ? cueStartOf(sceneEl) : null;
         if (start !== null && start > 0) {
           timeline.__lastSceneStart = start;
           var position = null;
           for (var index = args.length - 1; index >= 1; index -= 1) {
             if (typeof args[index] === 'number') { position = index; break; }
           }
-          if (position === null) { args.push(start); }
-          else {
-            if (args[position] < start) { args[position] = args[position] + start; }
+          if (position === null) {
+            args.push(start);
+          } else {
+            if (timeline.__atRelative) {
+              // 2026-11-19：屏内 builder（形参里有 at）的位置一律是「本屏相对秒」，
+              // 无条件补屏起点。以前靠 `args[position] < start` 猜，长屏（11.7s）后半段
+              // 的相对秒比屏起点大，猜不到就当绝对秒用 —— 整条动作提前了一个屏起点
+              // （s02 的 chip 本该 11.52s 出场，实际 8.33s 就冲出去了，屏尾 4.7 秒全静止）。
+              args[position] = start + args[position];
+              // 进入屏在转场窗口里被快照盖着，这段的动作观众根本看不见：统一抬到转场之后。
+              // 以前 T26 的 1.0s 入场整段落在 flip3d 的 0.92s 里，转场一结束元素已经到位，
+              // 成片里就是"转场完直接出现"（2026-11-19 s07）。
+              var pt_dur = sceneEl ? Number(sceneEl.getAttribute('data-pt-dur') || 0) : 0;
+              if (pt_dur > 0 && args[position] < start + pt_dur + 0.02) {
+                args[position] = start + pt_dur + 0.02;
+              }
+            }
             // 动作不得越过本屏结束：模型常把时间写到 5–8 秒，而每屏只有 3–4 秒，
             // 越界的动作会跑到后面几屏，表现为"标题在别的页上闪"或"这页没放完就跳"。
             // 夹到屏尾会变成"最后几毫秒才出现"，所以同时记一条违规给门禁硬拦。
-            var win = sceneWindowOf(args[0]);
+            // 例外：骨架自己的 `set(section, {autoAlpha:0}, end)` 本来就写在屏尾，
+            // 它不是内容动作，夹它只会让时间线检查每天报 6 条假 error。
+            var _vars = varsOf(args);
+            var _isSceneToggle = _vars && ('autoAlpha' in _vars);
+            var win = _isSceneToggle ? null : sceneWindowOf(args[0]);
             if (win) {
               var limit = win.start + win.dur - 0.06;
               if (args[position] > limit) {
@@ -1474,13 +1493,13 @@ SCENE_OFFSET_SCRIPT = """
     if (typeof originalCall === 'function') {
       timeline.call = function(){
         var args = Array.prototype.slice.call(arguments);
-        if (!timeline.__absolutePositions && timeline.__lastSceneStart > 0) {
+        if (timeline.__atRelative && timeline.__lastSceneStart > 0) {
           var position = null;
           for (var index = args.length - 1; index >= 1; index -= 1) {
             if (typeof args[index] === 'number') { position = index; break; }
           }
-          if (position !== null && args[position] >= 0 && args[position] < 2 &&
-              args[position] < timeline.__lastSceneStart) {
+          // 相对秒没有上限（长屏的 call 可能写在 8 秒后），只要求非负
+          if (position !== null && args[position] >= 0) {
             args[position] = args[position] + timeline.__lastSceneStart;
           }
         }
@@ -1490,12 +1509,21 @@ SCENE_OFFSET_SCRIPT = """
   }
   list.push = function(builder){
     if (typeof builder !== 'function') { return originalPush.call(list, builder); }
+    // 位置语义按 builder 的形参判定（2026-11-19）：
+    //   function(timeline, at)  = 屏内 builder，位置是本屏相对秒，必须补屏起点；
+    //   function(timeline)      = 骨架/转场 builder，位置写的是绝对秒，一处都不补。
+    // 以前靠 `位置 < 屏起点` 猜相对/绝对，长屏后半段永远猜错（见上面那段注释）。
+    var relativeMode = builder.length >= 2;
     return originalPush.call(list, function(timeline, at){
       patchTimeline(timeline);
       var priorAbsolute = timeline.__absolutePositions;
+      var priorRelative = timeline.__atRelative;
+      timeline.__absolutePositions = priorAbsolute;
+      timeline.__atRelative = relativeMode && !priorAbsolute;
       timeline.__lastSceneStart = null;
       var result = builder(timeline, at);
       timeline.__absolutePositions = priorAbsolute;
+      timeline.__atRelative = priorRelative;
       return result;
     });
   };
@@ -1802,6 +1830,42 @@ PAGE_TRANSITIONS_JS = r"""
 """
 
 
+PT_CALL_RE = re.compile(
+    r"__pt\(\s*timeline\s*,\s*['\"]([^'\"]+)['\"]\s*,\s*['\"]([^'\"]+)['\"]\s*,"
+    r"[^,]*,\s*([\d.]+)\s*\)"
+)
+
+
+def stamp_pt_durations(document: str) -> str:
+    """把每屏的页间转场时长写到 <section data-pt-dur> 上。
+
+    屏内动效的起点必须让开转场窗口：转场期间整屏被快照盖着，这段的动作观众看不见。
+    以前 T26 的 1.0s 入场整段落在 flip3d 的 0.92s 里，转场一结束元素已经到位，
+    成片里就是"转场完直接出现"（2026-11-19 s07 实测）。
+    patchTimeline 读这个属性，把落在窗口内的动作抬到转场之后。
+    """
+    durations = {}
+    for match in PT_CALL_RE.finditer(document):
+        sid, raw = match.group(2), match.group(3)
+        try:
+            value = float(raw)
+        except ValueError:
+            continue
+        if value > 0:
+            durations[sid] = max(durations.get(sid, 0.0), value)
+    for sid, value in durations.items():
+        pattern = re.compile(r'<section\b[^>]*\bdata-scene="%s"[^>]*>' % re.escape(sid))
+
+        def _stamp(match, value=value):
+            tag = match.group(0)
+            if "data-pt-dur=" in tag:
+                return tag
+            return tag[:-1] + ' data-pt-dur="%.3f">' % value
+
+        document, count = pattern.subn(_stamp, document, count=1)
+    return document
+
+
 def install_page_transitions(document: str) -> str:
     """转场运行时必须进 <head>。
 
@@ -1812,6 +1876,7 @@ def install_page_transitions(document: str) -> str:
     `window.__pt is not a function`，成片里每一刀都是硬切（2026-11-16 定）。
     head 里的内联脚本按原顺序解析，不放特殊 type，所以放这里一定早于所有 builder。
     """
+    document = stamp_pt_durations(document)
     document = re.sub(r'<script id="page-transition-runtime">[\s\S]*?</script>\s*', '', document)
     document = re.sub(r'<script id="page-transition-shim">[\s\S]*?</script>\s*', '', document)
     shim = '<script id="page-transition-shim">' + PAGE_TRANSITIONS_SHIM + '</script>\n'

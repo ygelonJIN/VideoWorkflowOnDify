@@ -219,13 +219,19 @@ describe("容器节点", () => {
       ]);
 
     const workflow = parseWorkflow(stringify({ version: "0.7.0", kind: "app", app: { name: "04 迭代切片", mode: "workflow" }, workflow: { graph: { nodes, edges } } }), "<04-slice>");
-    const section = "<section class=\"scene\" data-scene=\"s01\">A</section>";
-    // 合并节点内部可能对动效做清洗（h02sx 等），只断言 HTML 仍在，不绑死脚本原文
-    const script = "<script>window.__m = 1;</script>";
+    // H02S 现在交的是单屏规格 JSON（不再是 HTML），H02SK 负责把它渲染成唯一合法的 <section>；
+    // H02SM 交的是动效判断 JSON，H02SX 按编号展开成 <script>。stub 就按这两份契约给。
+    // 规格里不写 scene_id：让 H02SK 用迭代项的 scene_id，三屏才是 s01/s02/s03。
+    const spec = JSON.stringify({
+      visual: "html",
+      copy: [{ role: "title", text: "标题" }],
+      layout: { zone: "center-middle", align: "center" },
+    });
+    const motion = JSON.stringify({ motions: [{ preset: "T01", target: "title", at: 0.4 }] });
     const result = await runGraph(workflow, {
       inputs: { scene_payloads: [{ scene_id: "s01" }, { scene_id: "s02" }, { scene_id: "s03" }] },
       provider: providerFromEnv({ WF_STUB: "1" }),
-      stub: { get: (nodeId: string) => (nodeId === "h02s" ? section : nodeId === "h02sm" ? script : undefined) },
+      stub: { get: (nodeId: string) => (nodeId === "h02s" ? spec : nodeId === "h02sm" ? motion : undefined) },
     });
 
     assert.equal(result.status, "success");
@@ -235,10 +241,12 @@ describe("容器节点", () => {
 
     const scenes = result.outputs["scenes"] as string[];
     assert.equal(scenes.length, 3, "每屏应收集一条合并结果");
-    for (const item of scenes) {
-      assert.ok(item.startsWith(section), "合并结果应以本屏 HTML 开头");
-      assert.ok(item.length >= section.length, "合并结果不能丢内容");
-    }
+    scenes.forEach((item, index) => {
+      const sid = `s0${index + 1}`;
+      assert.ok(item.includes(`data-scene="${sid}"`), `第 ${index + 1} 屏应带自己的 scene_id`);
+      assert.ok(item.includes(">标题<"), "规格里的 copy 要落进 HTML");
+      assert.ok(item.includes("<script"), "合并结果要带上本屏脚本");
+    });
   });
 
   it("iteration 并行模式结果顺序不变", async () => {

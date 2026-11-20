@@ -12,6 +12,8 @@ export interface WorkflowNode {
   conditions?: unknown;
   model?: string;
   promptSections?: PromptSection[];
+  /** 所属迭代/循环容器；顶层节点为 null。容器内的节点不能单独重跑。 */
+  containerId?: string | null;
 }
 
 export interface WorkflowEdge {

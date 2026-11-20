@@ -150,6 +150,9 @@ export async function loadGraph(filePath) {
       code: typeof data.code === "string" ? data.code : undefined,
       conditions: data.cases ?? data.conditions ?? undefined,
       model: data.model?.name ?? undefined,
+      // 容器归属：迭代/循环里的节点不能单独重跑（调度器只对顶层 LLM/代码节点做复用），
+      // 前端要靠这个字段决定「从此节点重跑」能不能点。
+      containerId: data.iteration_id ?? data.loop_id ?? null,
     };
   });
   const start = [...workflow.nodes.values()].find((node) => node.data?.type === "start");

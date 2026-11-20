@@ -39,6 +39,11 @@ bash /Volumes/TUF ESD-T1A Media/视频工作流/成品/workflow_runtime/tools/ru
 | 时长 | **没有目标时长**，文案写多长成片就多长，以真实口播为唯一主时钟 | `视频需求与质量标准.md` §5 |
 | 去重 | 只有 `script_hash` 一个指纹在跑 | `A07_整理口播` 的 Code 节点 |
 | 界面元素 | 只能取编号组件（`U*`），不手写图形 | `H02S` 落版 + `components.css` |
+| 标题换行 | **`H02SK` 按标点切 2 段写死 `<br>`**，`solve_scale` 再按「最长那一行」反算字号（840/8=105→100 档） | `H02SK` 的 code + `layout_composer.solve_scale` |
+| 屏内动作时刻 | builder 带 `at` 形参 = 位置是**本屏相对秒**、无条件补屏起点；落进转场窗口的动作抬到 `data-pt-dur` 之后 | `sync_video` 的 `patchTimeline` + `stamp_pt_durations` |
+| 照片落版 | 全部 840 通栏横带，高度 `band` 600/420/300、`portrait` 520、`inset` 360、`thumb` 300、`texture` 620；**只有 `full` 满屏**，而 `full` 在 `H01PV` 就归一成 `band`，所以生成端写不出满屏照片 | `H02SK` 的 `FIXED_H` / `slot` |
+| 场景脚本外壳 | `<script>` + `push(function(timeline, at){` + `});` **只由 `H02SK` 生成一次**；剥壳、丢卡、补入场都在 body 层，永远碰不到外壳 | `H02SK` 的 code |
+| 卡片字号 | `.ui-card h3` = 本屏主字号 × 0.6、`p` = × 0.4（`--ui-card-title` / `--ui-card-body`）；`--ui-scale` 只给其它组件用 | `layout_composer` + `components.css` |
 
 ## 目录与职责（唯一一份目录表）
 
@@ -133,12 +138,12 @@ python3 能力库/动效库/add_card.py 本批.json --batch <批次>  # 写表 +
 - 整片至少一张真实照片；无照片的屏靠排版撑住（`role=html` + `data-visual="html"`）。图像计划逐屏决定 `role`，六个取值见本文件「口径」表。
 - **每屏一个主运动**，其余是次级；相邻两屏的主运动不能是同一张卡。切点前 0.3–0.5 秒要有收束（离场或自带回位），**不强制用 X 卡**。
 - **数字人小窗（full 线）固定在右上角**：270×480、距顶 120、距右 44，几何写在 `H01Z` 的 `--pip-*` 里，版面按它自动避让；提示词不许另写一套位置。黑帧线零占位。
-- **字由 HTML 承载**：canvas / 三维里不放文字。
+- **字由 HTML 承载**：canvas 里不放文字。
 - **动效由时间线驱动**，任意一帧可 seek 复现；禁 `requestAnimationFrame`、`performance.now`、`Math.random`、`yoyo`/`repeat` 无限循环（按 `t` 的周期函数不算循环）。
 - 静态图不能当动效镜头，每屏必须有语义相关的元素级动画；产品 UI 用编号模板组件，示例数据标"场景演示"，不得冒充真实产品截图。
 - 构图逐屏不同（`family` / `text_zone` / `align` / `scale`），相邻两屏不得同族；渲染前跑 `check_composition_variation.mjs`，要拦截加 `STRICT_COMPOSITION=1`。
 - **模型写数据不写实现**：只给编号 + 目标 `data-anim` 名 + 时序；坐标、目标框、路径一律由场景 HTML 给。卡不测量布局，唯一例外是指针类卡（临时显示隐藏场景量一次再还原）。
-- **技术契约以 `check_html_contract.py` 为准**：canvas 固定 1080×1920 且不得按 `getBoundingClientRect` 改尺寸、三维由 GSAP 时间线 `onUpdate` 驱动（`hf-seek` 兜底，场景必须引 `three.global.js`）、canvas 与照片默认不同屏（要"照片进三维"须在根节点声明 `data-visual="3d-photo"`）、字幕由本地注入。**机器拦得住的细则这里不复述**，去改检查器而不是抄一份文档。
+- **技术契约以 `check_html_contract.py` 为准**：canvas 固定 1080×1920 且不得按 `getBoundingClientRect` 改尺寸、canvas 由时间线驱动（`bgkit.bind` 的哑 tween 读 `timeline.time()`，`hf-seek` 兜底；绘制不挂 `onUpdate` 回调）、canvas 与照片不许同屏、字幕由本地注入。**机器拦得住的细则这里不复述**，去改检查器而不是抄一份文档。
 
 **交付前**：检查时长、音画同步、响度、字幕对齐和运动量；若提供 `npm run quality:video`，必须执行并通过。
 
@@ -177,7 +182,7 @@ python3 能力库/动效库/add_card.py 本批.json --batch <批次>  # 写表 +
 
 ### 经验文档/事故排查.md
 - 什么时候读：渲染失败、黑屏或静帧、音画不同步、字幕错位、整屏空白、Dify 输出残缺、页面只剩零点几秒
-- 包含：生成端结构保证与诊断清单、Dify 无输出、场景没识别、输出超限、失败定位与续跑、动效/黑屏/音画不同步的五种症状、空页与闪回、时间码缺失、render slot、**进件候选片渲染的五种成因（CDN 依赖 / paused 时间轴 / composition-id 不匹配 / template 片段 / scan 判「没有可 seek 的时间轴」）**、canvas 与三维、页面节奏锚定、`window.__cue`、成片复核工具、跑外部检查器的两条前提（Node ≥ 22 / Chrome `--no-sandbox`）、**数字人版（01）小窗与图片的三条症状**、文字对比度的量测口径、已知未修
+- 包含：生成端结构保证与诊断清单、Dify 无输出、场景没识别、输出超限、失败定位与续跑、动效/黑屏/音画不同步的五种症状、空页与闪回、时间码缺失、render slot、**进件候选片渲染的五种成因（CDN 依赖 / paused 时间轴 / composition-id 不匹配 / template 片段 / scan 判「没有可 seek 的时间轴」）**、canvas 画面、页面节奏锚定、`window.__cue`、**动作时刻错位 / 转场吃掉入场 / 整屏 script 语法错**、成片复核工具、跑外部检查器的两条前提（Node ≥ 22 / Chrome `--no-sandbox`）、**数字人版（01）小窗与图片的三条症状**、文字对比度的量测口径、已知未修
 - 不用读：流程本身跑得通、只是想跑一遍
 
 ### 经验文档/生图与图片链路.md

@@ -1,6 +1,6 @@
 {
  "version": 2,
- "updated": "2026-11-17",
+ "updated": "2026-11-19",
  "note": "每行 = 一个动作预设。status: ready=可直接用 / archived=有实现有样片但不接生产 / needs-work=先改成确定性 / skip=不入管线。role: bg|component|entrance_text|entrance_block|state_text|state_block|component_motion|decoration|page_transition —— 选择层只认 role。出处只认 src（必须带前缀，规范见 来源台账.md §六）；origin 字段已废弃，不要再写。",
  "presets": [
   {
@@ -1161,12 +1161,12 @@
     "fade": 0.5
    },
    "use": "元素从当前位置长到 data-morph-to 给的框（left,top,w,h[,radius]）；内部标 data-morph-detail 的层在放大到 55% 时淡入。尺寸由 HTML 给，卡不猜",
-   "avoid": "元素尺寸不一致时不要用；和 G02 同屏会抢焦点",
+   "avoid": "元素尺寸不一致时不要用；和 G02 同屏会抢焦点；需要元素自带 data-morph-to，生成端不写这个属性时卡会静默退出（2026-11-18 s02 被当成整块入场选走，标题啪一下出现、整屏等于没动效）——所以它只能算状态卡",
    "code": "(function () {\n  var _els = [].slice.call(document.querySelectorAll('{{sel}}'));\n  _els.forEach(function (n, i) {\n    var _to = (n.getAttribute('data-morph-to') || '').split(',');\n    if (_to.length < 4) return;\n    timeline.to(n, {\n      'left': parseFloat(_to[0]), 'top': parseFloat(_to[1]),\n      'width': parseFloat(_to[2]), 'height': parseFloat(_to[3]),\n      'borderRadius': _to[4] ? parseFloat(_to[4]) : 22,\n      'duration': {{dur}}, 'ease': '{{ease}}'\n    }, {{at}} + i * {{stagger}});\n    var _d = n.querySelector('[data-morph-detail]');\n    if (_d) timeline.to(_d, {'opacity': 1, 'duration': {{fade}}, 'ease': 'power2.out'}, {{at}} + {{dur}} * 0.55);\n  });\n})();",
    "needs": [
     "ui"
    ],
-   "role": "entrance_block"
+   "role": "state_block"
   },
   {
    "id": "S12",
@@ -1400,19 +1400,16 @@
    "family": "入场",
    "layer": "element",
    "status": "ready",
-   "cap": "CustomBounce：落下 → 压扁 → 回弹",
-   "src": "gsap:CustomBounce",
+   "cap": "落下 + 单次回弹（back.out）",
+   "src": "手写",
    "params": {
     "drop": 320,
-    "strength": 0.65,
-    "squash": 2,
-    "dur": 1.4,
-    "squashY": 0.86,
-    "squashX": 1.08
+    "dur": 1.0,
+    "overshoot": 1.3
    },
    "use": "单个物件落下（图标、按钮、价格牌）",
-   "avoid": "整段文字（压扁会糊）",
-   "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t || !window.CustomBounce) return;\n  CustomBounce.create('kit-bounce', {'strength': {{strength}}, 'squash': {{squash}}});\n  timeline.fromTo(_t, {'y': -{{drop}}, 'opacity': 0},\n    {'y': 0, 'opacity': 1, 'duration': {{dur}}, 'ease': 'kit-bounce'}, {{at}});\n  timeline.to(_t, {'scaleY': {{squashY}}, 'scaleX': {{squashX}}, 'duration': {{dur}}, 'ease': 'kit-bounce-squash'}, {{at}});\n})();",
+   "avoid": "整段文字（整块落下会把多行文字糊在一起）",
+   "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t) return;\n  timeline.fromTo(_t, {'y': -{{drop}}, 'opacity': 0},\n    {'y': 0, 'opacity': 1, 'duration': {{dur}}, 'ease': 'back.out({{overshoot}})'}, {{at}});\n})();",
    "needs": [
     "text"
    ],
@@ -1510,22 +1507,21 @@
   },
   {
    "id": "T17",
-   "text_safe": false,
-   "text_swap": "T01",
    "name": "两次冲过",
    "family": "入场",
    "layer": "element",
    "status": "ready",
-   "cap": "CustomEase 控制点一上一下：冲过再退回",
-   "src": "gsap:CustomEase",
+   "cap": "从画面外冲进来（elastic.out 振荡两次），停在原位",
+   "src": "手写",
    "params": {
     "dist": 780,
-    "curve": "M0,0 C0.3,1.6 0.55,-0.6 1,1",
-    "dur": 1.8
+    "dur": 1.8,
+    "amplitude": 1.0,
+    "period": 0.35
    },
-   "use": "强调落位、按钮出现",
-   "avoid": "需要精确停在目标点（会先冲过）",
-   "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t || !window.CustomEase) return;\n  CustomEase.create('kit-twice', '{{curve}}');\n  timeline.to(_t, {'x': {{dist}}, 'duration': {{dur}}, 'ease': 'kit-twice'}, {{at}});\n})();",
+   "use": "标签、按钮、角标入库：从左侧画外冲入落位",
+   "avoid": "整块面板（780px 位移对宽块等于半屏扫过，优先给窄元素）",
+   "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t) return;\n  timeline.fromTo(_t, {'x': -{{dist}}}, {'x': 0, 'duration': {{dur}}, 'ease': 'elastic.out({{amplitude}}, {{period}})'}, {{at}});\n})();",
    "needs": [
     "text"
    ],
@@ -1537,16 +1533,16 @@
    "family": "入场",
    "layer": "element",
    "status": "ready",
-   "cap": "CustomBounce endAtStart：弹完回到起点",
-   "src": "gsap:CustomBounce",
+   "cap": "弹出去再弹回来（两段 ease）",
+   "src": "手写",
    "params": {
     "dist": 700,
-    "strength": 0.8,
-    "dur": 1.9
+    "dur": 1.9,
+    "overshoot": 2.0
    },
    "use": "「试了一下又回来」",
    "avoid": "需要停在新位置",
-   "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t || !window.CustomBounce) return;\n  CustomBounce.create('kit-back', {'strength': {{strength}}, 'endAtStart': true});\n  timeline.to(_t, {'x': {{dist}}, 'duration': {{dur}}, 'ease': 'kit-back'}, {{at}});\n})();",
+   "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t) return;\n  var _t0 = {{at}}, _d = {{dur}};\n  timeline.to(_t, {'x': {{dist}}, 'duration': _d * 0.55, 'ease': 'power2.out'}, _t0);\n  timeline.to(_t, {'x': 0, 'duration': _d * 0.45, 'ease': 'back.out({{overshoot}})'}, _t0 + _d * 0.55);\n})();",
    "needs": [
     "text"
    ],
@@ -1554,23 +1550,21 @@
   },
   {
    "id": "T19",
-   "name": "弹跳压扁",
+   "name": "弹跳落地",
    "family": "入场",
    "layer": "element",
    "status": "ready",
-   "cap": "squash 控制落地压扁量",
-   "src": "gsap:CustomBounce",
+   "cap": "砸下来连弹两下（elastic.out）",
+   "src": "手写",
    "params": {
     "drop": 320,
-    "strength": 0.6,
-    "squash": 2,
-    "squashY": 0.9,
-    "squashX": 1.06,
-    "dur": 1.4
+    "dur": 1.2,
+    "amplitude": 0.8,
+    "period": 0.42
    },
    "use": "物件落地、价格牌砸下",
-   "avoid": "整段文字",
-   "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t || !window.CustomBounce) return;\n  CustomBounce.create('kit-sq', {'strength': {{strength}}, 'squash': {{squash}}});\n  timeline.fromTo(_t, {'y': -{{drop}}, 'opacity': 0}, {'y': 0, 'opacity': 1, 'duration': {{dur}}, 'ease': 'kit-sq'}, {{at}});\n  if ({{squash}}) timeline.to(_t, {'scaleY': {{squashY}}, 'scaleX': {{squashX}}, 'duration': {{dur}}, 'ease': 'kit-sq-squash'}, {{at}});\n})();",
+   "avoid": "整段文字（整块砸落会把多行文字糊在一起）",
+   "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t) return;\n  timeline.fromTo(_t, {'y': -{{drop}}, 'opacity': 0},\n    {'y': 0, 'opacity': 1, 'duration': {{dur}}, 'ease': 'elastic.out({{amplitude}}, {{period}})'}, {{at}});\n})();",
    "needs": [
     "text"
    ],
@@ -4153,70 +4147,6 @@
    }
   },
   {
-   "id": "Z14",
-   "name": "立体卡片",
-   "family": "三维",
-   "role": "decoration",
-   "layer": "element",
-   "status": "ready",
-   "cap": "css-3d",
-   "src": "ui2v:3d-card-flip",
-   "params": {
-    "rot": 14,
-    "dur": 0.7,
-    "ease": "power3.out"
-   },
-   "use": "卡片带一点立体角度落位；产品卡",
-   "avoid": "同屏两张以上（透视会乱）",
-   "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t) return;\n  _t.style.perspective = '1200px';\n  timeline.fromTo(_t, {rotationY: {{rot}}, rotationX: -6, opacity: 0},\n    {rotationY: 0, rotationX: 0, opacity: 1, duration: {{dur}}, ease: '{{ease}}'}, {{at}});\n})();",
-   "needs": [
-    "block"
-   ]
-  },
-  {
-   "id": "Z15",
-   "name": "面板纵深",
-   "family": "三维",
-   "role": "decoration",
-   "layer": "element",
-   "status": "ready",
-   "cap": "translate-z",
-   "src": "ui2v:carousel-orbit-1",
-   "params": {
-    "z": -160,
-    "dur": 0.65,
-    "ease": "power2.out"
-   },
-   "use": "面板从纵深处推到眼前；讲层次",
-   "avoid": "父节点没有 perspective 时退化成缩放",
-   "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t) return;\n  if (_t.parentNode) { _t.parentNode.style.perspective = '1400px'; }\n  timeline.fromTo(_t, {z: {{z}}, opacity: 0, scale: 0.92},\n    {z: 0, opacity: 1, scale: 1, duration: {{dur}}, ease: '{{ease}}'}, {{at}});\n})();",
-   "needs": [
-    "block"
-   ]
-  },
-  {
-   "id": "Z16",
-   "name": "文字挤出",
-   "family": "三维",
-   "role": "decoration",
-   "layer": "element",
-   "status": "ready",
-   "cap": "extrude",
-   "src": "ui2v:hero-blueprint-draw",
-   "params": {
-    "depth": 14,
-    "color": "rgba(134,240,192,.35)",
-    "dur": 0.55,
-    "ease": "power2.out"
-   },
-   "use": "大字带厚度压出来；标题定调",
-   "avoid": "细体字和小字号",
-   "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t) return;\n  var _d = {{depth}};\n  var _s = [];\n  for (var _i = 1; _i <= _d; _i++) { _s.push(_i + 'px ' + _i + 'px 0 {{color}}'); }\n  _t.style.textShadow = _s.reverse().join(',');\n  timeline.fromTo(_t, {opacity: 0, y: 20}, {opacity: 1, y: 0, duration: {{dur}}, ease: '{{ease}}'}, {{at}});\n})();",
-   "needs": [
-    "text"
-   ]
-  },
-  {
    "id": "PT12",
    "name": "下往上推",
    "family": "页间转场",
@@ -5270,59 +5200,6 @@
     "一闪"
    ],
    "note": "十几颗流星错峰斜下，配一层会呼吸的星点；暗底最适合压亮字",
-   "code": "/* canvas 背景：由 H02SX 调 bgkit.bind/draw，不展开 GSAP */"
-  },
-  {
-   "id": "Z17",
-   "name": "点阵地球",
-   "family": "三维",
-   "role": "bg",
-   "layer": "overlay",
-   "status": "ready",
-   "cap": "canvas-t",
-   "src": "magicui:globe",
-   "params": {
-    "count": 2400,
-    "per": 6,
-    "cy": 0.46,
-    "tilt": 0.34
-   },
-   "use": "一颗自转的点阵地球，几个节点在脉冲；全球、出海、国际、网络覆盖",
-   "avoid": "和照片同屏；节点数别调太高（4000 以上开始糊成球体）",
-   "surface": "opaque",
-   "tone": "dark",
-   "base": "#070a0c",
-   "impl": {
-    "kind": "canvas",
-    "name": "Z17"
-   },
-   "ink": {
-    "primary": "#eaf7f1",
-    "secondary": "#8fa79c",
-    "accent": "#86F0C0"
-   },
-   "tunable": [
-    "brightness",
-    "count",
-    "cy",
-    "hue",
-    "invert",
-    "per",
-    "tilt"
-   ],
-   "params_note": "可调：count 点数 / per 自转一周秒数 / cy 圆心高度(0–1) / tilt 地轴倾角 / invert / hue",
-   "bg_family": "dot",
-   "keywords": [
-    "地球",
-    "全球",
-    "世界",
-    "国际",
-    "节点",
-    "网络",
-    "出海",
-    "覆盖"
-   ],
-   "note": "球面点阵自转，几处节点脉冲；讲全球/覆盖/出海时用",
    "code": "/* canvas 背景：由 H02SX 调 bgkit.bind/draw，不展开 GSAP */"
   },
   {
