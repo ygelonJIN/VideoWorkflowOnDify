@@ -19,7 +19,7 @@
 ## 是什么
 - Dify 视频工作流仓库：可导入的 Dify Workflow + HTML 视频运行时。**提示词与 Code 节点只在 YAML 里，不留镜像副本。**
 - 仓库根就是工作区根，会话在这一层开；本文件会被 AI 对话自动读取。
-- `04_黑帧口播` 是默认生产线；`01_有数字人` = 04 + 右上角数字人小窗（同一套编号与逐屏生成，只是多一个 `H01Z` 注入小窗、出口换 HeyGen）。两份共用能力层，改卡两层一起变。
+- `04_黑帧口播` 是默认生产线；`01_有数字人` = 04 + 右上角数字人小窗（同一条两段式链路，多一个 `H01Z` 注入小窗、出口换 HeyGen）。两份共用能力层，改卡两层一起变。
 
 统一处理入口：
 
@@ -34,15 +34,15 @@ bash /Volumes/TUF ESD-T1A Media/视频工作流/成品/workflow_runtime/tools/ru
 | 事实 | 真值 | 真值在哪 |
 |---|---|---|
 | 页间转场几张 | **15 张（`PT01–PT15`）**，`kind` 全在 `__ptList` 里 | `presets.json` + `sync_video.py` 的 `window.__ptList` |
-| 照片 `role` 取值 | **`band` / `inset` / `portrait` / `thumb` / `texture` / `html`**；`large` 等同 `band`；`full`、`cover`、`background`、`photo` 一律降级成 `band` 并告警 | `H01P` 的 `allowed_roles` |
+| 照片 `role` 取值 | **`band` / `inset` / `portrait` / `thumb` / `texture` / `html`**；`large` 等同 `band`；`full`、`cover`、`background`、`photo` 一律降级成 `band` 并告警 | `S2N` 的 `ROLE_SIZES` |
 | `full` / `black-frame` / `html-only` | 是**渲染模式名**，不是 `role`；`full` 指数字人线，不是"照片铺满" | `视频需求与质量标准.md` §3 |
 | 时长 | **没有目标时长**，文案写多长成片就多长，以真实口播为唯一主时钟 | `视频需求与质量标准.md` §5 |
-| 去重 | 只有 `script_hash` 一个指纹在跑 | `A07_整理口播` 的 Code 节点 |
-| 界面元素 | 只能取编号组件（`U*`），不手写图形 | `H02S` 落版 + `components.css` |
-| 标题换行 | **`H02SK` 按标点切 2 段写死 `<br>`**，`solve_scale` 再按「最长那一行」反算字号（840/8=105→100 档） | `H02SK` 的 code + `layout_composer.solve_scale` |
+| 去重 | 只有 `script_hash` 一个指纹在跑 | `S1N` 的 Code 节点 |
+| 界面元素 | 只能取编号组件（`U*`）；模型只给编号+槽位文字，不写 HTML | `S2` 规格 + `R2` 槽位渲染 + `component_slots.py` |
+| 标题换行 | **`R2`（原 H02SK）按标点切 2 段写死 `<br>`**，`solve_scale` 再按「最长那一行」反算字号（840/8=105→100 档） | `R2` 的 code + `layout_composer.solve_scale` |
 | 屏内动作时刻 | builder 带 `at` 形参 = 位置是**本屏相对秒**、无条件补屏起点；落进转场窗口的动作抬到 `data-pt-dur` 之后 | `sync_video` 的 `patchTimeline` + `stamp_pt_durations` |
-| 照片落版 | 全部 840 通栏横带，高度 `band` 600/420/300、`portrait` 520、`inset` 360、`thumb` 300、`texture` 620；**只有 `full` 满屏**，而 `full` 在 `H01PV` 就归一成 `band`，所以生成端写不出满屏照片 | `H02SK` 的 `FIXED_H` / `slot` |
-| 场景脚本外壳 | `<script>` + `push(function(timeline, at){` + `});` **只由 `H02SK` 生成一次**；剥壳、丢卡、补入场都在 body 层，永远碰不到外壳 | `H02SK` 的 code |
+| 照片落版 | 全部 840 通栏横带，高度 `band` 600/420/300、`portrait` 520、`inset` 360、`thumb` 300、`texture` 620；**只有 `full` 满屏**，而 `full` 在 `S2N` 就归一成 `band`，所以生成端写不出满屏照片 | `R2` 的 `FIXED_H` / `slot` |
+| 场景脚本外壳 | `<script>` + `push(function(timeline, at){` + `});` **只由 `R2` 生成一次**；剥壳、丢卡、补入场都在 body 层，永远碰不到外壳 | `R2` 的 code |
 | 卡片字号 | `.ui-card h3` = 本屏主字号 × 0.6、`p` = × 0.4（`--ui-card-title` / `--ui-card-body`）；`--ui-scale` 只给其它组件用 | `layout_composer` + `components.css` |
 
 ## 目录与职责（唯一一份目录表）
@@ -107,11 +107,11 @@ python3 能力库/动效库/add_card.py 本批.json --batch <批次>  # 写表 +
 
 **内容不允许把渲染拦死**。硬失败只留给环境问题（缺 Chrome / Node / HyperFrames）。做法不是"渲完再修 HTML"，而是**让生成端从一开始就写不出坏 HTML**：
 
-1. `H02S` 不再写 HTML，只输出**单屏规格 JSON**（`visual` / `bg` / `media` / `copy` / `components` / `motions`，**没有 `css`**）；
-2. `H02SK` 用固定模板把规格渲染成唯一合法的 `<section>`（标签、属性、槽位、作用域 CSS 都由代码保证）；
+1. `S2` 一次输出**全片规格 JSON**（每屏 `bg` / `media` / `copy` / `components`（编号+槽位文字）/ `motions` / `transition`，**没有 `css`、没有 HTML**）；
+2. `R2` 用固定模板 + 组件槽位把规格渲染成唯一合法的 `<section>`（标签、属性、槽位、作用域 CSS 都由代码保证）；
 3. 模型给的组件片段先过标签平衡检查，不平衡就丢弃并记 warning；`copy` 是纯文本，直接转义。
 
-每一步只做自己的事、**不用默认值顶替**：口播不合格退回 `A06R` 重写，分镜为空退回 `A08`，缺屏不合成、不换卡、不猜转场。
+每一步只做自己的事、**不用默认值顶替**：口播不合格退回 `S1R` 重写，规格对不上退回 `S2`，缺屏不合成、不换卡、不猜转场。
 
 本地检查器（契约/排版/时间线/构图）只写 `诊断/检查结果.txt`，**不阻塞渲染**；`STRICT_RENDER=1` 才是排查用的旧行为。
 
@@ -172,7 +172,7 @@ python3 能力库/动效库/add_card.py 本批.json --batch <批次>  # 写表 +
 
 ### 经验文档/能力层架构.md
 - 什么时候读：加 / 删 / 改卡、改选择层、想动 `presets.json` 的字段、怀疑"卡加了不生效"、要重造某一层之前
-- 包含：定义层 / 选择层 / 展开层 / 样片层四层各自由谁生成、`role` 的全部取值、一条命令加删卡、四层门禁查什么、`H00` / `H01XJ` / `H02SX` 各自读哪个字段、01 = 04 + 小窗（含两边的同步清单）、进件流水线 `admit.py`（scan/build/render/keep/drop、适配器、编号分配、筛完即清）、审阅的三条（样片才是审阅物 / scan 判不能提就别 build / 外观片不留文件）、来源标注只认 `src` 且必须带前缀
+- 包含：定义层 / 选择层 / 展开层 / 样片层四层各自由谁生成、`role` 的全部取值、一条命令加删卡、四层门禁查什么、`H00` 选择层 / `R1` 动效展开 / `R2` 槽位落版各自读哪个字段、01 = 04 + 小窗（含两边的同步清单）、进件流水线 `admit.py`（scan/build/render/keep/drop、适配器、编号分配、筛完即清）、审阅的三条（样片才是审阅物 / scan 判不能提就别 build / 外观片不留文件）、来源标注只认 `src` 且必须带前缀
 - 不用读：只是对某张卡的参数不满意
 
 ### 经验文档/使用说明.md
