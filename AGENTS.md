@@ -107,7 +107,7 @@ python3 能力库/动效库/add_card.py 本批.json --batch <批次>  # 写表 +
 
 **内容不允许把渲染拦死**。硬失败只留给环境问题（缺 Chrome / Node / HyperFrames）。做法不是"渲完再修 HTML"，而是**让生成端从一开始就写不出坏 HTML**：
 
-1. `H02S` 不再写 HTML，只输出**单屏规格 JSON**（`visual` / `bg` / `layout` / `media` / `copy` / `components` / `css`）；
+1. `H02S` 不再写 HTML，只输出**单屏规格 JSON**（`visual` / `bg` / `media` / `copy` / `components` / `motions`，**没有 `css`**）；
 2. `H02SK` 用固定模板把规格渲染成唯一合法的 `<section>`（标签、属性、槽位、作用域 CSS 都由代码保证）；
 3. 模型给的组件片段先过标签平衡检查，不平衡就丢弃并记 warning；`copy` 是纯文本，直接转义。
 
