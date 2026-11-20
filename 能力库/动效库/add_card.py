@@ -170,6 +170,14 @@ def validate(card, existing, kinds, classes):
             for one in cls.split():
                 if one.startswith("ui-") and one not in classes:
                     bad.append("components.css 里没有 .%s" % one)
+        # 新链路用槽位模板渲染：卡必须能被 component_slots 解析出至少一个文本洞，
+        # 否则它进了目录却不在 COMPONENT_TPL 里，落版会静默丢掉。
+        import component_slots
+        info = component_slots.build(code)
+        if not info:
+            bad.append("component_slots 解析不出槽位（模板必须是有文本节点的 HTML 片段）")
+        elif info["before"] + info["row_slots"] * info["rows_default"] + info["after"] == 0:
+            bad.append("这张组件没有可填的文本槽位（纯装饰）")
     if role == "page_transition":
         if card.get("kind") not in kinds:
             bad.append("kind 必须是 sync_video.__ptList 里的：%s" % "/".join(sorted(kinds)))
