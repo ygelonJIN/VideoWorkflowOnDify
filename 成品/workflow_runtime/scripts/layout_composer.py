@@ -645,12 +645,12 @@ def build_scene_css(scene_id: str, zone: str, align: str, scale: str, tone: str,
     # 会撑成 142px 高的一排砖；压小到 21px 又看不清，两头都不对。
     ui_scale = _ui_scale
     parts.append('[data-scene="%s"] .scene-copy [class*="ui-"]{--ui-scale:%s;}\n' % (sid, ui_scale))
-    # 卡片字号直接锚在「本屏主字号 × 0.6 / 0.4」（2026-11-20 定）：
-    # 34:24 不是 0.6:0.4，用同一个 ui-scale 乘固定基准永远对不齐——
+    # 卡片字号直接锚在「本屏主字号 × 0.5 / 0.3」（2026-11-20 定）：
+    # 34:24 不是同一个比例，用同一个 ui-scale 乘固定基准永远对不齐——
     # 标题 80px 时落到 56/40（实测 0.70 / 0.495），卡片比标题的层级差看不出来。
     # 这里按本屏主字号发两个变量，.ui-card 的 h3 / p 读它们；没有标题的屏退回旧公式。
     parts.append('[data-scene="%s"] .scene-copy{--ui-card-title:%dpx;--ui-card-body:%dpx;}\n'
-                 % (sid, int(round(_primary_size * 0.6)), int(round(_primary_size * 0.4))))
+                 % (sid, int(round(_primary_size * 0.5)), int(round(_primary_size * 0.3))))
     # 窄栏里再排 2/3 列就等于每格 100px，词只能逐字换行。
     # 栏宽不到 560 时，网格和步骤条一律退成单列（每行通栏），不再硬塞多列。
     if width < 560:

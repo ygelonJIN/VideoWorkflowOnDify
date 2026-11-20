@@ -43,7 +43,7 @@ bash /Volumes/TUF ESD-T1A Media/视频工作流/成品/workflow_runtime/tools/ru
 | 屏内动作时刻 | builder 带 `at` 形参 = 位置是**本屏相对秒**、无条件补屏起点；落进转场窗口的动作抬到 `data-pt-dur` 之后 | `sync_video` 的 `patchTimeline` + `stamp_pt_durations` |
 | 照片落版 | 全部 840 通栏横带，高度 `band` 600/420/300、`portrait` 520、`inset` 360、`thumb` 300、`texture` 620；**只有 `full` 满屏**，而 `full` 在 `S2N` 就归一成 `band`，所以生成端写不出满屏照片 | `R2` 的 `FIXED_H` / `slot` |
 | 场景脚本外壳 | `<script>` + `push(function(timeline, at){` + `});` **只由 `R2` 生成一次**；剥壳、丢卡、补入场都在 body 层，永远碰不到外壳 | `R2` 的 code |
-| 卡片字号 | `.ui-card h3` = 本屏主字号 × 0.6、`p` = × 0.4（`--ui-card-title` / `--ui-card-body`）；`--ui-scale` 只给其它组件用 | `layout_composer` + `components.css` |
+| 卡片字号 | `.ui-card h3` = 本屏主字号 × 0.5、`p` = × 0.3（`--ui-card-title` / `--ui-card-body`）；`--ui-scale` 只给其它组件用 | `layout_composer` + `components.css` |
 
 ## 目录与职责（唯一一份目录表）
 
