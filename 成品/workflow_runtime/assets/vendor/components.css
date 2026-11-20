@@ -61,9 +61,21 @@
 .ui-card h3{font-size:var(--ui-card-title,calc(34px * var(--ui-scale,1)));line-height:1.3;font-weight:700;color:var(--ui-ink);}
 .ui-card p{margin-top:10px;font-size:var(--ui-card-body,calc(24px * var(--ui-scale,1)));line-height:1.5;color:var(--ui-muted);}
 
-/* U02 步骤条 */
-.ui-steps{display:flex;align-items:flex-start;gap:14px;}
-.ui-step{flex:1;position:relative;padding-top:34px;}
+/* U02 步骤条的宽度是**推出来的**，不是给的（2026-11-20 定）。
+ *
+ * 每列用 minmax(max-content, 1fr)：**不窄于这一格自己的内容，多余空间再均分**。
+ * 容器宽度自适应时，它会自然收敛到「格数 × 最宽那格 + 间距」，于是：
+ *   3 格 · 172.8/86.4/129.6 的内容 → 容器 546，三格各 172.8，都是一行；
+ * 纯 `1fr` 会把它压成「内容总和 ÷ 格数」的平均宽（129.6），最宽那格就被挤折行
+ * ——s04「积累经验」4 字 × 43.2px = 172.8px 只拿到 129.6px，折成两行。
+ * 用 grid（不是 flex）是因为 flex 的 flex-basis:0 + flex-grow:1 表达不了这个下限：
+ * 容器自适应时 flex 永远退回"内容总和"再均分，加 min-width:max-content 只会变成
+ * 不等宽的格子。grid 的隐式列数随子元素个数走，2 格 / 4 格都不必另写规则。
+ * 内容总宽真超过栏宽（840）时列不再收缩——那属于文案超长，由排版检查点名，
+ * 不是这里该兜的。 */
+.ui-steps{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(max-content,1fr);
+  align-items:flex-start;gap:14px;max-width:100%;}
+.ui-step{position:relative;padding-top:34px;}
 .ui-step::before{ /* 轨道 */
   content:""; position:absolute; left:0; right:0; top:12px; height:2px;
   background: var(--ui-border);
@@ -76,10 +88,17 @@
 .ui-step b{display:block;font-size:calc(24px * var(--ui-scale,1));color:var(--ui-ink);font-weight:600;}
 .ui-step span{display:block;margin-top:6px;font-size:calc(22px * var(--ui-scale,1));color:var(--ui-muted);}
 
-/* U03 网格面板 */
+/* U03 网格面板
+ * 列宽同样由内容推：`minmax(max-content, 1fr)` = 不窄于这一格自己的内容，余量均分。
+ * 容器自适应时收敛到「列数 × 最宽那一格 + 间距」，和步骤条同一条规则；
+ * 纯 1fr 会把最宽那格压成平均宽、逼它折行。 */
 .ui-grid{display:grid;gap:var(--ui-gap);}
-.ui-grid.c2{grid-template-columns:repeat(2,1fr);}
-.ui-grid.c3{grid-template-columns:repeat(3,1fr);}
+.ui-grid.c2{grid-template-columns:repeat(2,minmax(max-content,1fr));}
+.ui-grid.c3{grid-template-columns:repeat(3,minmax(max-content,1fr));}
+/* 卡片进栅格就跟着格走（2026-11-20 定）：.ui-card 本身是 width:fit-content
+   （卡片跟内容走，不拉成整栏空板），但一张卡被放进栅格里时，格子已经按内容
+   定好了宽，卡片再按内容撑就会在格子里留一块对不齐的空档。所以栅格里的卡片取格宽。 */
+.ui-grid > .ui-card{width:100%;}
 .ui-cell{
   border-radius:12px;border:1px solid var(--ui-border);background:var(--ui-surface-2);
   padding:20px 22px;font-size:calc(24px * var(--ui-scale,1));color:var(--ui-ink);
@@ -135,7 +154,7 @@
 /* ---------- U11–U20：编号制组件（2026-11 新增） ---------- */
 
 /* U11 聊天气泡 */
-.ui-chat{display:flex;flex-direction:column;gap:14px;}
+.ui-chat{display:flex;flex-direction:column;gap:14px;align-items:stretch;}
 .ui-chat .b{max-width:78%;padding:16px 20px;border-radius:18px;font-size:calc(26px * var(--ui-scale,1));line-height:1.5;
   background:var(--ui-surface-2);border:1px solid var(--ui-border);}
 .ui-chat .b.right{align-self:flex-end;background:rgba(56,214,255,.14);border-color:rgba(56,214,255,.30);}
@@ -211,13 +230,13 @@
 .ui-map .cap{position:absolute;left:16px;bottom:14px;font-size:calc(20px * var(--ui-scale,1));color:var(--ui-muted);}
 
 /* U22 目录 */
-.ui-toc{display:flex;flex-direction:column;gap:2px;}
-.ui-toc .i{display:flex;justify-content:space-between;padding:14px 0;border-bottom:1px solid var(--ui-border);
+.ui-toc{display:flex;flex-direction:column;gap:2px;align-items:stretch;}
+.ui-toc .i{display:flex;justify-content:space-between;align-items:center;padding:14px 0;border-bottom:1px solid var(--ui-border);
   font-size:calc(24px * var(--ui-scale,1));}
 .ui-toc .i span:last-child{color:var(--ui-muted);font-family:"SF Mono",Menlo,monospace;font-size:calc(19px * var(--ui-scale,1));}
 
 /* U23 表单 */
-.ui-form{display:flex;flex-direction:column;gap:16px;}
+.ui-form{display:flex;flex-direction:column;gap:16px;align-items:stretch;}
 .ui-form .f{padding:18px 20px;border-radius:12px;border:1px solid var(--ui-border);
   background:rgba(255,255,255,.03);font-size:calc(24px * var(--ui-scale,1));color:var(--ui-muted);}
 .ui-form .f.on{border-color:rgba(123,232,190,.5);color:var(--ui-ink);}
@@ -225,7 +244,7 @@
   background:rgba(56,214,255,.16);border:1px solid rgba(56,214,255,.4);}
 
 /* U24 标签云 */
-.ui-tags{display:flex;flex-wrap:wrap;gap:12px;}
+.ui-tags{display:flex;flex-wrap:wrap;gap:12px;align-items:center;}
 .ui-tags .g{padding:10px 18px;border-radius:999px;font-size:calc(21px * var(--ui-scale,1));
   border:1px solid var(--ui-border);background:var(--ui-surface);}
 .ui-tags .g.big{font-size:calc(28px * var(--ui-scale,1));padding:12px 22px;}
@@ -432,14 +451,14 @@
   border-radius:999px;background:rgba(255,255,255,.06);overflow:hidden;white-space:nowrap;
   font-family:"SF Mono",Menlo,monospace;font-size:calc(17px * var(--ui-scale,1));color:var(--ui-muted);}
 .ui-browser-url b{color:#7BE8BE;font-weight:400;}
-.ui-browser-body{display:flex;gap:calc(16px * var(--ui-scale,1));
+.ui-browser-body{display:flex;gap:calc(16px * var(--ui-scale,1));align-items:stretch;
   padding:calc(18px * var(--ui-scale,1));}
-.ui-browser-side{width:calc(84px * var(--ui-scale,1));display:flex;flex-direction:column;
+.ui-browser-side{width:calc(84px * var(--ui-scale,1));display:flex;flex-direction:column;align-items:stretch;
   gap:calc(9px * var(--ui-scale,1));flex:none;}
 .ui-browser-side .i{height:calc(22px * var(--ui-scale,1));border-radius:6px;background:rgba(255,255,255,.055);}
 .ui-browser-side .i.on{background:rgba(123,232,190,.22);}
-.ui-browser-main{flex:1;display:flex;flex-direction:column;gap:calc(12px * var(--ui-scale,1));min-width:0;}
-.ui-browser-kpi{display:flex;gap:calc(10px * var(--ui-scale,1));}
+.ui-browser-main{flex:1;display:flex;flex-direction:column;gap:calc(12px * var(--ui-scale,1));min-width:0;align-items:stretch;}
+.ui-browser-kpi{display:flex;gap:calc(10px * var(--ui-scale,1));align-items:center;}
 .ui-browser-kpi .k{flex:1;padding:calc(10px * var(--ui-scale,1)) calc(12px * var(--ui-scale,1));
   border-radius:10px;background:rgba(255,255,255,.045);border:1px solid var(--ui-border);}
 .ui-browser-kpi .k b{display:block;font-family:Georgia,serif;
@@ -465,6 +484,6 @@
 .ui-tweet-meta{margin-top:calc(14px * var(--ui-scale,1));
   font-family:"SF Mono",Menlo,monospace;font-size:calc(13px * var(--ui-scale,1));color:var(--ui-muted);}
 .ui-tweet-line{height:1px;background:var(--ui-border);margin:calc(14px * var(--ui-scale,1)) 0 calc(12px * var(--ui-scale,1));}
-.ui-tweet-stats{display:flex;gap:calc(24px * var(--ui-scale,1));
+.ui-tweet-stats{display:flex;gap:calc(24px * var(--ui-scale,1));align-items:center;
   font-family:"SF Mono",Menlo,monospace;font-size:calc(14px * var(--ui-scale,1));color:var(--ui-muted);}
 .ui-tweet-stats b{color:var(--ui-ink);font-weight:600;}

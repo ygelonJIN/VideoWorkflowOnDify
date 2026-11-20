@@ -19,11 +19,15 @@
 import argparse
 import json
 import pathlib
+import re
 import sys
 
 ROOT = pathlib.Path(__file__).resolve().parent
 REPO = ROOT.parent.parent
 # 两份共用能力层（01 = 04 + 数字人小窗），H02SX 的 TPL/DEFAULTS/UNSAFE_TEXT 必须一起变。
+# 双引号标量的折行续行：`\` + 换行 + 缩进，后面可能跟一个 `\ `（转义空格）。
+_YAML_CONT = re.compile(r"\\\n[ \t]*(\\ )?")
+
 YAMLS = [REPO / "Dify工作流" / "04_黑帧口播_分组生成.yml",
          REPO / "Dify工作流" / "01_有数字人完整视频工作流.yml"]
 
@@ -97,6 +101,17 @@ def audit_params():
     return bad
 
 
+def unfold_yaml_wraps(text):
+    """把双引号标量里被折开的长行折回去。
+
+    Dify 导出（或编辑器）会把超长的一行按 700 字符折开：行尾一个 `\\` 续行，
+    下一行开头用 `\\ ` 补回那个空格。值是一模一样的，但**原文**和 `json.dumps`
+    出来的转义串从此对不上，下面按原文定位就会 count==0（2026-11-20 实测：
+    04/01 各有一处折行，sync_expander 直接"定位失败"，删卡链在这里断）。
+    定位前先把续行还原，写入时保持还原后的单行。"""
+    return _YAML_CONT.sub(lambda m: " " if m.group(1) else "", text)
+
+
 def splice(code):
     new_block, ids = build_blocks()
     i0 = code.index("    TPL = {")
@@ -126,7 +141,7 @@ def main():
 
     pending, ids = [], []
     for path in YAMLS:
-        raw = path.read_text(encoding="utf-8")
+        raw = unfold_yaml_wraps(path.read_text(encoding="utf-8"))
         data = yaml.safe_load(raw)
         node = None
         for n in data["workflow"]["graph"]["nodes"]:

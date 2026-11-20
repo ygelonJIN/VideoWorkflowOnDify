@@ -2626,8 +2626,11 @@ def install_cue_times(document: str, cues: list[dict], entries: list[dict], time
                 words.setdefault(name, []).append([text, round(begin - start, 3)])
                 break
 
+    # 没有字幕/词级时间码时不能直接返回：屏内动作现在全走 window.__slot，
+    # 它只要有 __cueWindows 就能按真实屏长排网格（只是没法按词微调）。
+    # 以前这里一返回，__slot 就不存在，所有动作会退到同一个默认点。
     if not lines and not words:
-        return document
+        print("cue_runtime: 没有字幕或词级时间码，只注入 __slot 的网格（不按词微调）")
 
     payload_windows = json.dumps(windows, ensure_ascii=False, separators=(",", ":"))
     payload_lines = json.dumps(lines, ensure_ascii=False, separators=(",", ":"))
@@ -2704,6 +2707,98 @@ def install_cue_times(document: str, cues: list[dict], entries: list[dict], time
         'window.__sceneStart = function(scene){\n'
         '  var win = (window.__cueWindows || {})[scene];\n'
         '  return win ? win[0] : 0;\n'
+        '};\n'
+        # 屏内动作的槽位网格（2026-11-20 定）。
+        # 以前每个元素的位置 = 模型给的那个 beat 在口播里的时刻，被 __cueFind 的
+        # 0.72·屏长 硬上限压一刀就完事。三个后果实测都出现过：
+        #   1) 标题是概括句，模型把 beat 挑在句子落点上 → 6 屏里 5 屏标题最后一个出场，
+        #      最后一屏的标题只剩 0.47s（2026-11-20 s06）；
+        #   2) 上限只看"什么时候开始露"，不知道这张卡自己要演多久 → T05 是 2.0s 的裁剪
+        #      揭示，从切点前 1.66s 开始，被下一屏盖掉时还剩 0.34s 没演完（s02）；
+        #   3) 中段大段静止：s02/s04/s05 各有 2.3-2.9s 完全不动。
+        # 现在：顺序由 role 槽位决定（R1 传 k/n），节奏由真实屏长算出的等距网格决定，
+        # 末位元素的收尾落在切点前 TAIL（默认 1.5s）；beat 只在
+        # 网格槽 ±0.4 步的带宽里微调，保"跟口播"但不决定先后。
+        'window.__ptDurOf = function(scene){\n'
+        '  var el = document.querySelector(\'.scene[data-scene="\' + scene + \'"]\');\n'
+        '  return el ? (Number(el.getAttribute("data-pt-dur")) || 0) : 0;\n'
+        '};\n'
+        'window.__slot = function(scene, index, total, phrase, cardDur){\n'
+        '  var win = (window.__cueWindows || {})[scene];\n'
+        '  var D = win ? win[1] : 0;\n'
+        '  if (!(D > 0)) { D = 6; }\n'
+        '  var n = Math.max(1, Number(total) || 1);\n'
+        '  var k = Math.min(Math.max(0, Number(index) || 0), n - 1);\n'
+        '  var own = Number(cardDur);\n'
+        '  if (!(own > 0)) { own = 0.6; }\n'
+        '  var arr = (window.__sceneCardDur || {})[scene] || [];\n'
+        '  function durOf(i){\n'
+        '    var v = Number(arr[i]);\n'
+        '    return (v > 0) ? v : own;\n'
+        '  }\n'
+        # 收完到切点的静止时长按「末位收尾」定，不按「最长卡」定（2026-11-20 改）。
+        # 旧公式：末位起点 = 屏长 - 最长卡 - 0.35，于是
+        #   静止 = 0.35 + (最长卡 - 末位卡时长)
+        # 最长卡在前几屏时，静止被放大成 1.75s；最长卡正好在末位就只有 0.35s。
+        # 现在改成：按每张卡的**收完时刻**等距铺开，末位收在 屏长 - TAIL，
+        # 静止对每屏都是 TAIL；起点不足时依次退让，靠 hi/lo 夹住，保证不越界、不反序。
+        '  var TAIL = (window.__slotTail == null ? 1.5 : Number(window.__slotTail));\n'
+        '  var MIN = 0.22;\n'
+        '  var GUTTER = 0.10;\n'
+        '  var lead = (window.__ptDurOf ? window.__ptDurOf(scene) : 0) + 0.18;\n'
+        '  var lastEnd = D - TAIL;\n'
+        '  // 两种铺法，按有没有余量选：\n'
+        '  //   宽松（余量够）：等间隔，空档均匀落在元素之间，末位收在 D - TAIL；\n'
+        '  //   拥挤（最长卡一类的堆叠）：退回按「收尾时刻」等距，靠夹逼保证不越界。\n'
+        '  // 为什么需要宽松这一档：只按收尾等距，元素少的长屏会把余量全挤成一个中段空档\n'
+        '  // （s03 变成 2.58→4.14 干等 1.56s）。等间隔 + 固定收尾两头都平。\n'
+        '  var sum = 0;\n'
+        '  for (var j = 0; j < n; j++) { sum += durOf(j); }\n'
+        '  var slack = lastEnd - lead - sum;\n'
+        '  var gapEq = (n > 1) ? slack / (n - 1) : 0;\n'
+        '  var steady = (n > 1 && gapEq >= 0.25);\n'
+        '  var t = lead;\n'
+        '  var prevBefore = -Infinity;\n'
+        '  if (steady) {\n'
+        '    var acc = lead;\n'
+        '    for (var m = 0; m <= k; m++) {\n'
+        '      prevBefore = t;\n'
+        '      t = acc;\n'
+        '      acc += durOf(m) + gapEq;\n'
+        '    }\n'
+        '  } else {\n'
+        '    var firstEnd = lead + durOf(0);\n'
+        '    var stepEnd = (n > 1 && lastEnd > firstEnd) ? (lastEnd - firstEnd) / (n - 1) : 0;\n'
+        '    var prev = -Infinity;\n'
+        '    for (var i = 0; i <= k; i++) {\n'
+        '      var cd = durOf(i);\n'
+        '      var hi = D - MIN - cd;\n'
+        '      if (hi < lead) { hi = lead; }\n'
+        '      var g = firstEnd + stepEnd * i - cd;\n'
+        '      var lo = (i === 0) ? lead : prev + GUTTER;\n'
+        '      if (lo > hi) { lo = hi; }\n'
+        '      prevBefore = prev;\n'
+        '      prev = Math.min(Math.max(g, lo), hi);\n'
+        '      if (i === k) { t = prev; }\n'
+        '    }\n'
+        '    gapEq = Math.max(0.10, stepEnd);\n'
+        '  }\n'
+        # beat 只在槽内微调；末位收紧到 ±0.12，免得把固定收尾又拉出方差
+        '  var rel = window.__cueFind ? window.__cueFind(scene, phrase) : null;\n'
+        '  if (rel !== null && isFinite(rel)) {\n'
+        '    var band = Math.max(0.10, Math.min(0.22, gapEq * 0.25));\n'
+        '    if (k === n - 1) { band = Math.min(band, 0.12); }\n'
+        '    t = Math.min(Math.max(rel, t - band), t + band);\n'
+        '    var loK = (k === 0) ? lead : (prevBefore + GUTTER);\n'
+        '    var hiK = D - MIN - own;\n'
+        '    if (hiK < lead) { hiK = lead; }\n'
+        '    if (loK > hiK) { loK = hiK; }\n'
+        '    t = Math.min(Math.max(t, loK), hiK);\n'
+        '  }\n'
+        # 单位必须和 __cue 一致：这里是真实相对秒，而 at() 会乘 data-timeline-scale，
+        # 所以先除回去，at() 再乘回来，落到 patchTimeline 手上才是真实秒。
+        '  var scale = window.__timelineScale || 1;\n'
+        '  return t / scale;\n'
         '};\n'
         '</script>'
     )

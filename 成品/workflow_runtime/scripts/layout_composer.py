@@ -651,27 +651,18 @@ def build_scene_css(scene_id: str, zone: str, align: str, scale: str, tone: str,
     # 这里按本屏主字号发两个变量，.ui-card 的 h3 / p 读它们；没有标题的屏退回旧公式。
     parts.append('[data-scene="%s"] .scene-copy{--ui-card-title:%dpx;--ui-card-body:%dpx;}\n'
                  % (sid, int(round(_primary_size * 0.5)), int(round(_primary_size * 0.3))))
-    # 窄栏里再排 2/3 列就等于每格 100px，词只能逐字换行。
-    # 栏宽不到 560 时，网格和步骤条一律退成单列（每行通栏），不再硬塞多列。
+    # 组件宽度不写死，由 CSS 按内容推导（2026-11-20 定）：
+    # .ui-steps / .ui-grid 用 `repeat(n, minmax(max-content, 1fr))` —— 每列不窄于
+    # 它自己的内容，多余空间再均分。于是容器自适应时自然收敛到"n × 最宽那格 + 间距"，
+    # 而不动的 1fr 会把它压成"内容总和 ÷ n"的平均宽，最宽那格分到比自己的字还窄
+    # （s04「积累经验」172.8px 只拿到 129.6px，折两行）。
+    # 宽度既然由内容推出来，这里就不写 width，窄栏只改方向和卡片。
     if width < 560:
         parts.append('[data-scene="%s"] .scene-copy .ui-grid{grid-template-columns:1fr;}\n' % sid)
-        parts.append('[data-scene="%s"] .scene-copy .ui-steps{flex-direction:column;gap:18px;}\n' % sid)
+        parts.append('[data-scene="%s"] .scene-copy .ui-steps{grid-auto-flow:row;gap:18px;}\n' % sid)
         parts.append('[data-scene="%s"] .scene-copy .ui-step{padding-top:0;}\n' % sid)
-        # 竖栏只有 480 时，width:fit-content 的组件照内容撑宽就顶出安全区
-        # （2026-11-17 s06 实测：.ui-card 右缘 1044，安全区 990）。窄栏里一律按栏宽排。
-        parts.append('[data-scene="%s"] .scene-copy .ui-card,\n'
-                     '[data-scene="%s"] .scene-copy .ui-grid,\n'
-                     '[data-scene="%s"] .scene-copy .ui-bento,\n'
-                     '[data-scene="%s"] .scene-copy .ui-masonry,\n'
-                     '[data-scene="%s"] .scene-copy .ui-swipe,\n'
-                     '[data-scene="%s"] .scene-copy .ui-timeline,\n'
-                     '[data-scene="%s"] .scene-copy .ui-file,\n'
-                     '[data-scene="%s"] .scene-copy .ui-form,\n'
-                     '[data-scene="%s"] .scene-copy .ui-toc,\n'
-                     '[data-scene="%s"] .scene-copy .ui-price,\n'
-                     '[data-scene="%s"] .scene-copy .ui-map'
-                     '{width:100%%!important;max-width:100%%!important;min-width:0;}\n'
-                     % ((sid,) * 11))
+        parts.append('[data-scene="%s"] .scene-copy .ui-card{width:100%%!important;'
+                     'max-width:100%%!important;min-width:0;}\n' % sid)
     # 网格/弹性容器的子项默认 min-width:auto，内容一长就顶破栏宽：
     # 482 的竖栏里 .ui-card 的正文把整块撑到 632，"退成单列"也救不回来（2026-11-17 s06 实测）。
     # 子项允许收缩，文字才会按栏宽换行。

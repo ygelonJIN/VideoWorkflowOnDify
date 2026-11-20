@@ -1527,27 +1527,6 @@
    "role": "entrance_block"
   },
   {
-   "id": "T18",
-   "name": "弹跳回起点",
-   "family": "入场",
-   "layer": "element",
-   "status": "ready",
-   "cap": "弹出去再弹回来（两段 ease）",
-   "src": "手写",
-   "params": {
-    "dist": 700,
-    "dur": 1.9,
-    "overshoot": 2.0
-   },
-   "use": "「试了一下又回来」",
-   "avoid": "需要停在新位置",
-   "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t) return;\n  var _t0 = {{at}}, _d = {{dur}};\n  timeline.to(_t, {'x': {{dist}}, 'duration': _d * 0.55, 'ease': 'power2.out'}, _t0);\n  timeline.to(_t, {'x': 0, 'duration': _d * 0.45, 'ease': 'back.out({{overshoot}})'}, _t0 + _d * 0.55);\n})();",
-   "needs": [
-    "text"
-   ],
-   "role": "entrance_text"
-  },
-  {
    "id": "T19",
    "name": "弹跳落地",
    "family": "入场",
@@ -2498,10 +2477,10 @@
    "cap": "component-html",
    "src": "components.css",
    "params": {},
-   "note": "大小不一的标签堆；讲分类、来源、关键词",
+   "note": "一排等大的标签；讲分类、来源、关键词",
    "use": "本屏的信息结构；只填文案与数字，样式在 components.css",
    "avoid": "自己改样式、加图形、加图标",
-   "code": "<div class=\"ui-tags\" data-anim=\"tags\"><span class=\"g big\">展会</span><span class=\"g\">转介绍</span><span class=\"g\">官网</span><span class=\"g\">老客户</span></div>",
+   "code": "<div class=\"ui-tags\" data-anim=\"tags\"><span class=\"g\">展会</span><span class=\"g\">转介绍</span><span class=\"g\">官网</span><span class=\"g\">老客户</span></div>",
    "needs": [
     "ui"
    ],

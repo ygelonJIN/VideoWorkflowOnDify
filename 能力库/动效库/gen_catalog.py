@@ -12,7 +12,7 @@
     state_block     块级状态变化
     component_motion 组件动效
     decoration      只能给装饰元素
-    page_transition 页间转场（catalog.page_transition，由 H01T 选、H03 生成）
+    page_transition 页间转场（catalog.page_transition，由 S2 给偏好、R3 逐刀生成）
 
 表里没有"选了也用不上"的卡：每张 ready 卡都必须落进上面某一格。
 
@@ -165,7 +165,7 @@ def render_cards_md(cards):
             out.append("")
             continue
         if fam == "页间转场":
-            out.append("页间转场由 `H01T_转场设计` 选编号，`H03` 按切点表生成 `window.__pt` 调用。\n")
+            out.append("页间转场由 `S2` 逐刀给编号偏好，`R3` 按切点表逐刀生成 `window.__pt` 调用（N 屏必出 N-1 条）。\n")
             out.append("| 编号 | 名字 | kind | 用在哪 | 别用在哪 |")
             out.append("|---|---|---|---|---|")
             for c in items:
