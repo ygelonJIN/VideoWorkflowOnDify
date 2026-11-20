@@ -77,13 +77,35 @@ def _replace_once(raw: str, old: str, new: str, what: str, node_id: str = "") ->
     raise SystemExit("%s 命中 %d 处，但没有一处属于节点 %s" % (what, len(starts), node_id))
 
 
+def _roundtrip_set(path, node_id: str, key: str, value: str) -> None:
+    """文本定位失败时的兜底写入：整份 YAML 读入、改字段、再 dump。
+
+    2026-11-20 之后两份 YAML 由 yaml.safe_dump 生成，长字符串的转义方式不再
+    和 Dify 导出的一致，`_replace_once` 会定位不到；这条路径保证生成器还能写。
+    """
+    import yaml as _yaml
+    data = _yaml.safe_load(read_yaml_text(path))
+    node = _node(data, node_id)
+    if key == "code":
+        node["data"]["code"] = value
+    else:
+        for part in node["data"]["prompt_template"]:
+            if part.get("role") == "system":
+                part["text"] = value
+                break
+    write_yaml_text(_yaml.safe_dump(data, allow_unicode=True, sort_keys=False, width=100000), path)
+
+
 def set_code(node_id: str, new_code: str, path=None) -> None:
     raw = read_yaml_text(path)
     old = get_code(node_id, path)
     if old == new_code:
         return
     compile(new_code, node_id, "exec")
-    write_yaml_text(_replace_once(raw, old, new_code, node_id + " 的代码", node_id), path)
+    try:
+        write_yaml_text(_replace_once(raw, old, new_code, node_id + " 的代码", node_id), path)
+    except SystemExit:
+        _roundtrip_set(path, node_id, "code", new_code)
 
 
 def set_prompt_text(node_id: str, new_text: str, path=None) -> None:
@@ -91,4 +113,7 @@ def set_prompt_text(node_id: str, new_text: str, path=None) -> None:
     old = get_prompt_text(node_id, path)
     if old == new_text:
         return
-    write_yaml_text(_replace_once(raw, old, new_text, node_id + " 的提示词", node_id), path)
+    try:
+        write_yaml_text(_replace_once(raw, old, new_text, node_id + " 的提示词", node_id), path)
+    except SystemExit:
+        _roundtrip_set(path, node_id, "prompt", new_text)
