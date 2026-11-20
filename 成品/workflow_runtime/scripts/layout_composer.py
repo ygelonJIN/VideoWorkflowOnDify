@@ -638,6 +638,7 @@ def build_scene_css(scene_id: str, zone: str, align: str, scale: str, tone: str,
     # 一律不吃。2026-11-16 s07 的流程行就是这么双倍位移、右边界顶到 1080 的。
     parts.append('#stage [data-scene="%s"] .scene-copy > *{position:relative;top:auto;'
                  'left:auto;right:auto;bottom:auto;max-height:none!important;'
+                 'max-width:100%%!important;'
                  'height:auto!important;overflow:visible!important;}\n' % sid)
     # 组件字号：不低于 1.55（24px 基准 ×1.55 ≈ 37px，竖屏小字下限 34px），
     # 也不低于本屏文字档位。以前直接吃 .scene-copy 上的档位值，窄栏里 5 个字

@@ -1454,7 +1454,13 @@ SCENE_OFFSET_SCRIPT = """
               // 以前 T26 的 1.0s 入场整段落在 flip3d 的 0.92s 里，转场一结束元素已经到位，
               // 成片里就是"转场完直接出现"（2026-11-19 s07）。
               var pt_dur = sceneEl ? Number(sceneEl.getAttribute('data-pt-dur') || 0) : 0;
-              if (pt_dur > 0 && args[position] < start + pt_dur + 0.02) {
+              // 屏首「先藏起来」的 set 必须在切点就生效，不能抬到转场之后：
+              // 入场卡的 from 值（例如 T17 的 xPercent -110）在 immediateRender 时已经写进元素，
+              // 抬到转场结束会让它在转场窗口里带着 from 值露一角（2026-11-20 s03：标题的「始，」
+              // 在屏幕左缘冒出来，就是这 0.48 秒）。
+              var _pv = varsOf(args);
+              var _isHideSet = !!_pv && ((_pv.opacity === 0) || (_pv.autoAlpha === 0));
+              if (pt_dur > 0 && args[position] < start + pt_dur + 0.02 && !_isHideSet) {
                 args[position] = start + pt_dur + 0.02;
               }
             }
@@ -2673,9 +2679,12 @@ def install_cue_times(document: str, cues: list[dict], entries: list[dict], time
         '  var fromLine = pick(pool, function(row, hit){\n'
         '    return row[1] + row[2] * (hit / Math.max(1, row[0].length)) - sceneStart;\n'
         '  });\n'
-        '  if (fromLine !== null) { return Math.min(Math.max(fromLine, 0.02), Math.max(0.05, sceneDur - (window.__cueHold == null ? 1.2 : window.__cueHold))); }\n'
+        '  var _hold = (window.__cueHold == null ? 1.2 : window.__cueHold);\n'
+        '  var _cap = (window.__cueCap == null ? 0.72 : window.__cueCap);\n'
+        '  var _max = Math.max(0.05, Math.min(sceneDur - _hold, sceneDur * _cap));\n'
+        '  if (fromLine !== null) { return Math.min(Math.max(fromLine, 0.02), _max); }\n'
         '  var fromWord = pick((window.__cueWords || {})[scene] || [], function(row){ return row[1]; });\n'
-        '  if (fromWord !== null) { return Math.min(Math.max(fromWord, 0.02), Math.max(0.05, sceneDur - (window.__cueHold == null ? 1.2 : window.__cueHold))); }\n'
+        '  if (fromWord !== null) { return Math.min(Math.max(fromWord, 0.02), _max); }\n'
         '  return null;\n'
         '};\n'
         'window.__cue = function(scene, phrase, fallback){\n'

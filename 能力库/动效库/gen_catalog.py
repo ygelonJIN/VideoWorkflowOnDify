@@ -105,8 +105,14 @@ def _fmt_params(params):
 def render_cards_md(cards):
     out = [HEADER, HARD_RULES]
     by_family = collections.defaultdict(list)
+    shapes = 0
     for c in cards:
         if not c.get("role"):
+            continue
+        # role=shape 是图形素材（整屏 SVG / mermaid 形状），不进选择层：
+        # 模型选不到，就不会再出现"整屏坐标系的图被塞进 840 文字栏"。
+        if c["role"] == "shape":
+            shapes += 1
             continue
         by_family[c.get("family", "未分类")].append(c)
 
@@ -167,6 +173,11 @@ def render_cards_md(cards):
             out.append("| %s | %s | %s | %s | %s | %s |" % (
                 c["id"], c.get("name", ""), role_label.get(c.get("role"), c.get("role", "")),
                 _fmt_params(c.get("params")), c.get("use", ""), c.get("avoid", "")))
+        out.append("")
+
+    if shapes:
+        out.append("> 另有 %d 张图形素材（`role=shape`，整屏 SVG / mermaid 形状）留在 `presets.json`，"
+                   "**不进选择层**：它们按 1080×1920 整屏坐标画，塞进 840 栏必然出画布。" % shapes)
         out.append("")
 
     return "\n".join(out).rstrip() + "\n"

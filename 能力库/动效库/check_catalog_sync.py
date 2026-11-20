@@ -33,7 +33,7 @@ REELS = HERE / "样片" / "全卡审阅"
 # 2026-11-17：none / archive / special_dom 三个"在表但选不到"的 role 已整族删除。
 # 现在表里每张卡都必须落进下面某一格，否则 gen_catalog 的目录里就没有它，等于白做。
 ROLES = {"bg", "component", "entrance_text", "entrance_block", "state_text",
-         "state_block", "component_motion", "decoration", "page_transition"}
+         "state_block", "component_motion", "decoration", "page_transition", "shape"}
 BG_FAMILIES = {"dot", "line", "ring", "block", "light", "noise"}
 NO_REEL = {"page_transition"}
 
@@ -97,7 +97,7 @@ def main() -> int:
             print("  -", line)
         return 1
     print("四层一致：%d 张卡，可选 %d 张，样片齐。" % (
-        len(cards), sum(1 for c in cards if c.get("role"))))
+        len(cards), sum(1 for c in cards if c.get("role") and c["role"] != "shape")))
     return 0
 
 

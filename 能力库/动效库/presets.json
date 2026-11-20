@@ -1,6 +1,6 @@
 {
  "version": 2,
- "updated": "2026-11-19",
+ "updated": "2026-11-20",
  "note": "每行 = 一个动作预设。status: ready=可直接用 / archived=有实现有样片但不接生产 / needs-work=先改成确定性 / skip=不入管线。role: bg|component|entrance_text|entrance_block|state_text|state_block|component_motion|decoration|page_transition —— 选择层只认 role。出处只认 src（必须带前缀，规范见 来源台账.md §六）；origin 字段已废弃，不要再写。",
  "presets": [
   {
@@ -1514,14 +1514,13 @@
    "cap": "从画面外冲进来（elastic.out 振荡两次），停在原位",
    "src": "手写",
    "params": {
-    "dist": 780,
     "dur": 1.8,
     "amplitude": 1.0,
     "period": 0.35
    },
    "use": "标签、按钮、角标入库：从左侧画外冲入落位",
    "avoid": "整块面板（780px 位移对宽块等于半屏扫过，优先给窄元素）",
-   "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t) return;\n  timeline.fromTo(_t, {'x': -{{dist}}}, {'x': 0, 'duration': {{dur}}, 'ease': 'elastic.out({{amplitude}}, {{period}})'}, {{at}});\n})();",
+   "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t) return;\n  // 位移按元素自身宽度算：xPercent 取 -110 再补 -120，任何宽度都完整出画。\n  // 以前写死 780px，890px 宽的标题只藏住 87%，切点后会在屏幕左缘露出一角。\n  timeline.fromTo(_t, {'xPercent': -110, 'x': -120},\n    {'xPercent': 0, 'x': 0, 'duration': {{dur}}, 'ease': 'elastic.out({{amplitude}}, {{period}})'}, {{at}});\n})();",
    "needs": [
     "text"
    ],
@@ -7006,7 +7005,7 @@
    "id": "MG01",
    "name": "感叹符",
    "family": "图示",
-   "role": "component",
+   "role": "shape",
    "status": "ready",
    "cap": "component-html",
    "src": "mermaid:shapes/bang.ts",
@@ -7025,13 +7024,14 @@
      "DrawSVGPlugin"
     ],
     "js": "var _s=document.querySelector('[data-anim=\"subject\"] svg');var _p=_s?_s.querySelectorAll('path,rect,circle,ellipse,polygon,line,polyline'):[];timeline.fromTo(_p,{opacity:0},{opacity:1,duration:0.22,stagger:0.03},0.30);if(window.DrawSVGPlugin&&_p.length){timeline.fromTo(_p,{drawSVG:'0%'},{drawSVG:'100%',duration:1.05,ease:'power2.inOut',stagger:0.04},0.42);}if(_s){timeline.fromTo(_s,{scale:0.985},{scale:1,duration:1.1,ease:'power2.out'},0.36);}"
-   }
+   },
+   "selectable": false
   },
   {
    "id": "MG04",
    "name": "BPMN 任务",
    "family": "图示",
-   "role": "component",
+   "role": "shape",
    "status": "ready",
    "cap": "component-html",
    "src": "mermaid:shapes/bpmnActivity.ts",
@@ -7050,13 +7050,14 @@
      "DrawSVGPlugin"
     ],
     "js": "var _s=document.querySelector('[data-anim=\"subject\"] svg');var _p=_s?_s.querySelectorAll('path,rect,circle,ellipse,polygon,line,polyline'):[];timeline.fromTo(_p,{opacity:0},{opacity:1,duration:0.22,stagger:0.03},0.30);if(window.DrawSVGPlugin&&_p.length){timeline.fromTo(_p,{drawSVG:'0%'},{drawSVG:'100%',duration:1.05,ease:'power2.inOut',stagger:0.04},0.42);}if(_s){timeline.fromTo(_s,{scale:0.985},{scale:1,duration:1.1,ease:'power2.out'},0.36);}"
-   }
+   },
+   "selectable": false
   },
   {
    "id": "MG06",
    "name": "BPMN 边界事件",
    "family": "图示",
-   "role": "component",
+   "role": "shape",
    "status": "ready",
    "cap": "component-html",
    "src": "mermaid:shapes/bpmnBoundary.ts",
@@ -7075,13 +7076,14 @@
      "DrawSVGPlugin"
     ],
     "js": "var _s=document.querySelector('[data-anim=\"subject\"] svg');var _p=_s?_s.querySelectorAll('path,rect,circle,ellipse,polygon,line,polyline'):[];timeline.fromTo(_p,{opacity:0},{opacity:1,duration:0.22,stagger:0.03},0.30);if(window.DrawSVGPlugin&&_p.length){timeline.fromTo(_p,{drawSVG:'0%'},{drawSVG:'100%',duration:1.05,ease:'power2.inOut',stagger:0.04},0.42);}if(_s){timeline.fromTo(_s,{scale:0.985},{scale:1,duration:1.1,ease:'power2.out'},0.36);}"
-   }
+   },
+   "selectable": false
   },
   {
    "id": "MG07",
    "name": "BPMN 数据对象",
    "family": "图示",
-   "role": "component",
+   "role": "shape",
    "status": "ready",
    "cap": "component-html",
    "src": "mermaid:shapes/bpmnDataObject.ts",
@@ -7100,13 +7102,14 @@
      "DrawSVGPlugin"
     ],
     "js": "var _s=document.querySelector('[data-anim=\"subject\"] svg');var _p=_s?_s.querySelectorAll('path,rect,circle,ellipse,polygon,line,polyline'):[];timeline.fromTo(_p,{opacity:0},{opacity:1,duration:0.22,stagger:0.03},0.30);if(window.DrawSVGPlugin&&_p.length){timeline.fromTo(_p,{drawSVG:'0%'},{drawSVG:'100%',duration:1.05,ease:'power2.inOut',stagger:0.04},0.42);}if(_s){timeline.fromTo(_s,{scale:0.985},{scale:1,duration:1.1,ease:'power2.out'},0.36);}"
-   }
+   },
+   "selectable": false
   },
   {
    "id": "MG08",
    "name": "BPMN 数据存储",
    "family": "图示",
-   "role": "component",
+   "role": "shape",
    "status": "ready",
    "cap": "component-html",
    "src": "mermaid:shapes/bpmnDataStore.ts",
@@ -7125,13 +7128,14 @@
      "DrawSVGPlugin"
     ],
     "js": "var _s=document.querySelector('[data-anim=\"subject\"] svg');var _p=_s?_s.querySelectorAll('path,rect,circle,ellipse,polygon,line,polyline'):[];timeline.fromTo(_p,{opacity:0},{opacity:1,duration:0.22,stagger:0.03},0.30);if(window.DrawSVGPlugin&&_p.length){timeline.fromTo(_p,{drawSVG:'0%'},{drawSVG:'100%',duration:1.05,ease:'power2.inOut',stagger:0.04},0.42);}if(_s){timeline.fromTo(_s,{scale:0.985},{scale:1,duration:1.1,ease:'power2.out'},0.36);}"
-   }
+   },
+   "selectable": false
   },
   {
    "id": "MG09",
    "name": "BPMN 结束",
    "family": "图示",
-   "role": "component",
+   "role": "shape",
    "status": "ready",
    "cap": "component-html",
    "src": "mermaid:shapes/bpmnEnd.ts",
@@ -7150,13 +7154,14 @@
      "DrawSVGPlugin"
     ],
     "js": "var _s=document.querySelector('[data-anim=\"subject\"] svg');var _p=_s?_s.querySelectorAll('path,rect,circle,ellipse,polygon,line,polyline'):[];timeline.fromTo(_p,{opacity:0},{opacity:1,duration:0.22,stagger:0.03},0.30);if(window.DrawSVGPlugin&&_p.length){timeline.fromTo(_p,{drawSVG:'0%'},{drawSVG:'100%',duration:1.05,ease:'power2.inOut',stagger:0.04},0.42);}if(_s){timeline.fromTo(_s,{scale:0.985},{scale:1,duration:1.1,ease:'power2.out'},0.36);}"
-   }
+   },
+   "selectable": false
   },
   {
    "id": "MG10",
    "name": "BPMN 事件",
    "family": "图示",
-   "role": "component",
+   "role": "shape",
    "status": "ready",
    "cap": "component-html",
    "src": "mermaid:shapes/bpmnEvent.ts",
@@ -7175,13 +7180,14 @@
      "DrawSVGPlugin"
     ],
     "js": "var _s=document.querySelector('[data-anim=\"subject\"] svg');var _p=_s?_s.querySelectorAll('path,rect,circle,ellipse,polygon,line,polyline'):[];timeline.fromTo(_p,{opacity:0},{opacity:1,duration:0.22,stagger:0.03},0.30);if(window.DrawSVGPlugin&&_p.length){timeline.fromTo(_p,{drawSVG:'0%'},{drawSVG:'100%',duration:1.05,ease:'power2.inOut',stagger:0.04},0.42);}if(_s){timeline.fromTo(_s,{scale:0.985},{scale:1,duration:1.1,ease:'power2.out'},0.36);}"
-   }
+   },
+   "selectable": false
   },
   {
    "id": "MG11",
    "name": "BPMN 网关",
    "family": "图示",
-   "role": "component",
+   "role": "shape",
    "status": "ready",
    "cap": "component-html",
    "src": "mermaid:shapes/bpmnGateway.ts",
@@ -7200,13 +7206,14 @@
      "DrawSVGPlugin"
     ],
     "js": "var _s=document.querySelector('[data-anim=\"subject\"] svg');var _p=_s?_s.querySelectorAll('path,rect,circle,ellipse,polygon,line,polyline'):[];timeline.fromTo(_p,{opacity:0},{opacity:1,duration:0.22,stagger:0.03},0.30);if(window.DrawSVGPlugin&&_p.length){timeline.fromTo(_p,{drawSVG:'0%'},{drawSVG:'100%',duration:1.05,ease:'power2.inOut',stagger:0.04},0.42);}if(_s){timeline.fromTo(_s,{scale:0.985},{scale:1,duration:1.1,ease:'power2.out'},0.36);}"
-   }
+   },
+   "selectable": false
   },
   {
    "id": "MG12",
    "name": "BPMN 中间事件",
    "family": "图示",
-   "role": "component",
+   "role": "shape",
    "status": "ready",
    "cap": "component-html",
    "src": "mermaid:shapes/bpmnIntermediate.ts",
@@ -7225,13 +7232,14 @@
      "DrawSVGPlugin"
     ],
     "js": "var _s=document.querySelector('[data-anim=\"subject\"] svg');var _p=_s?_s.querySelectorAll('path,rect,circle,ellipse,polygon,line,polyline'):[];timeline.fromTo(_p,{opacity:0},{opacity:1,duration:0.22,stagger:0.03},0.30);if(window.DrawSVGPlugin&&_p.length){timeline.fromTo(_p,{drawSVG:'0%'},{drawSVG:'100%',duration:1.05,ease:'power2.inOut',stagger:0.04},0.42);}if(_s){timeline.fromTo(_s,{scale:0.985},{scale:1,duration:1.1,ease:'power2.out'},0.36);}"
-   }
+   },
+   "selectable": false
   },
   {
    "id": "MG13",
    "name": "BPMN 开始",
    "family": "图示",
-   "role": "component",
+   "role": "shape",
    "status": "ready",
    "cap": "component-html",
    "src": "mermaid:shapes/bpmnStart.ts",
@@ -7250,13 +7258,14 @@
      "DrawSVGPlugin"
     ],
     "js": "var _s=document.querySelector('[data-anim=\"subject\"] svg');var _p=_s?_s.querySelectorAll('path,rect,circle,ellipse,polygon,line,polyline'):[];timeline.fromTo(_p,{opacity:0},{opacity:1,duration:0.22,stagger:0.03},0.30);if(window.DrawSVGPlugin&&_p.length){timeline.fromTo(_p,{drawSVG:'0%'},{drawSVG:'100%',duration:1.05,ease:'power2.inOut',stagger:0.04},0.42);}if(_s){timeline.fromTo(_s,{scale:0.985},{scale:1,duration:1.1,ease:'power2.out'},0.36);}"
-   }
+   },
+   "selectable": false
   },
   {
    "id": "MG14",
    "name": "浏览器窗",
    "family": "图示",
-   "role": "component",
+   "role": "shape",
    "status": "ready",
    "cap": "component-html",
    "src": "mermaid:shapes/browser.ts",
@@ -7275,13 +7284,14 @@
      "DrawSVGPlugin"
     ],
     "js": "var _s=document.querySelector('[data-anim=\"subject\"] svg');var _p=_s?_s.querySelectorAll('path,rect,circle,ellipse,polygon,line,polyline'):[];timeline.fromTo(_p,{opacity:0},{opacity:1,duration:0.22,stagger:0.03},0.30);if(window.DrawSVGPlugin&&_p.length){timeline.fromTo(_p,{drawSVG:'0%'},{drawSVG:'100%',duration:1.05,ease:'power2.inOut',stagger:0.04},0.42);}if(_s){timeline.fromTo(_s,{scale:0.985},{scale:1,duration:1.1,ease:'power2.out'},0.36);}"
-   }
+   },
+   "selectable": false
   },
   {
    "id": "MG15",
    "name": "桶",
    "family": "图示",
-   "role": "component",
+   "role": "shape",
    "status": "ready",
    "cap": "component-html",
    "src": "mermaid:shapes/bucket.ts",
@@ -7300,13 +7310,14 @@
      "DrawSVGPlugin"
     ],
     "js": "var _s=document.querySelector('[data-anim=\"subject\"] svg');var _p=_s?_s.querySelectorAll('path,rect,circle,ellipse,polygon,line,polyline'):[];timeline.fromTo(_p,{opacity:0},{opacity:1,duration:0.22,stagger:0.03},0.30);if(window.DrawSVGPlugin&&_p.length){timeline.fromTo(_p,{drawSVG:'0%'},{drawSVG:'100%',duration:1.05,ease:'power2.inOut',stagger:0.04},0.42);}if(_s){timeline.fromTo(_s,{scale:0.985},{scale:1,duration:1.1,ease:'power2.out'},0.36);}"
-   }
+   },
+   "selectable": false
   },
   {
    "id": "MG17",
    "name": "菱形判断",
    "family": "图示",
-   "role": "component",
+   "role": "shape",
    "status": "ready",
    "cap": "component-html",
    "src": "mermaid:shapes/choice.ts",
@@ -7325,13 +7336,14 @@
      "DrawSVGPlugin"
     ],
     "js": "var _s=document.querySelector('[data-anim=\"subject\"] svg');var _p=_s?_s.querySelectorAll('path,rect,circle,ellipse,polygon,line,polyline'):[];timeline.fromTo(_p,{opacity:0},{opacity:1,duration:0.22,stagger:0.03},0.30);if(window.DrawSVGPlugin&&_p.length){timeline.fromTo(_p,{drawSVG:'0%'},{drawSVG:'100%',duration:1.05,ease:'power2.inOut',stagger:0.04},0.42);}if(_s){timeline.fromTo(_s,{scale:0.985},{scale:1,duration:1.1,ease:'power2.out'},0.36);}"
-   }
+   },
+   "selectable": false
   },
   {
    "id": "MG18",
    "name": "圆",
    "family": "图示",
-   "role": "component",
+   "role": "shape",
    "status": "ready",
    "cap": "component-html",
    "src": "mermaid:shapes/circle.ts",
@@ -7350,13 +7362,14 @@
      "DrawSVGPlugin"
     ],
     "js": "var _s=document.querySelector('[data-anim=\"subject\"] svg');var _p=_s?_s.querySelectorAll('path,rect,circle,ellipse,polygon,line,polyline'):[];timeline.fromTo(_p,{opacity:0},{opacity:1,duration:0.22,stagger:0.03},0.30);if(window.DrawSVGPlugin&&_p.length){timeline.fromTo(_p,{drawSVG:'0%'},{drawSVG:'100%',duration:1.05,ease:'power2.inOut',stagger:0.04},0.42);}if(_s){timeline.fromTo(_s,{scale:0.985},{scale:1,duration:1.1,ease:'power2.out'},0.36);}"
-   }
+   },
+   "selectable": false
   },
   {
    "id": "MG20",
    "name": "折叠组",
    "family": "图示",
-   "role": "component",
+   "role": "shape",
    "status": "ready",
    "cap": "component-html",
    "src": "mermaid:shapes/collapsedGroup.ts",
@@ -7375,13 +7388,14 @@
      "DrawSVGPlugin"
     ],
     "js": "var _s=document.querySelector('[data-anim=\"subject\"] svg');var _p=_s?_s.querySelectorAll('path,rect,circle,ellipse,polygon,line,polyline'):[];timeline.fromTo(_p,{opacity:0},{opacity:1,duration:0.22,stagger:0.03},0.30);if(window.DrawSVGPlugin&&_p.length){timeline.fromTo(_p,{drawSVG:'0%'},{drawSVG:'100%',duration:1.05,ease:'power2.inOut',stagger:0.04},0.42);}if(_s){timeline.fromTo(_s,{scale:0.985},{scale:1,duration:1.1,ease:'power2.out'},0.36);}"
-   }
+   },
+   "selectable": false
   },
   {
    "id": "MG22",
    "name": "命令行窗",
    "family": "图示",
-   "role": "component",
+   "role": "shape",
    "status": "ready",
    "cap": "component-html",
    "src": "mermaid:shapes/console.ts",
@@ -7400,13 +7414,14 @@
      "DrawSVGPlugin"
     ],
     "js": "var _s=document.querySelector('[data-anim=\"subject\"] svg');var _p=_s?_s.querySelectorAll('path,rect,circle,ellipse,polygon,line,polyline'):[];timeline.fromTo(_p,{opacity:0},{opacity:1,duration:0.22,stagger:0.03},0.30);if(window.DrawSVGPlugin&&_p.length){timeline.fromTo(_p,{drawSVG:'0%'},{drawSVG:'100%',duration:1.05,ease:'power2.inOut',stagger:0.04},0.42);}if(_s){timeline.fromTo(_s,{scale:0.985},{scale:1,duration:1.1,ease:'power2.out'},0.36);}"
-   }
+   },
+   "selectable": false
   },
   {
    "id": "MG23",
    "name": "叉圆",
    "family": "图示",
-   "role": "component",
+   "role": "shape",
    "status": "ready",
    "cap": "component-html",
    "src": "mermaid:shapes/crossedCircle.ts",
@@ -7425,13 +7440,14 @@
      "DrawSVGPlugin"
     ],
     "js": "var _s=document.querySelector('[data-anim=\"subject\"] svg');var _p=_s?_s.querySelectorAll('path,rect,circle,ellipse,polygon,line,polyline'):[];timeline.fromTo(_p,{opacity:0},{opacity:1,duration:0.22,stagger:0.03},0.30);if(window.DrawSVGPlugin&&_p.length){timeline.fromTo(_p,{drawSVG:'0%'},{drawSVG:'100%',duration:1.05,ease:'power2.inOut',stagger:0.04},0.42);}if(_s){timeline.fromTo(_s,{scale:0.985},{scale:1,duration:1.1,ease:'power2.out'},0.36);}"
-   }
+   },
+   "selectable": false
   },
   {
    "id": "MG28",
    "name": "圆柱",
    "family": "图示",
-   "role": "component",
+   "role": "shape",
    "status": "ready",
    "cap": "component-html",
    "src": "mermaid:shapes/cylinder.ts",
@@ -7450,13 +7466,14 @@
      "DrawSVGPlugin"
     ],
     "js": "var _s=document.querySelector('[data-anim=\"subject\"] svg');var _p=_s?_s.querySelectorAll('path,rect,circle,ellipse,polygon,line,polyline'):[];timeline.fromTo(_p,{opacity:0},{opacity:1,duration:0.22,stagger:0.03},0.30);if(window.DrawSVGPlugin&&_p.length){timeline.fromTo(_p,{drawSVG:'0%'},{drawSVG:'100%',duration:1.05,ease:'power2.inOut',stagger:0.04},0.42);}if(_s){timeline.fromTo(_s,{scale:0.985},{scale:1,duration:1.1,ease:'power2.out'},0.36);}"
-   }
+   },
+   "selectable": false
   },
   {
    "id": "MG29",
    "name": "数据存储",
    "family": "图示",
-   "role": "component",
+   "role": "shape",
    "status": "ready",
    "cap": "component-html",
    "src": "mermaid:shapes/datastore.ts",
@@ -7475,13 +7492,14 @@
      "DrawSVGPlugin"
     ],
     "js": "var _s=document.querySelector('[data-anim=\"subject\"] svg');var _p=_s?_s.querySelectorAll('path,rect,circle,ellipse,polygon,line,polyline'):[];timeline.fromTo(_p,{opacity:0},{opacity:1,duration:0.22,stagger:0.03},0.30);if(window.DrawSVGPlugin&&_p.length){timeline.fromTo(_p,{drawSVG:'0%'},{drawSVG:'100%',duration:1.05,ease:'power2.inOut',stagger:0.04},0.42);}if(_s){timeline.fromTo(_s,{scale:0.985},{scale:1,duration:1.1,ease:'power2.out'},0.36);}"
-   }
+   },
+   "selectable": false
   },
   {
    "id": "MG31",
    "name": "分隔框",
    "family": "图示",
-   "role": "component",
+   "role": "shape",
    "status": "ready",
    "cap": "component-html",
    "src": "mermaid:shapes/dividedRect.ts",
@@ -7500,13 +7518,14 @@
      "DrawSVGPlugin"
     ],
     "js": "var _s=document.querySelector('[data-anim=\"subject\"] svg');var _p=_s?_s.querySelectorAll('path,rect,circle,ellipse,polygon,line,polyline'):[];timeline.fromTo(_p,{opacity:0},{opacity:1,duration:0.22,stagger:0.03},0.30);if(window.DrawSVGPlugin&&_p.length){timeline.fromTo(_p,{drawSVG:'0%'},{drawSVG:'100%',duration:1.05,ease:'power2.inOut',stagger:0.04},0.42);}if(_s){timeline.fromTo(_s,{scale:0.985},{scale:1,duration:1.1,ease:'power2.out'},0.36);}"
-   }
+   },
+   "selectable": false
   },
   {
    "id": "MG33",
    "name": "双圆",
    "family": "图示",
-   "role": "component",
+   "role": "shape",
    "status": "ready",
    "cap": "component-html",
    "src": "mermaid:shapes/doubleCircle.ts",
@@ -7525,13 +7544,14 @@
      "DrawSVGPlugin"
     ],
     "js": "var _s=document.querySelector('[data-anim=\"subject\"] svg');var _p=_s?_s.querySelectorAll('path,rect,circle,ellipse,polygon,line,polyline'):[];timeline.fromTo(_p,{opacity:0},{opacity:1,duration:0.22,stagger:0.03},0.30);if(window.DrawSVGPlugin&&_p.length){timeline.fromTo(_p,{drawSVG:'0%'},{drawSVG:'100%',duration:1.05,ease:'power2.inOut',stagger:0.04},0.42);}if(_s){timeline.fromTo(_s,{scale:0.985},{scale:1,duration:1.1,ease:'power2.out'},0.36);}"
-   }
+   },
+   "selectable": false
   },
   {
    "id": "MG35",
    "name": "实心圆",
    "family": "图示",
-   "role": "component",
+   "role": "shape",
    "status": "ready",
    "cap": "component-html",
    "src": "mermaid:shapes/filledCircle.ts",
@@ -7550,13 +7570,14 @@
      "DrawSVGPlugin"
     ],
     "js": "var _s=document.querySelector('[data-anim=\"subject\"] svg');var _p=_s?_s.querySelectorAll('path,rect,circle,ellipse,polygon,line,polyline'):[];timeline.fromTo(_p,{opacity:0},{opacity:1,duration:0.22,stagger:0.03},0.30);if(window.DrawSVGPlugin&&_p.length){timeline.fromTo(_p,{drawSVG:'0%'},{drawSVG:'100%',duration:1.05,ease:'power2.inOut',stagger:0.04},0.42);}if(_s){timeline.fromTo(_s,{scale:0.985},{scale:1,duration:1.1,ease:'power2.out'},0.36);}"
-   }
+   },
+   "selectable": false
   },
   {
    "id": "MG37",
    "name": "文件夹",
    "family": "图示",
-   "role": "component",
+   "role": "shape",
    "status": "ready",
    "cap": "component-html",
    "src": "mermaid:shapes/folder.ts",
@@ -7575,13 +7596,14 @@
      "DrawSVGPlugin"
     ],
     "js": "var _s=document.querySelector('[data-anim=\"subject\"] svg');var _p=_s?_s.querySelectorAll('path,rect,circle,ellipse,polygon,line,polyline'):[];timeline.fromTo(_p,{opacity:0},{opacity:1,duration:0.22,stagger:0.03},0.30);if(window.DrawSVGPlugin&&_p.length){timeline.fromTo(_p,{drawSVG:'0%'},{drawSVG:'100%',duration:1.05,ease:'power2.inOut',stagger:0.04},0.42);}if(_s){timeline.fromTo(_s,{scale:0.985},{scale:1,duration:1.1,ease:'power2.out'},0.36);}"
-   }
+   },
+   "selectable": false
   },
   {
    "id": "MG43",
    "name": "圆形图标框",
    "family": "图示",
-   "role": "component",
+   "role": "shape",
    "status": "ready",
    "cap": "component-html",
    "src": "mermaid:shapes/iconCircle.ts",
@@ -7600,13 +7622,14 @@
      "DrawSVGPlugin"
     ],
     "js": "var _s=document.querySelector('[data-anim=\"subject\"] svg');var _p=_s?_s.querySelectorAll('path,rect,circle,ellipse,polygon,line,polyline'):[];timeline.fromTo(_p,{opacity:0},{opacity:1,duration:0.22,stagger:0.03},0.30);if(window.DrawSVGPlugin&&_p.length){timeline.fromTo(_p,{drawSVG:'0%'},{drawSVG:'100%',duration:1.05,ease:'power2.inOut',stagger:0.04},0.42);}if(_s){timeline.fromTo(_s,{scale:0.985},{scale:1,duration:1.1,ease:'power2.out'},0.36);}"
-   }
+   },
+   "selectable": false
   },
   {
    "id": "MG47",
    "name": "倒梯形",
    "family": "图示",
-   "role": "component",
+   "role": "shape",
    "status": "ready",
    "cap": "component-html",
    "src": "mermaid:shapes/invertedTrapezoid.ts",
@@ -7625,13 +7648,14 @@
      "DrawSVGPlugin"
     ],
     "js": "var _s=document.querySelector('[data-anim=\"subject\"] svg');var _p=_s?_s.querySelectorAll('path,rect,circle,ellipse,polygon,line,polyline'):[];timeline.fromTo(_p,{opacity:0},{opacity:1,duration:0.22,stagger:0.03},0.30);if(window.DrawSVGPlugin&&_p.length){timeline.fromTo(_p,{drawSVG:'0%'},{drawSVG:'100%',duration:1.05,ease:'power2.inOut',stagger:0.04},0.42);}if(_s){timeline.fromTo(_s,{scale:0.985},{scale:1,duration:1.1,ease:'power2.out'},0.36);}"
-   }
+   },
+   "selectable": false
   },
   {
    "id": "MG51",
    "name": "闪电",
    "family": "图示",
-   "role": "component",
+   "role": "shape",
    "status": "ready",
    "cap": "component-html",
    "src": "mermaid:shapes/lightningBolt.ts",
@@ -7650,13 +7674,14 @@
      "DrawSVGPlugin"
     ],
     "js": "var _s=document.querySelector('[data-anim=\"subject\"] svg');var _p=_s?_s.querySelectorAll('path,rect,circle,ellipse,polygon,line,polyline'):[];timeline.fromTo(_p,{opacity:0},{opacity:1,duration:0.22,stagger:0.03},0.30);if(window.DrawSVGPlugin&&_p.length){timeline.fromTo(_p,{drawSVG:'0%'},{drawSVG:'100%',duration:1.05,ease:'power2.inOut',stagger:0.04},0.42);}if(_s){timeline.fromTo(_s,{scale:0.985},{scale:1,duration:1.1,ease:'power2.out'},0.36);}"
-   }
+   },
+   "selectable": false
   },
   {
    "id": "MG52",
    "name": "线纹圆柱",
    "family": "图示",
-   "role": "component",
+   "role": "shape",
    "status": "ready",
    "cap": "component-html",
    "src": "mermaid:shapes/linedCylinder.ts",
@@ -7675,13 +7700,14 @@
      "DrawSVGPlugin"
     ],
     "js": "var _s=document.querySelector('[data-anim=\"subject\"] svg');var _p=_s?_s.querySelectorAll('path,rect,circle,ellipse,polygon,line,polyline'):[];timeline.fromTo(_p,{opacity:0},{opacity:1,duration:0.22,stagger:0.03},0.30);if(window.DrawSVGPlugin&&_p.length){timeline.fromTo(_p,{drawSVG:'0%'},{drawSVG:'100%',duration:1.05,ease:'power2.inOut',stagger:0.04},0.42);}if(_s){timeline.fromTo(_s,{scale:0.985},{scale:1,duration:1.1,ease:'power2.out'},0.36);}"
-   }
+   },
+   "selectable": false
   },
   {
    "id": "MG55",
    "name": "多段框",
    "family": "图示",
-   "role": "component",
+   "role": "shape",
    "status": "ready",
    "cap": "component-html",
    "src": "mermaid:shapes/multiRect.ts",
@@ -7700,13 +7726,14 @@
      "DrawSVGPlugin"
     ],
     "js": "var _s=document.querySelector('[data-anim=\"subject\"] svg');var _p=_s?_s.querySelectorAll('path,rect,circle,ellipse,polygon,line,polyline'):[];timeline.fromTo(_p,{opacity:0},{opacity:1,duration:0.22,stagger:0.03},0.30);if(window.DrawSVGPlugin&&_p.length){timeline.fromTo(_p,{drawSVG:'0%'},{drawSVG:'100%',duration:1.05,ease:'power2.inOut',stagger:0.04},0.42);}if(_s){timeline.fromTo(_s,{scale:0.985},{scale:1,duration:1.1,ease:'power2.out'},0.36);}"
-   }
+   },
+   "selectable": false
   },
   {
    "id": "MG56",
    "name": "多段波浪框",
    "family": "图示",
-   "role": "component",
+   "role": "shape",
    "status": "ready",
    "cap": "component-html",
    "src": "mermaid:shapes/multiWaveEdgedRectangle.ts",
@@ -7725,13 +7752,14 @@
      "DrawSVGPlugin"
     ],
     "js": "var _s=document.querySelector('[data-anim=\"subject\"] svg');var _p=_s?_s.querySelectorAll('path,rect,circle,ellipse,polygon,line,polyline'):[];timeline.fromTo(_p,{opacity:0},{opacity:1,duration:0.22,stagger:0.03},0.30);if(window.DrawSVGPlugin&&_p.length){timeline.fromTo(_p,{drawSVG:'0%'},{drawSVG:'100%',duration:1.05,ease:'power2.inOut',stagger:0.04},0.42);}if(_s){timeline.fromTo(_s,{scale:0.985},{scale:1,duration:1.1,ease:'power2.out'},0.36);}"
-   }
+   },
+   "selectable": false
   },
   {
    "id": "MG57",
    "name": "便签",
    "family": "图示",
-   "role": "component",
+   "role": "shape",
    "status": "ready",
    "cap": "component-html",
    "src": "mermaid:shapes/note.ts",
@@ -7750,13 +7778,14 @@
      "DrawSVGPlugin"
     ],
     "js": "var _s=document.querySelector('[data-anim=\"subject\"] svg');var _p=_s?_s.querySelectorAll('path,rect,circle,ellipse,polygon,line,polyline'):[];timeline.fromTo(_p,{opacity:0},{opacity:1,duration:0.22,stagger:0.03},0.30);if(window.DrawSVGPlugin&&_p.length){timeline.fromTo(_p,{drawSVG:'0%'},{drawSVG:'100%',duration:1.05,ease:'power2.inOut',stagger:0.04},0.42);}if(_s){timeline.fromTo(_s,{scale:0.985},{scale:1,duration:1.1,ease:'power2.out'},0.36);}"
-   }
+   },
+   "selectable": false
   },
   {
    "id": "MG58",
    "name": "人形",
    "family": "图示",
-   "role": "component",
+   "role": "shape",
    "status": "ready",
    "cap": "component-html",
    "src": "mermaid:shapes/person.ts",
@@ -7775,13 +7804,14 @@
      "DrawSVGPlugin"
     ],
     "js": "var _s=document.querySelector('[data-anim=\"subject\"] svg');var _p=_s?_s.querySelectorAll('path,rect,circle,ellipse,polygon,line,polyline'):[];timeline.fromTo(_p,{opacity:0},{opacity:1,duration:0.22,stagger:0.03},0.30);if(window.DrawSVGPlugin&&_p.length){timeline.fromTo(_p,{drawSVG:'0%'},{drawSVG:'100%',duration:1.05,ease:'power2.inOut',stagger:0.04},0.42);}if(_s){timeline.fromTo(_s,{scale:0.985},{scale:1,duration:1.1,ease:'power2.out'},0.36);}"
-   }
+   },
+   "selectable": false
   },
   {
    "id": "MG60",
    "name": "左反箭头框",
    "family": "图示",
-   "role": "component",
+   "role": "shape",
    "status": "ready",
    "cap": "component-html",
    "src": "mermaid:shapes/rectLeftInvArrow.ts",
@@ -7800,13 +7830,14 @@
      "DrawSVGPlugin"
     ],
     "js": "var _s=document.querySelector('[data-anim=\"subject\"] svg');var _p=_s?_s.querySelectorAll('path,rect,circle,ellipse,polygon,line,polyline'):[];timeline.fromTo(_p,{opacity:0},{opacity:1,duration:0.22,stagger:0.03},0.30);if(window.DrawSVGPlugin&&_p.length){timeline.fromTo(_p,{drawSVG:'0%'},{drawSVG:'100%',duration:1.05,ease:'power2.inOut',stagger:0.04},0.42);}if(_s){timeline.fromTo(_s,{scale:0.985},{scale:1,duration:1.1,ease:'power2.out'},0.36);}"
-   }
+   },
+   "selectable": false
   },
   {
    "id": "MG63",
    "name": "圆角框",
    "family": "图示",
-   "role": "component",
+   "role": "shape",
    "status": "ready",
    "cap": "component-html",
    "src": "mermaid:shapes/roundedRect.ts",
@@ -7825,13 +7856,14 @@
      "DrawSVGPlugin"
     ],
     "js": "var _s=document.querySelector('[data-anim=\"subject\"] svg');var _p=_s?_s.querySelectorAll('path,rect,circle,ellipse,polygon,line,polyline'):[];timeline.fromTo(_p,{opacity:0},{opacity:1,duration:0.22,stagger:0.03},0.30);if(window.DrawSVGPlugin&&_p.length){timeline.fromTo(_p,{drawSVG:'0%'},{drawSVG:'100%',duration:1.05,ease:'power2.inOut',stagger:0.04},0.42);}if(_s){timeline.fromTo(_s,{scale:0.985},{scale:1,duration:1.1,ease:'power2.out'},0.36);}"
-   }
+   },
+   "selectable": false
   },
   {
    "id": "MG64",
    "name": "阴影流程框",
    "family": "图示",
-   "role": "component",
+   "role": "shape",
    "status": "ready",
    "cap": "component-html",
    "src": "mermaid:shapes/shadedProcess.ts",
@@ -7850,13 +7882,14 @@
      "DrawSVGPlugin"
     ],
     "js": "var _s=document.querySelector('[data-anim=\"subject\"] svg');var _p=_s?_s.querySelectorAll('path,rect,circle,ellipse,polygon,line,polyline'):[];timeline.fromTo(_p,{opacity:0},{opacity:1,duration:0.22,stagger:0.03},0.30);if(window.DrawSVGPlugin&&_p.length){timeline.fromTo(_p,{drawSVG:'0%'},{drawSVG:'100%',duration:1.05,ease:'power2.inOut',stagger:0.04},0.42);}if(_s){timeline.fromTo(_s,{scale:0.985},{scale:1,duration:1.1,ease:'power2.out'},0.36);}"
-   }
+   },
+   "selectable": false
   },
   {
    "id": "MG65",
    "name": "斜切框",
    "family": "图示",
-   "role": "component",
+   "role": "shape",
    "status": "ready",
    "cap": "component-html",
    "src": "mermaid:shapes/slopedRect.ts",
@@ -7875,13 +7908,14 @@
      "DrawSVGPlugin"
     ],
     "js": "var _s=document.querySelector('[data-anim=\"subject\"] svg');var _p=_s?_s.querySelectorAll('path,rect,circle,ellipse,polygon,line,polyline'):[];timeline.fromTo(_p,{opacity:0},{opacity:1,duration:0.22,stagger:0.03},0.30);if(window.DrawSVGPlugin&&_p.length){timeline.fromTo(_p,{drawSVG:'0%'},{drawSVG:'100%',duration:1.05,ease:'power2.inOut',stagger:0.04},0.42);}if(_s){timeline.fromTo(_s,{scale:0.985},{scale:1,duration:1.1,ease:'power2.out'},0.36);}"
-   }
+   },
+   "selectable": false
   },
   {
    "id": "MG66",
    "name": "方框",
    "family": "图示",
-   "role": "component",
+   "role": "shape",
    "status": "ready",
    "cap": "component-html",
    "src": "mermaid:shapes/squareRect.ts",
@@ -7900,13 +7934,14 @@
      "DrawSVGPlugin"
     ],
     "js": "var _s=document.querySelector('[data-anim=\"subject\"] svg');var _p=_s?_s.querySelectorAll('path,rect,circle,ellipse,polygon,line,polyline'):[];timeline.fromTo(_p,{opacity:0},{opacity:1,duration:0.22,stagger:0.03},0.30);if(window.DrawSVGPlugin&&_p.length){timeline.fromTo(_p,{drawSVG:'0%'},{drawSVG:'100%',duration:1.05,ease:'power2.inOut',stagger:0.04},0.42);}if(_s){timeline.fromTo(_s,{scale:0.985},{scale:1,duration:1.1,ease:'power2.out'},0.36);}"
-   }
+   },
+   "selectable": false
   },
   {
    "id": "MG68",
    "name": "状态框",
    "family": "图示",
-   "role": "component",
+   "role": "shape",
    "status": "ready",
    "cap": "component-html",
    "src": "mermaid:shapes/state.ts",
@@ -7925,13 +7960,14 @@
      "DrawSVGPlugin"
     ],
     "js": "var _s=document.querySelector('[data-anim=\"subject\"] svg');var _p=_s?_s.querySelectorAll('path,rect,circle,ellipse,polygon,line,polyline'):[];timeline.fromTo(_p,{opacity:0},{opacity:1,duration:0.22,stagger:0.03},0.30);if(window.DrawSVGPlugin&&_p.length){timeline.fromTo(_p,{drawSVG:'0%'},{drawSVG:'100%',duration:1.05,ease:'power2.inOut',stagger:0.04},0.42);}if(_s){timeline.fromTo(_s,{scale:0.985},{scale:1,duration:1.1,ease:'power2.out'},0.36);}"
-   }
+   },
+   "selectable": false
   },
   {
    "id": "MG69",
    "name": "结束态",
    "family": "图示",
-   "role": "component",
+   "role": "shape",
    "status": "ready",
    "cap": "component-html",
    "src": "mermaid:shapes/stateEnd.ts",
@@ -7950,13 +7986,14 @@
      "DrawSVGPlugin"
     ],
     "js": "var _s=document.querySelector('[data-anim=\"subject\"] svg');var _p=_s?_s.querySelectorAll('path,rect,circle,ellipse,polygon,line,polyline'):[];timeline.fromTo(_p,{opacity:0},{opacity:1,duration:0.22,stagger:0.03},0.30);if(window.DrawSVGPlugin&&_p.length){timeline.fromTo(_p,{drawSVG:'0%'},{drawSVG:'100%',duration:1.05,ease:'power2.inOut',stagger:0.04},0.42);}if(_s){timeline.fromTo(_s,{scale:0.985},{scale:1,duration:1.1,ease:'power2.out'},0.36);}"
-   }
+   },
+   "selectable": false
   },
   {
    "id": "MG70",
    "name": "起始态",
    "family": "图示",
-   "role": "component",
+   "role": "shape",
    "status": "ready",
    "cap": "component-html",
    "src": "mermaid:shapes/stateStart.ts",
@@ -7975,13 +8012,14 @@
      "DrawSVGPlugin"
     ],
     "js": "var _s=document.querySelector('[data-anim=\"subject\"] svg');var _p=_s?_s.querySelectorAll('path,rect,circle,ellipse,polygon,line,polyline'):[];timeline.fromTo(_p,{opacity:0},{opacity:1,duration:0.22,stagger:0.03},0.30);if(window.DrawSVGPlugin&&_p.length){timeline.fromTo(_p,{drawSVG:'0%'},{drawSVG:'100%',duration:1.05,ease:'power2.inOut',stagger:0.04},0.42);}if(_s){timeline.fromTo(_s,{scale:0.985},{scale:1,duration:1.1,ease:'power2.out'},0.36);}"
-   }
+   },
+   "selectable": false
   },
   {
    "id": "MG72",
    "name": "带标签框",
    "family": "图示",
-   "role": "component",
+   "role": "shape",
    "status": "ready",
    "cap": "component-html",
    "src": "mermaid:shapes/taggedRect.ts",
@@ -8000,13 +8038,14 @@
      "DrawSVGPlugin"
     ],
     "js": "var _s=document.querySelector('[data-anim=\"subject\"] svg');var _p=_s?_s.querySelectorAll('path,rect,circle,ellipse,polygon,line,polyline'):[];timeline.fromTo(_p,{opacity:0},{opacity:1,duration:0.22,stagger:0.03},0.30);if(window.DrawSVGPlugin&&_p.length){timeline.fromTo(_p,{drawSVG:'0%'},{drawSVG:'100%',duration:1.05,ease:'power2.inOut',stagger:0.04},0.42);}if(_s){timeline.fromTo(_s,{scale:0.985},{scale:1,duration:1.1,ease:'power2.out'},0.36);}"
-   }
+   },
+   "selectable": false
   },
   {
    "id": "MG75",
    "name": "斜置圆柱",
    "family": "图示",
-   "role": "component",
+   "role": "shape",
    "status": "ready",
    "cap": "component-html",
    "src": "mermaid:shapes/tiltedCylinder.ts",
@@ -8025,13 +8064,14 @@
      "DrawSVGPlugin"
     ],
     "js": "var _s=document.querySelector('[data-anim=\"subject\"] svg');var _p=_s?_s.querySelectorAll('path,rect,circle,ellipse,polygon,line,polyline'):[];timeline.fromTo(_p,{opacity:0},{opacity:1,duration:0.22,stagger:0.03},0.30);if(window.DrawSVGPlugin&&_p.length){timeline.fromTo(_p,{drawSVG:'0%'},{drawSVG:'100%',duration:1.05,ease:'power2.inOut',stagger:0.04},0.42);}if(_s){timeline.fromTo(_s,{scale:0.985},{scale:1,duration:1.1,ease:'power2.out'},0.36);}"
-   }
+   },
+   "selectable": false
   },
   {
    "id": "MG77",
    "name": "五边形",
    "family": "图示",
-   "role": "component",
+   "role": "shape",
    "status": "ready",
    "cap": "component-html",
    "src": "mermaid:shapes/trapezoidalPentagon.ts",
@@ -8050,13 +8090,14 @@
      "DrawSVGPlugin"
     ],
     "js": "var _s=document.querySelector('[data-anim=\"subject\"] svg');var _p=_s?_s.querySelectorAll('path,rect,circle,ellipse,polygon,line,polyline'):[];timeline.fromTo(_p,{opacity:0},{opacity:1,duration:0.22,stagger:0.03},0.30);if(window.DrawSVGPlugin&&_p.length){timeline.fromTo(_p,{drawSVG:'0%'},{drawSVG:'100%',duration:1.05,ease:'power2.inOut',stagger:0.04},0.42);}if(_s){timeline.fromTo(_s,{scale:0.985},{scale:1,duration:1.1,ease:'power2.out'},0.36);}"
-   }
+   },
+   "selectable": false
   },
   {
    "id": "MG79",
    "name": "用例角色",
    "family": "图示",
-   "role": "component",
+   "role": "shape",
    "status": "ready",
    "cap": "component-html",
    "src": "mermaid:shapes/usecaseActor.ts",
@@ -8075,13 +8116,14 @@
      "DrawSVGPlugin"
     ],
     "js": "var _s=document.querySelector('[data-anim=\"subject\"] svg');var _p=_s?_s.querySelectorAll('path,rect,circle,ellipse,polygon,line,polyline'):[];timeline.fromTo(_p,{opacity:0},{opacity:1,duration:0.22,stagger:0.03},0.30);if(window.DrawSVGPlugin&&_p.length){timeline.fromTo(_p,{drawSVG:'0%'},{drawSVG:'100%',duration:1.05,ease:'power2.inOut',stagger:0.04},0.42);}if(_s){timeline.fromTo(_s,{scale:0.985},{scale:1,duration:1.1,ease:'power2.out'},0.36);}"
-   }
+   },
+   "selectable": false
   },
   {
    "id": "MG80",
    "name": "用例角色·实",
    "family": "图示",
-   "role": "component",
+   "role": "shape",
    "status": "ready",
    "cap": "component-html",
    "src": "mermaid:shapes/usecaseActorAwesome.ts",
@@ -8100,13 +8142,14 @@
      "DrawSVGPlugin"
     ],
     "js": "var _s=document.querySelector('[data-anim=\"subject\"] svg');var _p=_s?_s.querySelectorAll('path,rect,circle,ellipse,polygon,line,polyline'):[];timeline.fromTo(_p,{opacity:0},{opacity:1,duration:0.22,stagger:0.03},0.30);if(window.DrawSVGPlugin&&_p.length){timeline.fromTo(_p,{drawSVG:'0%'},{drawSVG:'100%',duration:1.05,ease:'power2.inOut',stagger:0.04},0.42);}if(_s){timeline.fromTo(_s,{scale:0.985},{scale:1,duration:1.1,ease:'power2.out'},0.36);}"
-   }
+   },
+   "selectable": false
   },
   {
    "id": "MG81",
    "name": "用例角色·空",
    "family": "图示",
-   "role": "component",
+   "role": "shape",
    "status": "ready",
    "cap": "component-html",
    "src": "mermaid:shapes/usecaseActorHollow.ts",
@@ -8125,13 +8168,14 @@
      "DrawSVGPlugin"
     ],
     "js": "var _s=document.querySelector('[data-anim=\"subject\"] svg');var _p=_s?_s.querySelectorAll('path,rect,circle,ellipse,polygon,line,polyline'):[];timeline.fromTo(_p,{opacity:0},{opacity:1,duration:0.22,stagger:0.03},0.30);if(window.DrawSVGPlugin&&_p.length){timeline.fromTo(_p,{drawSVG:'0%'},{drawSVG:'100%',duration:1.05,ease:'power2.inOut',stagger:0.04},0.42);}if(_s){timeline.fromTo(_s,{scale:0.985},{scale:1,duration:1.1,ease:'power2.out'},0.36);}"
-   }
+   },
+   "selectable": false
   },
   {
    "id": "MG83",
    "name": "业务用例",
    "family": "图示",
-   "role": "component",
+   "role": "shape",
    "status": "ready",
    "cap": "component-html",
    "src": "mermaid:shapes/usecaseBusiness.ts",
@@ -8150,13 +8194,14 @@
      "DrawSVGPlugin"
     ],
     "js": "var _s=document.querySelector('[data-anim=\"subject\"] svg');var _p=_s?_s.querySelectorAll('path,rect,circle,ellipse,polygon,line,polyline'):[];timeline.fromTo(_p,{opacity:0},{opacity:1,duration:0.22,stagger:0.03},0.30);if(window.DrawSVGPlugin&&_p.length){timeline.fromTo(_p,{drawSVG:'0%'},{drawSVG:'100%',duration:1.05,ease:'power2.inOut',stagger:0.04},0.42);}if(_s){timeline.fromTo(_s,{scale:0.985},{scale:1,duration:1.1,ease:'power2.out'},0.36);}"
-   }
+   },
+   "selectable": false
   },
   {
    "id": "MG85",
    "name": "JSON 表",
    "family": "图示",
-   "role": "component",
+   "role": "shape",
    "status": "ready",
    "cap": "component-html",
    "src": "mermaid:shapes/usecaseJsonTable.ts",
@@ -8175,13 +8220,14 @@
      "DrawSVGPlugin"
     ],
     "js": "var _s=document.querySelector('[data-anim=\"subject\"] svg');var _p=_s?_s.querySelectorAll('path,rect,circle,ellipse,polygon,line,polyline'):[];timeline.fromTo(_p,{opacity:0},{opacity:1,duration:0.22,stagger:0.03},0.30);if(window.DrawSVGPlugin&&_p.length){timeline.fromTo(_p,{drawSVG:'0%'},{drawSVG:'100%',duration:1.05,ease:'power2.inOut',stagger:0.04},0.42);}if(_s){timeline.fromTo(_s,{scale:0.985},{scale:1,duration:1.1,ease:'power2.out'},0.36);}"
-   }
+   },
+   "selectable": false
   },
   {
    "id": "MG86",
    "name": "波浪框",
    "family": "图示",
-   "role": "component",
+   "role": "shape",
    "status": "ready",
    "cap": "component-html",
    "src": "mermaid:shapes/waveEdgedRectangle.ts",
@@ -8200,13 +8246,14 @@
      "DrawSVGPlugin"
     ],
     "js": "var _s=document.querySelector('[data-anim=\"subject\"] svg');var _p=_s?_s.querySelectorAll('path,rect,circle,ellipse,polygon,line,polyline'):[];timeline.fromTo(_p,{opacity:0},{opacity:1,duration:0.22,stagger:0.03},0.30);if(window.DrawSVGPlugin&&_p.length){timeline.fromTo(_p,{drawSVG:'0%'},{drawSVG:'100%',duration:1.05,ease:'power2.inOut',stagger:0.04},0.42);}if(_s){timeline.fromTo(_s,{scale:0.985},{scale:1,duration:1.1,ease:'power2.out'},0.36);}"
-   }
+   },
+   "selectable": false
   },
   {
    "id": "MG88",
    "name": "窗格",
    "family": "图示",
-   "role": "component",
+   "role": "shape",
    "status": "ready",
    "cap": "component-html",
    "src": "mermaid:shapes/windowPane.ts",
@@ -8225,13 +8272,14 @@
      "DrawSVGPlugin"
     ],
     "js": "var _s=document.querySelector('[data-anim=\"subject\"] svg');var _p=_s?_s.querySelectorAll('path,rect,circle,ellipse,polygon,line,polyline'):[];timeline.fromTo(_p,{opacity:0},{opacity:1,duration:0.22,stagger:0.03},0.30);if(window.DrawSVGPlugin&&_p.length){timeline.fromTo(_p,{drawSVG:'0%'},{drawSVG:'100%',duration:1.05,ease:'power2.inOut',stagger:0.04},0.42);}if(_s){timeline.fromTo(_s,{scale:0.985},{scale:1,duration:1.1,ease:'power2.out'},0.36);}"
-   }
+   },
+   "selectable": false
   },
   {
    "id": "MG89",
    "name": "classBox",
    "family": "图示",
-   "role": "component",
+   "role": "shape",
    "status": "ready",
    "cap": "component-html",
    "src": "mermaid:shapes/classBox.ts",
@@ -8250,13 +8298,14 @@
      "DrawSVGPlugin"
     ],
     "js": "var _s=document.querySelector('[data-anim=\"subject\"] svg');var _p=_s?_s.querySelectorAll('path,rect,circle,ellipse,polygon,line,polyline'):[];timeline.fromTo(_p,{opacity:0},{opacity:1,duration:0.22,stagger:0.03},0.30);if(window.DrawSVGPlugin&&_p.length){timeline.fromTo(_p,{drawSVG:'0%'},{drawSVG:'100%',duration:1.05,ease:'power2.inOut',stagger:0.04},0.42);}if(_s){timeline.fromTo(_s,{scale:0.985},{scale:1,duration:1.1,ease:'power2.out'},0.36);}"
-   }
+   },
+   "selectable": false
   },
   {
    "id": "MD01",
    "name": "流程图·三段推进",
    "family": "图示",
-   "role": "component",
+   "role": "shape",
    "status": "ready",
    "cap": "component-html",
    "src": "mermaid:diagrams",
@@ -8274,13 +8323,14 @@
      "DrawSVGPlugin"
     ],
     "js": "timeline.fromTo('[data-anim=\"subject\"] .dn rect',{opacity:0,scale:.94,transformOrigin:'50% 50%'},{opacity:1,scale:1,duration:.5,ease:'power2.out',stagger:.12},0.30);timeline.fromTo('[data-anim=\"subject\"] .dn text',{opacity:0},{opacity:1,duration:.4,stagger:.12},0.45);timeline.fromTo('[data-anim=\"subject\"] .de',{drawSVG:'0%'},{drawSVG:'100%',duration:.55,ease:'power2.inOut',stagger:.18},0.9);if(!window.DrawSVGPlugin){timeline.set('[data-anim=\"subject\"] .de',{opacity:1},0);}"
-   }
+   },
+   "selectable": false
   },
   {
    "id": "MD02",
    "name": "时序图·三方往返",
    "family": "图示",
-   "role": "component",
+   "role": "shape",
    "status": "ready",
    "cap": "component-html",
    "src": "mermaid:diagrams",
@@ -8298,13 +8348,14 @@
      "DrawSVGPlugin"
     ],
     "js": "timeline.fromTo('[data-anim=\"subject\"] .dn',{opacity:0,y:-18},{opacity:1,y:0,duration:.45,ease:'power2.out',stagger:.12},0.3);timeline.fromTo('[data-anim=\"subject\"] .de',{drawSVG:'0%'},{drawSVG:'100%',duration:.5,ease:'power2.inOut',stagger:.2},0.8);timeline.fromTo('[data-anim=\"subject\"] .dl',{opacity:0},{opacity:1,duration:.3,stagger:.2},1.0);if(!window.DrawSVGPlugin){timeline.set('[data-anim=\"subject\"] .de',{opacity:1},0);}"
-   }
+   },
+   "selectable": false
   },
   {
    "id": "MD03",
    "name": "泳道图·两条线并行",
    "family": "图示",
-   "role": "component",
+   "role": "shape",
    "status": "ready",
    "cap": "component-html",
    "src": "mermaid:diagrams",
@@ -8322,13 +8373,14 @@
      "DrawSVGPlugin"
     ],
     "js": "timeline.fromTo('[data-anim=\"subject\"] .dlane',{opacity:0},{opacity:1,duration:.5,stagger:.15},0.25);timeline.fromTo('[data-anim=\"subject\"] .dn rect',{opacity:0,scale:.9,transformOrigin:'50% 50%'},{opacity:1,scale:1,duration:.45,ease:'back.out(1.4)',stagger:.14},0.6);timeline.fromTo('[data-anim=\"subject\"] .dn text',{opacity:0},{opacity:1,duration:.3,stagger:.14},0.75);timeline.fromTo('[data-anim=\"subject\"] .de',{drawSVG:'0%'},{drawSVG:'100%',duration:.4,stagger:.12},1.35);if(!window.DrawSVGPlugin){timeline.set('[data-anim=\"subject\"] .de',{opacity:1},0);}"
-   }
+   },
+   "selectable": false
   },
   {
    "id": "MD04",
    "name": "时间轴·四个节点",
    "family": "图示",
-   "role": "component",
+   "role": "shape",
    "status": "ready",
    "cap": "component-html",
    "src": "mermaid:diagrams",
@@ -8346,13 +8398,14 @@
      "DrawSVGPlugin"
     ],
     "js": "timeline.fromTo('[data-anim=\"subject\"] .de',{drawSVG:'0%'},{drawSVG:'100%',duration:1.0,ease:'power2.inOut'},0.3);timeline.fromTo('[data-anim=\"subject\"] .dn',{opacity:0,y:14},{opacity:1,y:0,duration:.45,ease:'power2.out',stagger:.16},0.85);timeline.fromTo('[data-anim=\"subject\"] .dn circle',{scale:0,transformOrigin:'50% 50%'},{scale:1,duration:.4,ease:'back.out(2)',stagger:.16},0.8);if(!window.DrawSVGPlugin){timeline.set('[data-anim=\"subject\"] .de',{opacity:1},0);}"
-   }
+   },
+   "selectable": false
   },
   {
    "id": "MD05",
    "name": "四象限·两类分选",
    "family": "图示",
-   "role": "component",
+   "role": "shape",
    "status": "ready",
    "cap": "component-html",
    "src": "mermaid:diagrams",
@@ -8370,13 +8423,14 @@
      "DrawSVGPlugin"
     ],
     "js": "timeline.fromTo('[data-anim=\"subject\"] .de',{drawSVG:'0%'},{drawSVG:'100%',duration:.7,ease:'power2.inOut',stagger:.2},0.3);timeline.fromTo('[data-anim=\"subject\"] .dn',{opacity:0,scale:.4,transformOrigin:'50% 50%'},{opacity:1,scale:1,duration:.55,ease:'back.out(1.6)',stagger:.14},0.9);if(!window.DrawSVGPlugin){timeline.set('[data-anim=\"subject\"] .de',{opacity:1},0);}"
-   }
+   },
+   "selectable": false
   },
   {
    "id": "MD06",
    "name": "桑基流向·三段归集",
    "family": "图示",
-   "role": "component",
+   "role": "shape",
    "status": "ready",
    "cap": "component-html",
    "src": "mermaid:diagrams",
@@ -8394,13 +8448,14 @@
      "DrawSVGPlugin"
     ],
     "js": "timeline.fromTo('[data-anim=\"subject\"] .dn',{opacity:0,x:-20},{opacity:1,x:0,duration:.45,ease:'power2.out',stagger:.1},0.3);timeline.fromTo('[data-anim=\"subject\"] .dr',{opacity:0,scaleY:.3,transformOrigin:'0% 50%'},{opacity:1,scaleY:1,duration:.6,ease:'power2.out',stagger:.14},0.75);if(!window.DrawSVGPlugin){timeline.set('[data-anim=\"subject\"] .de',{opacity:1},0);}"
-   }
+   },
+   "selectable": false
   },
   {
    "id": "MD07",
    "name": "树状图·一主三分支",
    "family": "图示",
-   "role": "component",
+   "role": "shape",
    "status": "ready",
    "cap": "component-html",
    "src": "mermaid:diagrams",
@@ -8418,7 +8473,8 @@
      "DrawSVGPlugin"
     ],
     "js": "timeline.fromTo('[data-anim=\"subject\"] .dn',{opacity:0,y:16},{opacity:1,y:0,duration:.4,ease:'power2.out',stagger:.07},0.3);timeline.fromTo('[data-anim=\"subject\"] .de',{drawSVG:'0%'},{drawSVG:'100%',duration:.4,ease:'power2.inOut',stagger:.06},0.55);if(!window.DrawSVGPlugin){timeline.set('[data-anim=\"subject\"] .de',{opacity:1},0);}"
-   }
+   },
+   "selectable": false
   },
   {
    "id": "MX01",
@@ -8499,7 +8555,7 @@
    "id": "MT01",
    "name": "标签自动换行",
    "family": "图示",
-   "role": "component",
+   "role": "shape",
    "status": "ready",
    "cap": "component-html",
    "src": "mermaid:rendering-util/splitText.ts",
@@ -8514,7 +8570,8 @@
     "stage": "<div data-anim=\"subject\"><svg class=\"dsvg\" viewBox=\"0 0 1080 1920\" xmlns=\"http://www.w3.org/2000/svg\" style=\"position:absolute;inset:0;width:1080px;height:1920px\"><defs><marker id=\"arw\" viewBox=\"0 0 12 12\" refX=\"10\" refY=\"6\" markerWidth=\"7\" markerHeight=\"7\" orient=\"auto\"><path d=\"M1 1 L11 6 L1 11\" fill=\"none\" stroke=\"#86F0C0\" stroke-width=\"2\"/></marker></defs><g class=\"dn\"><rect x=\"140\" y=\"820\" width=\"800\" height=\"300\" rx=\"26\" fill=\"rgba(134,240,192,.14)\" stroke=\"#86F0C0\" stroke-width=\"4\"/></g><text class=\"ln\" x=\"190\" y=\"900\" font-size=\"52\" font-weight=\"700\" fill=\"#F4F1E9\">线索自动分级之后，</text><text class=\"ln\" x=\"190\" y=\"976\" font-size=\"52\" font-weight=\"700\" fill=\"#F4F1E9\">跟进提醒会直接</text><text class=\"ln\" x=\"190\" y=\"1052\" font-size=\"52\" font-weight=\"700\" fill=\"#F4F1E9\">落到负责人手上</text></svg></div>",
     "sel": "[data-anim=\"subject\"]",
     "js": "timeline.fromTo('[data-anim=\"subject\"] .dn',{opacity:0},{opacity:1,duration:.4},0.3);timeline.fromTo('[data-anim=\"subject\"] .ln',{opacity:0,y:18},{opacity:1,y:0,duration:.4,ease:'power2.out',stagger:.16},0.7);"
-   }
+   },
+   "selectable": false
   }
  ],
  "schema_note": "契约字段：surface=opaque|transparent（是否自带底色）；tone=dark|light|any（适配明暗）；base=底色；needs=[text|img|ui]（DOM 前提）；impl=实现入口；缺字段的卡不许进选卡池。"

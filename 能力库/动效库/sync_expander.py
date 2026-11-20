@@ -35,7 +35,7 @@ def build_blocks():
     cards = [
         c for c in bp.load()["presets"]
         if c.get("status") == "ready" and not c["id"].startswith("B")
-        and c.get("role") != "bg"
+        and c.get("role") not in ("bg", "shape")
         and c.get("cap") not in ("component-html", "page-transition")
     ]
     tpl = ["    TPL = {"]
@@ -77,7 +77,7 @@ def audit_params():
         if c.get("status") == "ready":
             ready[c["id"]] = c
     for c in bp.load()["presets"]:
-        if c.get("status") != "ready" or c["id"].startswith("B") or c.get("cap") in ("component-html", "page-transition"):
+        if c.get("status") != "ready" or c["id"].startswith("B") or c.get("role") == "shape" or c.get("cap") in ("component-html", "page-transition"):
             continue
         vals = dict(c.get("params") or {})
         vals.update({"sel": "x", "at": "at(0.2)", "k": "0", "sel2": "y"})
