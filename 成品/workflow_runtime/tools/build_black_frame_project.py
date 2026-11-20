@@ -359,6 +359,20 @@ def _key_from_shell_rc(name: str) -> str:
     return ""
 
 
+TTS_BASE_URL_LABELS = {
+    # 开始节点的是「选项标签」，不是 URL。这里再挡一次，老包不重跑 Dify 也能重建。
+    "默认（按量付费）": "https://api.xiaomimimo.com/v1",
+    "Token Plan - 中国": "https://token-plan-cn.xiaomimimo.com/v1",
+    "Token Plan - 新加坡": "https://token-plan-sgp.xiaomimimo.com/v1",
+    "Token Plan - 欧洲": "https://token-plan-ams.xiaomimimo.com/v1",
+}
+
+
+def normalize_base_url(value: str) -> str:
+    text = str(value or "").strip()
+    return TTS_BASE_URL_LABELS.get(text, text)
+
+
 def generate_mimo_voice(script: str, output: Path, model: str, voice: str, base_url: str) -> None:
     api_key = os.environ.get("MIMO_API_KEY", "").strip() or _key_from_shell_rc("MIMO_API_KEY")
     if not api_key:
@@ -510,7 +524,7 @@ def main() -> None:
     data = normalize_input(raw)
     tts_config = data.get("tts_config", {})
     provider = args.tts_provider or tts_config.get("provider") or os.environ.get("TTS_PROVIDER", "mimo")
-    base_url = args.tts_base_url or tts_config.get("base_url") or os.environ.get("TTS_BASE_URL", "https://api.xiaomimimo.com/v1")
+    base_url = normalize_base_url(args.tts_base_url or tts_config.get("base_url") or os.environ.get("TTS_BASE_URL", "https://api.xiaomimimo.com/v1"))
     model = args.tts_model or tts_config.get("model") or os.environ.get("TTS_MODEL", "mimo-v2.5-tts")
     voice_name = args.voice_name or tts_config.get("voice") or os.environ.get("MIMO_TTS_VOICE", os.environ.get("TTS_VOICE", "mimo_default"))
     project_dir = BASE / args.project_name
