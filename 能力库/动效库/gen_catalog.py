@@ -33,6 +33,7 @@ import sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 import yaml_nodes  # noqa: E402
+import component_slots  # noqa: E402
 
 HERE = pathlib.Path(__file__).resolve().parent
 REPO = HERE.parent.parent
@@ -79,10 +80,15 @@ def catalog_of(cards):
         role = c.get("role") or ""
         cid = c["id"]
         if role == "bg":
+            ink = c.get("ink")
+            if isinstance(ink, dict):
+                ink = ink.get("primary", "")
             bg[cid] = {"name": c.get("name", ""), "note": c.get("note", ""),
-                       "family": c.get("bg_family", "")}
+                       "family": c.get("bg_family", ""), "base": c.get("base", ""),
+                       "ink_primary": ink or ""}
         elif role == "component":
-            comp[cid] = {"name": c.get("name", ""), "note": c.get("note", "")}
+            info = component_slots.build(c.get("code") or "", component_slots.REPEAT_HINTS.get(cid))
+            comp[cid] = component_slots.catalog_entry(c, info) if info else {"name": c.get("name", ""), "note": c.get("note", "")}
         elif role == "page_transition":
             pt[cid] = {"name": c.get("name", ""), "note": c.get("note", ""),
                        "kind": c.get("kind", "")}
@@ -305,6 +311,20 @@ def splice_inventory_prompt(text, block):
     return splice_between(text, block, INV_START, INV_END)
 
 
+def render_h00_code(catalog, templates):
+    """H00 是纯生成物：目录 + 组件模板。整段重建，不再往旧代码里插块。"""
+    cat_blob = json.dumps(catalog, ensure_ascii=False)
+    tpl_blob = json.dumps(templates, ensure_ascii=False)
+    return ('def main(package_json: str = "") -> dict:\n'
+            '    """选择层：目录（含槽位元数据）与组件模板。由 gen_catalog.py 生成，不要手改。"""\n'
+            '    import json\n'
+            '    CATALOG = json.loads(r"""%s""")\n'
+            '    COMPONENT_TPL = json.loads(r"""%s""")\n'
+            '    return {"catalog_json": json.dumps(CATALOG, ensure_ascii=False),\n'
+            '            "component_tpl_json": json.dumps(COMPONENT_TPL, ensure_ascii=False)}\n'
+            % (cat_blob, tpl_blob))
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--check", action="store_true", help="只检查是否已同步")
@@ -312,37 +332,21 @@ def main() -> int:
 
     cards = load()
     cat = catalog_of(cards)
-    blob = json.dumps(cat, ensure_ascii=False)
-    if '"""' in blob:
-        raise SystemExit("目录里出现三引号，无法安全嵌入 H00")
-
-    prompt_block = render_components_prompt(cards)
-    inv_block = render_inventory_prompt(cards)
+    templates = {}
+    for card in cards:
+        if card.get("role") == "component":
+            info = component_slots.build(card.get("code") or "", component_slots.REPEAT_HINTS.get(card.get("id")))
+            if info:
+                templates[card["id"]] = component_slots.template_entry(info)
+    h00_code = render_h00_code(cat, templates)
+    compile(h00_code, "h00", "exec")
     md_cards = render_cards_md(cards)
     md_comp = render_comp_md(cards)
 
-    diffs, plans = [], []
+    diffs = []
     for path in YAMLS:
-        code = h00_code(path)
-        new_code = splice_h00(code, blob)
-        compile(new_code, "h00", "exec")
-        h02s_text = yaml_nodes.get_prompt_text("h02s", path)
-        h02s_new = splice_components_prompt(h02s_text, prompt_block)
-        # A10 编号清单段：2026-11-18 起工作流里已经没有 a10 节点（A10/A11 并入 A12 与 A09）。
-        # 节点不在就跳过这一段，不当成错误——否则整个加删卡链路会被一个不存在的节点卡死。
-        try:
-            a10_text = yaml_nodes.get_prompt_text("a10", path)
-        except SystemExit:
-            a10_text = None
-        a10_new = splice_inventory_prompt(a10_text, inv_block) if a10_text is not None else None
-        plans.append((path, code, new_code, h02s_text, h02s_new, a10_text, a10_new))
-        if new_code != code:
-            diffs.append("%s 的 H00 目录" % path.name)
-        if h02s_new != h02s_text:
-            diffs.append("%s 的 H02S 组件段" % path.name)
-        if a10_text is not None and a10_new != a10_text:
-            diffs.append("%s 的 A10 编号清单" % path.name)
-
+        if yaml_nodes.get_code("h00", path) != h00_code:
+            diffs.append("%s 的 H00 选择层" % path.name)
     if not CARDS_MD.exists() or CARDS_MD.read_text(encoding="utf-8") != md_cards:
         diffs.append("能力卡.md")
     if not COMP_MD.exists() or COMP_MD.read_text(encoding="utf-8") != md_comp:
@@ -358,16 +362,12 @@ def main() -> int:
         print("已同步：%d 张卡，可选 %d 张（两份 YAML 一致）" % (len(cards), n_sel))
         return 0
 
-    for path, code, new_code, h02s_text, h02s_new, a10_text, a10_new in plans:
-        if new_code != code:
-            write_h00(new_code, path)
-        if h02s_new != h02s_text:
-            yaml_nodes.set_prompt_text("h02s", h02s_new, path)
-        if a10_text is not None and a10_new != a10_text:
-            yaml_nodes.set_prompt_text("a10", a10_new, path)
+    for path in YAMLS:
+        if yaml_nodes.get_code("h00", path) != h00_code:
+            yaml_nodes.set_code("h00", h00_code, path)
     CARDS_MD.write_text(md_cards, encoding="utf-8")
     COMP_MD.write_text(md_comp, encoding="utf-8")
-    print("已写入：能力卡.md / 组件卡.md / H00 目录（两份 YAML）；可选 %d 张（背景 %d / 组件 %d / 转场 %d / 动效 %d）"
+    print("已写入：能力卡.md / 组件卡.md / H00 选择层（两份 YAML）；可选 %d 张（背景 %d / 组件 %d / 转场 %d / 动效 %d）"
           % (n_sel, len(cat["background"]), len(cat["component"]), len(cat["page_transition"]),
              sum(len(v) for v in cat["motion"].values())))
     return 0

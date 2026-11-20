@@ -130,11 +130,12 @@ def main():
         data = yaml.safe_load(raw)
         node = None
         for n in data["workflow"]["graph"]["nodes"]:
-            if n.get("data", {}).get("title", "").startswith("H02SX"):
+            # 优先按 id 找（节点标题会随语义改），旧文件退回按标题
+            if n.get("id") == "h02sx" or n.get("data", {}).get("title", "").startswith(("H02SX", "R1_")):
                 node = n
                 break
         if not node:
-            print("找不到 H02SX 节点：%s" % path.name)
+            print("找不到动效展开节点（h02sx / H02SX / R1_）：%s" % path.name)
             return 1
         code = node["data"]["code"]
         new_code, ids = splice(code)
