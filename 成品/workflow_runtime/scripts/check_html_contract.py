@@ -137,13 +137,13 @@ def main() -> None:
                 if ('data-anim="%s"' % _anim) not in _block:
                     _scope_miss.append("%s 没有 %s" % (_scope.group(1), _anim))
         if _scope_miss:
-            errors.append("动效目标不在本屏：%s（跨屏同名元素不算命中；先查 H02SM 的 target）"
+            errors.append("动效目标不在本屏：%s（跨屏同名元素不算命中；先查 H02S 的 target）"
                           % "、".join(sorted(set(_scope_miss))[:6]))
     _skipped_motion = re.findall(r'data-motion-skipped="([^"]*)"', doc)
     if _skipped_motion:
         # 2026-11-17 起本地不再"改拍到主文字"，目标不存在就整条丢弃（见 H02SK 的 _fix_block），
         # 所以这里报的是"这条动效已经没了"，不是"换了目标"。
-        errors.append("动效被丢弃：%s（H02SM 的 target 在本屏不存在；重跑 H02SM，把 target 逐字对齐 scene_spec）"
+        errors.append("动效被丢弃：%s（H02S 的 target 在本屏不存在；重跑 H02S，把 target 逐字对齐 scene_spec）"
                       % "；".join(html_lib.unescape(item) for item in _skipped_motion[:6]))
 
     # ---- 两句一眼能看出、却一直没人报的诊断（2026-11-17 补）----
@@ -217,7 +217,7 @@ def main() -> None:
     root_duration = float(root_duration_match.group(1)) if root_duration_match else 0.0
     scene_tags = re.findall(r'<section\b(?=[^>]*class=["\'][^"\']*\bscene\b)[^>]*>', doc, flags=re.I)
     structure_blocking = []
-    # 逐屏动效契约（2026-11-11）：动效由 H02SM 逐屏写，每屏至少 push 一个 builder。
+    # 逐屏动效契约（2026-11-11）：动效由 H02S 逐屏写（2026-11-20 起与规格同一份 JSON），每屏至少 push 一个 builder。
     # 少了就说明动效节点没产出（成片会是一条只有转场的静帧片），必须拦。
     if "data-anim=" in doc and "__sceneBuilders" in doc:
         _scene_total = len(re.findall(r'<section\b[^>]*data-scene="[^"]+"', doc))
@@ -241,7 +241,7 @@ def main() -> None:
         if _scene_total and len(_markers) < _scene_total * 2:
             errors.append(
                 "动效密度不足：%d 个场景只有 %d 条内容动效（每屏要求 2 条：1 入场 + 1 状态变化，"
-                "背景卡不算）。先查 H02SM 是否每屏都给了 entrance + state 两条"
+                "背景卡不算）。先查 H02S 是否每屏都给了 entrance + state 两条"
                 % (_scene_total, len(_markers)))
         _chunks = re.split(r'(?=<section[^>]*data-scene=")', doc)
         _seq = []
@@ -260,7 +260,7 @@ def main() -> None:
             _thin = [sid for sid, ms in _seq if len(ms) < 2]
             if _thin:
                 errors.append(
-                    "这些屏只有 1 条内容动效（应为 入场 + 状态 两条）：%s。先在 H02SM 的产出里看这几屏"
+                    "这些屏只有 1 条内容动效（应为 入场 + 状态 两条）：%s。先在 H02S 的产出里看这几屏"
                     "是不是只给了一条，再查 H01X 的 motion_budget.state 是否为空"
                     % "、".join(_thin))
             _count = {}
@@ -285,7 +285,7 @@ def main() -> None:
         if _scene_total and _builders < _scene_total:
             structure_blocking.append(
                 "逐屏动效缺失：%d 个场景只有 %d 个 scene builder（每屏应各有一个）；"
-                "先查 H02SM 是否产出、H02SK 是否合并" % (_scene_total, _builders))
+                "先查 H02S 是否产出、H02SK 是否合并" % (_scene_total, _builders))
 
     # 场景显隐已交还给页面自己驱动（本地不再注入 scene-window-runtime），
     # 页面没写驱动的话所有 scene 会同时叠在画布上，必须拦。
