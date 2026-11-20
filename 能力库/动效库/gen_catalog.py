@@ -315,7 +315,7 @@ def render_h00_code(catalog, templates):
     """H00 是纯生成物：目录 + 组件模板。整段重建，不再往旧代码里插块。"""
     cat_blob = json.dumps(catalog, ensure_ascii=False)
     tpl_blob = json.dumps(templates, ensure_ascii=False)
-    return ('def main(package_json: str = "") -> dict:\n'
+    return ('def main() -> dict:\n'
             '    """选择层：目录（含槽位元数据）与组件模板。由 gen_catalog.py 生成，不要手改。"""\n'
             '    import json\n'
             '    CATALOG = json.loads(r"""%s""")\n'
