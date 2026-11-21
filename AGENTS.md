@@ -24,7 +24,7 @@
 统一处理入口：
 
 ```bash
-bash /Volumes/TUF ESD-T1A Media/视频工作流/成品/workflow_runtime/tools/run_dify_output.sh 项目名
+bash /Volumes/TUF ESD-T1A Media/视频工作流/runtime/tools/run_dify_output.sh 项目名
 ```
 
 ## 口径（唯一真值，其他文档只写指路）
@@ -39,12 +39,22 @@ bash /Volumes/TUF ESD-T1A Media/视频工作流/成品/workflow_runtime/tools/ru
 | 时长 | **没有目标时长**，文案写多长成片就多长，以真实口播为唯一主时钟 | `视频需求与质量标准.md` §5 |
 | 去重 | 只有 `script_hash` 一个指纹在跑 | `S1N` 的 Code 节点 |
 | 界面元素 | 只能取编号组件（`U*`）；模型只给编号+槽位文字，不写 HTML | `S2` 规格 + `R2` 槽位渲染 + `component_slots.py` |
+| 组件动效配对 | 组件卡 `provides`、动效 `needs`；`motion_by_component` 由 `gen_catalog` 算，`S2N`/`R1` 再验 | `contracts.py` + `gen_catalog.py` |
+| 状态卡落点 | 卡 `needs` 里的锚点（如 S36 的 `num`）必须由目标组件 `provides`；`R1` 把 `sel` 绑到锚点元素，缺锚点就丢卡 | `gen_catalog` 的 `card_needs` + `S2N`/`R1` |
+| 组件槽位 | 组数由 `texts` 给到的**完整组**决定；不补空串、不满组整组丢 | `S2N` 的 `fit_component_texts` |
+| 组件落哪一层 | 组件默认进 840 文字栏；卡上写 `span: "full"` 的进 1080 通栏层 `.scene-ui`，版面给它留一条横带（`data-ui-full`） | `gen_catalog` 的 `COMPONENT_TPL.span` + `R2` + `layout_composer` 的 `ui_band` |
+| 组件根唯一 | 模板有多个顶层节点的片段由 `R2` 包一层 `.ui-comp-row` 再挂 `data-anim`；`R1` 的"显示这一层"打在根上 | `R2` 的 `top_level_count` + `R1` 的 `layer_sel` + `components.css` 的 `.ui-comp-row` |
+| 背景可绑定 | 目录里有哪张就能绑哪张（`catalog.background`），不再写死 B23–B39；目录外的编号丢弃并点名，不塞默认卡 | `R1` 的 `CANVAS_BG` + `S2N` |
+| 照片入场 | **只能选 `catalog.motion.entrance_media`**（`gen_catalog` 从 `entrance_block` 派生的那格：只动根节点、不依赖子结构和元素自带属性）；列表为空就留空，`R2` 给默认淡入 | `gen_catalog.media_entrance_ok` + `S2N` + `R1` |
+| 照片槽的压暗 | 是 `.media` 的子元素 `.media-scrim`，**不是槽上的 `::after`**——空槽不许露板，装饰要跟内容同透明度 | `R2` 的 `media_html` + `layout_composer.build_scene_css` |
+| 状态卡 | `state_*` 卡不许给**根元素**设隐藏起始态（动子元素要声明 `child`）；一屏一个 role / 一个组件 `anim` 名只留一条 | `add_card.validate` + `S2N` 去重 |
 | 标题换行 | **`R2` 按标点切 2 段写死 `<br>`**，`solve_scale` 再按「最长那一行」反算字号（840/8=105→100 档） | `R2` 的 code + `layout_composer.solve_scale` |
 | 屏内动作时刻 | 顺序由 `role` 槽位定（title → 辅助 → body → media → 组件 → state）；时刻由 `__slot` 按真实屏长铺开：有余量时按**等间隔**排、末位收在切点前 **1.5s**（`window.__slotTail`）；挤不下时才退回按收尾时刻等距。`beat` 只在槽内微调。每屏收完到切点的静止统一 1.5s | `R1` 展开成 `at(slot(...))` + `sync_video` 的 `window.__slot` |
 | 页间转场几刀 | **N 屏必出 N-1 条 `__pt`**：`R3` 按切点表逐刀生成，kind 从能力目录派生；模型只给偏好，漏的按本片转场族补齐并点名重跑 `S2` | `R3` 的 `build_transition_script` + `pt_catalog` |
 | 照片落版 | 全部 840 通栏横带，高度 `band` 600/420/300、`portrait` 520、`inset` 360、`thumb` 300、`texture` 620；**只有 `full` 满屏**，而 `full` 在 `S2N` 就归一成 `band`，所以生成端写不出满屏照片 | `R2` 的 `FIXED_H` / `slot` |
 | 场景脚本外壳 | `<script>` + `push(function(timeline, at){` + `});` **只由 `R2` 生成一次**；剥壳、丢卡、补入场都在 body 层，永远碰不到外壳 | `R2` 的 code |
 | 卡片字号 | `.ui-card h3` = 本屏主字号 × 0.5、`p` = × 0.3（`--ui-card-title` / `--ui-card-body`）；`--ui-scale` 只给其它组件用 | `layout_composer` + `components.css` |
+| 组件栅格宽度 | `ui-cell` 按格内最长文字反算 `--ui-scale` 上限（下限 1.55）；U54 指标三连标签/值分两行 | `layout_composer.ui_grid_scale_cap` + `components.css` |
 
 ## 目录与职责（唯一一份目录表）
 
@@ -62,7 +72,7 @@ bash /Volumes/TUF ESD-T1A Media/视频工作流/成品/workflow_runtime/tools/ru
 | `成品/<项目>/` | 正式项目：成品与项目内运行脚本，不作为新项目模板直接修改 |
 | `成品/试验/<项目>/` | 没上线的试验、`-check` / `-rebuild` 副本、结构/图片链路的测试项目 |
 | `成品/失败项目/`、`成品/项目备份/` | 渲染失败与 `--replace` 的自动备份，各自带 README 写保留策略 |
-| `成品/workflow_runtime/` | 可复用模板、脚本、GSAP 运行时、工具，钉死的 HyperFrames CLI（`vendor/`，`node_modules` 不进仓库）。只读，不往里写运行结果，也不放任何私人配置 |
+| `runtime/` | 可复用模板、脚本、GSAP 运行时、工具，钉死的 HyperFrames CLI（`vendor/`，`node_modules` 不进仓库）。只读，不往里写运行结果，也不放任何私人配置 |
 | `成品/Dify输出/` | Dify 原始 TXT / JSON / HTML 和 HeyGen 响应 |
 | `成品/HTML预览/` | 只有 `html_document` 的输出（浏览器预览，不渲染 MP4） |
 | `成品/项目状态.md` | 在跑、待重跑、已归档的项目清单（只列正式项目） |
@@ -83,6 +93,8 @@ python3 能力库/动效库/check_catalog_sync.py         # 四层一致性门�
 `add_card.py` 会拒绝这些情况：`role` 不合法、`code` 里的 `{{x}}` 在 `params` 里没有默认值、
 背景卡缺 `bg_family`/`keywords`/`note`、组件卡用了 `components.css` 里没有的类、PT 卡的 `kind` 不在 `__ptList`、
 以及**没有样片的卡**（规则：没样片不入表；`--render` 只是先把候选片渲到 `样片/待筛/` 再停，不转正）。
+能力契约也在这里拦：组件卡缺 `provides`、`component_motion` 卡缺 `needs` 锚点 / `target`、
+或者算下来没有任何组件能接（没有宿主），同样拒收。
 
 各层谁生成谁，见 `经验文档/能力层架构.md`。
 
@@ -126,10 +138,10 @@ python3 能力库/动效库/add_card.py 本批.json --batch <批次>  # 写表 +
 |---|---|
 | `presets.json` 的字段、`role`、参数 | 跑 `add_card.py` / `remove_card.py` / `gen_catalog.py`，再跑 `check_catalog_sync.py` |
 | 能力目录、选择层、`H00` 的 catalog | `gen_catalog.py` 生成，不要手改 YAML 里的 CATALOG 块 |
-| 输出变量、字段或 JSON 结构 | `Dify工作流/使用说明.md`、`经验文档/使用说明.md`、`workflow_runtime/tools/` |
+| 输出变量、字段或 JSON 结构 | `Dify工作流/使用说明.md`、`经验文档/使用说明.md`、`runtime/tools/` |
 | 04 的链路节点（骨架 / 单屏规格 / 落版 / 检查） | `Dify工作流/01_有数字人完整视频工作流.yml` 的对应差异块，清单在 `经验文档/能力层架构.md` §七 |
-| 媒体、字幕、布局或渲染规则 | `workflow_runtime/`、`能力库/项目文档/视频需求与质量标准.md` |
-| 图像计划、生图 prompt 规则、图片契约 | `workflow_runtime/scripts/generate_images.py`、`workflow_runtime/tools/build_black_frame_project.py`、`能力库/项目文档/视频需求与质量标准.md` |
+| 媒体、字幕、布局或渲染规则 | `runtime/`、`能力库/项目文档/视频需求与质量标准.md` |
+| 图像计划、生图 prompt 规则、图片契约 | `runtime/scripts/generate_images.py`、`runtime/tools/build_black_frame_project.py`、`能力库/项目文档/视频需求与质量标准.md` |
 | 新增或重命名节点 | `能力库/README.md` 和相关说明 |
 | 本地命令或目录职责 | 根目录 `AGENTS.md`、`经验文档/使用说明.md` |
 | `admit.py` / `adapters/` 的进件流程 | `经验文档/能力层架构.md` §三之二、`能力库/动效库/样片/README.md` |
@@ -152,7 +164,7 @@ python3 能力库/动效库/add_card.py 本批.json --batch <批次>  # 写表 +
 
 ### 修改后的最低验证
 
-1. 用**导入时同一份解析器**解析全部 YAML：`node 成品/workflow_runtime/tools/check_dsl_parse.mjs`。
+1. 用**导入时同一份解析器**解析全部 YAML：`node runtime/tools/check_dsl_parse.mjs`。
    `yaml.safe_load` 过了不代表能导入（2026-11-20 踩过，见 `经验文档/事故排查.md`「导入 Dify 报 YAML 解析失败」）。
 2. 改过的提示词和 Code 节点确实写进了对应 YAML（`yaml.safe_load` 能解析、节点里找得到）。
 3. Python 文件执行语法编译，Shell 文件执行 `bash -n`。
@@ -162,9 +174,9 @@ python3 能力库/动效库/add_card.py 本批.json --batch <批次>  # 写表 +
 
 ### 清理
 
-- 保留 `333`、`workflow_runtime` 和 `Dify输出/333*`。
+- 保留 `333`、`runtime/` 和 `Dify输出/333*`。
 - 正式字幕只放在项目自己的 `字幕/` 目录。
-- 不把运行结果写入 `workflow_runtime/`。
+- 不把运行结果写入 `runtime/`。
 - 删除历史资料、备份或外部分发包前，先确认已合并有效内容并明确告知不可恢复。
 
 ## 经验索引
@@ -176,7 +188,7 @@ python3 能力库/动效库/add_card.py 本批.json --batch <批次>  # 写表 +
 
 ### 经验文档/能力层架构.md
 - 什么时候读：加 / 删 / 改卡、改选择层、想动 `presets.json` 的字段、怀疑"卡加了不生效"、要重造某一层之前
-- 包含：定义层 / 选择层 / 展开层 / 样片层四层各自由谁生成、`role` 的全部取值、一条命令加删卡、四层门禁查什么、`H00` 选择层 / `R1` 动效展开 / `R2` 槽位落版各自读哪个字段、01 = 04 + 小窗（含两边的同步清单）、进件流水线 `admit.py`（scan/build/render/keep/drop、适配器、编号分配、筛完即清）、审阅的三条（样片才是审阅物 / scan 判不能提就别 build / 外观片不留文件）、来源标注只认 `src` 且必须带前缀
+- 包含：定义层 / 选择层 / 展开层 / 样片层四层各自由谁生成、`role` 的全部取值、照片入场派生族 `entrance_media`、状态卡不许重置根元素、**状态卡锚点 `card_needs`（S36 落 `num`）**、**组件槽位按完整组切、不补空串**、**组件 `span: full` 落 1080 通栏层**、**背景可绑定集合从 `catalog.background` 派生**、一条命令加删卡、四层门禁查什么、`H00` 选择层 / `R1` 动效展开 / `R2` 槽位落版各自读哪个字段、01 = 04 + 小窗（含两边的同步清单）、进件流水线 `admit.py`（scan/build/render/keep/drop、适配器、编号分配、筛完即清）、审阅的三条（样片才是审阅物 / scan 判不能提就别 build / 外观片不留文件）、来源标注只认 `src` 且必须带前缀
 - 不用读：只是对某张卡的参数不满意
 
 ### 经验文档/使用说明.md
@@ -186,7 +198,7 @@ python3 能力库/动效库/add_card.py 本批.json --batch <批次>  # 写表 +
 
 ### 经验文档/事故排查.md
 - 什么时候读：渲染失败、黑屏或静帧、音画不同步、字幕错位、整屏空白、Dify 输出残缺、页面只剩零点几秒
-- 包含：生成端结构保证与诊断清单、**导入报 YAML 解析失败（PyYAML 过了不等于能导入）**、Dify 无输出、场景没识别、输出超限、失败定位与续跑、动效/黑屏/音画不同步的五种症状、空页与闪回、时间码缺失、render slot、**进件候选片渲染的五种成因（CDN 依赖 / paused 时间轴 / composition-id 不匹配 / template 片段 / scan 判「没有可 seek 的时间轴」）**、canvas 画面、页面节奏锚定、`window.__cue`、**动作时刻错位 / 转场吃掉入场 / 整屏 script 语法错**、成片复核工具、跑外部检查器的两条前提（Node ≥ 22 / Chrome `--no-sandbox`）、**数字人版（01）小窗与图片的三条症状**、文字对比度的量测口径、已知未修
+- 包含：生成端结构保证与诊断清单、**最后一屏没背景 / 卡片空一格 / 屏上冒出数字（目录给的选择下游兑现不了）**、**导入报 YAML 解析失败（PyYAML 过了不等于能导入）**、Dify 无输出、场景没识别、输出超限、失败定位与续跑、动效/黑屏/音画不同步的五种症状、空页与闪回、时间码缺失、render slot、**进件候选片渲染的五种成因（CDN 依赖 / paused 时间轴 / composition-id 不匹配 / template 片段 / scan 判「没有可 seek 的时间轴」）**、canvas 画面、页面节奏锚定、`window.__cue`、**动作时刻错位 / 转场吃掉入场 / 整屏 script 语法错**、成片复核工具、跑外部检查器的两条前提（Node ≥ 22 / Chrome `--no-sandbox`）、**数字人版（01）小窗与图片的三条症状**、文字对比度的量测口径、已知未修
 - 不用读：流程本身跑得通、只是想跑一遍
 
 ### 经验文档/生图与图片链路.md

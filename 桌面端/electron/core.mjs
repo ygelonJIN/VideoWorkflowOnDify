@@ -220,7 +220,7 @@ export async function runWorkflow({ path: workflowPath, inputs = {}, until, prec
   }
 }
 
-const BUILD_SCRIPT = path.join(workspaceDir, "成品", "workflow_runtime", "tools", "build_black_frame_project.py");
+const BUILD_SCRIPT = path.join(workspaceDir, "runtime", "tools", "build_black_frame_project.py");
 let mimoKeyCache;
 
 /** TTS 的 MIMO_API_KEY：优先进程环境，其次从登录 zsh（~/.zshrc）里读，不落盘、不回传渲染层。 */
@@ -337,7 +337,7 @@ export async function startBuild({ kind, action, projectName, outputs, tts = {},
   const runId = `build-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
   const started = Date.now();
   const child = spawn("python3", args, {
-    cwd: path.join(workspaceDir, "成品", "workflow_runtime"),
+    cwd: path.join(workspaceDir, "runtime"),
     env,
     stdio: ["ignore", "pipe", "pipe"],
   });
@@ -488,7 +488,7 @@ export async function listProjects() {
   const entries = await readdir(projectsDir, { withFileTypes: true });
   const projects = [];
   for (const entry of entries) {
-    if (!entry.isDirectory() || entry.name.startsWith(".") || entry.name === "workflow_runtime") continue;
+    if (!entry.isDirectory() || entry.name.startsWith(".")) continue;
     const full = path.join(projectsDir, entry.name);
     const info = await stat(full).catch(() => null);
     projects.push({ name: entry.name, path: full, mtime: info?.mtimeMs ?? 0 });
@@ -582,47 +582,4 @@ export async function readText(filePath, limit = 200_000) {
   const safe = safePath(filePath);
   const data = await readFile(safe);
   return { path: safe, text: data.subarray(0, limit).toString("utf8"), truncated: data.length > limit };
-}
-
-/* 旧流程（run_dify_output.sh → TextEdit 贴 Dify 文本）已经不用；终端只保留自由命令。 */
-const TERM_PRESETS = [];
-
-export function termPresets() {
-  return TERM_PRESETS;
-}
-
-let termSeq = 0;
-
-/** 跑一条本地命令，stdout/stderr 逐行回传。 */
-export function startCommand({ cmd, cwd, onData, onExit }) {
-  const working = cwd ? safePath(cwd) : workspaceDir;
-  const id = `term-${Date.now().toString(36)}-${++termSeq}`;
-  const child = spawn("bash", ["-lc", cmd], {
-    cwd: working,
-    env: { ...process.env, FORCE_COLOR: "0" },
-    stdio: ["ignore", "pipe", "pipe"],
-  });
-  const started = Date.now();
-  let output = "";
-  const emit = (stream, text) => {
-    output += text;
-    onData?.({ id, stream, text });
-  };
-  child.stdout.setEncoding("utf8");
-  child.stderr.setEncoding("utf8");
-  child.stdout.on("data", (chunk) => emit("out", String(chunk)));
-  child.stderr.on("data", (chunk) => emit("err", String(chunk)));
-  const done = new Promise((resolve) => {
-    child.on("error", (error) => {
-      const ms = Date.now() - started;
-      onExit?.({ id, code: -1, ms, output, error: String(error) });
-      resolve({ code: -1, ms, output, error: String(error) });
-    });
-    child.on("close", (code) => {
-      const ms = Date.now() - started;
-      onExit?.({ id, code: code ?? -1, ms, output });
-      resolve({ code: code ?? -1, ms, output });
-    });
-  });
-  return { id, done, kill: () => child.kill("SIGTERM") };
 }

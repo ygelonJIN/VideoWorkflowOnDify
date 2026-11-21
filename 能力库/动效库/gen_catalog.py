@@ -29,11 +29,13 @@ import argparse
 import collections
 import json
 import pathlib
+import re
 import sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 import yaml_nodes  # noqa: E402
 import component_slots  # noqa: E402
+import contracts  # noqa: E402
 
 HERE = pathlib.Path(__file__).resolve().parent
 REPO = HERE.parent.parent
@@ -73,6 +75,35 @@ def load():
     return json.loads(PRESETS.read_text(encoding="utf-8"))["presets"]
 
 
+# 照片带能接的入场（2026-11-21）：这是一格**派生族**，不是新 role。
+# 为什么要有：`entrance_block` 里有 14 张卡，S2 只能从那里挑，于是 G09（Flip +
+# gridTemplateColumns + 动 _t.children 的版面卡）落到了单张 <img> 上，整张卡退化成
+# "屏首藏起来、2.6 秒后才淡入"，成片里那段就是一块空占位板。
+# 判据只看卡自己，不看名字：
+#   - 只动根节点（不碰 _t.children / Flip / gridTemplateColumns，也不按内部结构查元素）；
+#   - 不依赖元素自带属性（getAttribute('data-…')），照片框没有这些属性，卡会静默空转；
+#   - 声明能落照片/整块（needs 里有 photo/media/img/block），或者 presets 里显式
+#     media_safe: true（T41 这类"任何内容都能用"的纯根变换）。
+def media_entrance_ok(card):
+    if str(card.get("role") or "") != "entrance_block":
+        return False
+    code = str(card.get("code") or "")
+    if any(k in code for k in (".children", "Flip.", "gridTemplateColumns")):
+        return False
+    if any(sel != "{{sel}}" for sel in re.findall(r"querySelectorAll?\('([^']*)'\)", code)):
+        return False
+    if re.search(r"getAttribute\('data-", code):
+        return False
+    if "media_safe" in card:
+        return bool(card["media_safe"])
+    caps = {str(n) for n in (card.get("needs") or [])}
+    return bool(caps & {"photo", "media", "img", "block"}) and not (caps & {"ui", "text", "svg"})
+
+
+def media_entrances(cards):
+    return sorted(c["id"] for c in cards if media_entrance_ok(c))
+
+
 def catalog_of(cards):
     bg, comp, pt = {}, {}, {}
     motion = collections.OrderedDict((r, []) for r in MOTION_ROLES)
@@ -94,11 +125,45 @@ def catalog_of(cards):
                        "kind": c.get("kind", "")}
         elif role in motion:
             motion[role].append(cid)
+
+    # 派生族：照片带入场的可选项（选择层里单独一格，见 media_entrance_ok 的注释）。
+    motion["entrance_media"] = media_entrances(cards)
+
+    # ---- 能力契约（2026-11-21）----
+    # 组件声明 provides（锚点 → 组件内选择器），组件动效声明 needs/target/anchor。
+    # 兼容矩阵由 contracts.py 算出，S2 只看到每个组件可用的卡，落版层再校验一次。
+    comp_meta = {}
+    motion_meta = {}
+    for c in sorted(cards, key=lambda x: x["id"]):
+        role = c.get("role") or ""
+        cid = c["id"]
+        if role == "component" and contracts.provides_of(c):
+            comp_meta[cid] = {"provides": contracts.provides_of(c)}
+        elif role == "component_motion" and c.get("status") == "ready":
+            motion_meta[cid] = {
+                "name": c.get("name", ""),
+                "needs": contracts.anchors_of(c),
+                "target": contracts.target_mode(c),
+                "anchor": str(c.get("anchor") or ""),
+                "bind": {str(k): str(v) for k, v in (c.get("bind") or {}).items()},
+            }
+    # 每张卡需要的锚点（只取 ANCHORS 词汇表里的词）。组件动效用它算兼容矩阵；
+    # 状态卡也走这张表：S36 要 num，S2N / R1 据此把 sel 绑到组件声明的锚点元素上，
+    # 绑不上就丢卡——不再让卡自己在目标里猜选择器（2026-11-21 s07 的「156」）。
+    card_needs = {}
+    for c in sorted(cards, key=lambda x: x["id"]):
+        anchors = contracts.anchors_of(c)
+        if anchors and c.get("status") == "ready":
+            card_needs[c["id"]] = anchors
     return {
         "background": bg,
         "component": comp,
         "motion": {k: v for k, v in motion.items()},
         "page_transition": pt,
+        "component_meta": comp_meta,
+        "motion_meta": motion_meta,
+        "motion_by_component": contracts.component_motions(cards),
+        "card_needs": card_needs,
     }
 
 
@@ -141,7 +206,12 @@ def render_cards_md(cards):
         ids = sorted(by_role.get(r, []))
         if ids:
             out.append("| `%s` %s | %d | %s |" % (r, role_label[r], len(ids), " ".join(ids)))
+    media_ids = media_entrances(cards)
+    if media_ids:
+        out.append("| `entrance_media` 照片带入场 | %d | %s |" % (len(media_ids), " ".join(media_ids)))
     out.append("")
+    out.append("`entrance_media` 是从 `entrance_block` 里派生的一格：只收\"只动根节点、不依赖子结构和元素自带属性\"的卡，"
+               "照片槽只能从这里选（`S2N` 与 `R1` 都会验，见 `经验文档/能力层架构.md`）。\n")
 
     out.append("## 各族明细\n")
     for fam in order:
@@ -173,12 +243,13 @@ def render_cards_md(cards):
                     c["id"], c.get("name", ""), c.get("kind", ""), c.get("use", ""), c.get("avoid", "")))
             out.append("")
             continue
-        out.append("| 编号 | 名字 | 角色 | 参数 | 用在哪 | 别用在哪 |")
-        out.append("|---|---|---|---|---|---|")
+        out.append("| 编号 | 名字 | 角色 | 需要锚点 | 参数 | 用在哪 | 别用在哪 |")
+        out.append("|---|---|---|---|---|---|---|")
         for c in items:
-            out.append("| %s | %s | %s | %s | %s | %s |" % (
+            anchors = "、".join(contracts.anchors_of(c)) if c.get("role") == "component_motion" else "—"
+            out.append("| %s | %s | %s | %s | %s | %s | %s |" % (
                 c["id"], c.get("name", ""), role_label.get(c.get("role"), c.get("role", "")),
-                _fmt_params(c.get("params")), c.get("use", ""), c.get("avoid", "")))
+                anchors or "—", _fmt_params(c.get("params")), c.get("use", ""), c.get("avoid", "")))
         out.append("")
 
     if shapes:
@@ -206,6 +277,9 @@ def render_comp_md(cards):
         out.append("## %s %s\n" % (c["id"], c.get("name", "")))
         if c.get("note"):
             out.append(c["note"] + "\n")
+        provides = contracts.provides_of(c)
+        if provides:
+            out.append("动效锚点：%s\n" % "、".join("`%s`=%s" % (k, v or "（根）") for k, v in provides.items()))
         out.append("```html\n%s\n```\n" % (c.get("code") or "").rstrip())
     return "\n".join(out).rstrip() + "\n"
 
@@ -337,7 +411,12 @@ def main() -> int:
         if card.get("role") == "component":
             info = component_slots.build(card.get("code") or "", component_slots.REPEAT_HINTS.get(card.get("id")))
             if info:
-                templates[card["id"]] = component_slots.template_entry(info)
+                entry = component_slots.template_entry(info)
+                # span=full：这张组件要落在 1080 通栏层（R2 读它决定放 .scene-ui 还是 .scene-copy）。
+                # 以前所有组件都塞进 840 文字栏，对话气泡被挤成两个小方块（2026-11-21 定）。
+                if card.get("span"):
+                    entry["span"] = str(card["span"])
+                templates[card["id"]] = entry
     h00_code = render_h00_code(cat, templates)
     compile(h00_code, "h00", "exec")
     md_cards = render_cards_md(cards)
@@ -353,7 +432,8 @@ def main() -> int:
         diffs.append("组件卡.md")
 
     n_sel = (len(cat["background"]) + len(cat["component"])
-             + len(cat["page_transition"]) + sum(len(v) for v in cat["motion"].values()))
+             + len(cat["page_transition"])
+             + sum(len(v) for k, v in cat["motion"].items() if k != "entrance_media"))
 
     if args.check:
         if diffs:
@@ -369,7 +449,7 @@ def main() -> int:
     COMP_MD.write_text(md_comp, encoding="utf-8")
     print("已写入：能力卡.md / 组件卡.md / H00 选择层（两份 YAML）；可选 %d 张（背景 %d / 组件 %d / 转场 %d / 动效 %d）"
           % (n_sel, len(cat["background"]), len(cat["component"]), len(cat["page_transition"]),
-             sum(len(v) for v in cat["motion"].values())))
+             sum(len(v) for k, v in cat["motion"].items() if k != "entrance_media")))
     return 0
 
 

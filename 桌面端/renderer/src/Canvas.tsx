@@ -343,7 +343,8 @@ export function Canvas({ graph, selectedId, connectSource, statuses, onSelect, o
                 <span className="node-title">{node.title}</span>
               </div>
               <div className="node-kind">{node.type}</div>
-              <div className="node-meta">{node.model ?? node.id}</div>
+              {/* 这里只写节点 id：模型是全应用统一的，由顶栏设置决定，卡片上重复十几次没有意义 */}
+              <div className="node-meta">{node.id}</div>
               {STATE_TEXT[status] && (
                 <span className={`node-state ${STATE_CLASS[status]}`}>{STATE_TEXT[status]}</span>
               )}

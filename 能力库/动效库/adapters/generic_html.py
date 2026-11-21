@@ -30,7 +30,7 @@ SEEK_DRIVER = """<script>
 })();
 </script>
 """
-VENDOR_GSAP = pathlib.Path(__file__).resolve().parents[3] / "成品" / "workflow_runtime" / "assets" / "vendor" / "gsap.min.js"
+VENDOR_GSAP = pathlib.Path(__file__).resolve().parents[3] / "runtime" / "assets" / "vendor" / "gsap.min.js"
 
 
 def can_handle(path: pathlib.Path, kind: str) -> bool:

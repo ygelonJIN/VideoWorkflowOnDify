@@ -22,7 +22,7 @@ ROOT = pathlib.Path(__file__).resolve().parent
 WORKSPACE = ROOT.parent.parent
 PRESETS = ROOT / "presets.json"
 OUT = WORKSPACE / "能力库" / "动效库" / "样片" / "全卡审阅"
-VENDOR = WORKSPACE / "成品" / "workflow_runtime" / "assets" / "vendor"
+VENDOR = WORKSPACE / "runtime" / "assets" / "vendor"
 PHOTO = WORKSPACE / "能力库" / "动效库" / "assets" / "demo" / "photo.png"
 
 SECONDS = 3.0          # 每张卡时长
@@ -39,6 +39,8 @@ SEL_MAP = {
     "UA01": ".panel", "UA02": ".row", "UA03": ".row em", "UA04": ".bars b",
     "UA05": ".bars", "UA06": ".row", "UA07": ".row span",
     "I01": ".ptr", "I02": ".ptr", "G03": ".morph", "W02": ".shot", "S12": ".page",
+    # S36 的 sel 现在就是数字元素本身（展开层按组件 num 锚点绑），样片同样指到 .num。
+    "S36": ".num",
 }
 
 

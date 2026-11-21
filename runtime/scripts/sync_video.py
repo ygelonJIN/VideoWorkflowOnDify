@@ -1435,8 +1435,19 @@ SCENE_OFFSET_SCRIPT = """
         }
         var sceneEl = sceneOfTarget(args[0]);
         var start = sceneEl ? cueStartOf(sceneEl) : null;
+        // 2026-11-21：屏内 builder 里对**普通对象**的 tween（K81 的 {p:0}、K42 的 {v:0} 这类
+        // 手动驱动量）没有元素可查，sceneOfTarget 认不出场景，屏起点就丢了 —— 整段动作落回
+        // 片子开头，演完定在那里。1955 s08 的「受」永远比别的字大就是这个：透镜在 0.99–2.5s
+        // （第 1 页）扫完，第 8 页只剩 p=1 的终态。
+        // 同屏第一个**元素**动作已经把屏起点记进 __lastSceneStart（wrapper 每进一个 builder 清一次），
+        // 这里按它补回来；call() 早就是这么处理的，to/from/fromTo/set 之前漏了这一类目标。
+        if (start === null && timeline.__atRelative && timeline.__lastSceneStart > 0) {
+          start = timeline.__lastSceneStart;
+          sceneEl = timeline.__lastSceneEl || null;
+        }
         if (start !== null && start > 0) {
           timeline.__lastSceneStart = start;
+          timeline.__lastSceneEl = sceneEl;
           var position = null;
           for (var index = args.length - 1; index >= 1; index -= 1) {
             if (typeof args[index] === 'number') { position = index; break; }
@@ -1527,6 +1538,7 @@ SCENE_OFFSET_SCRIPT = """
       timeline.__absolutePositions = priorAbsolute;
       timeline.__atRelative = relativeMode && !priorAbsolute;
       timeline.__lastSceneStart = null;
+      timeline.__lastSceneEl = null;
       var result = builder(timeline, at);
       timeline.__absolutePositions = priorAbsolute;
       timeline.__atRelative = priorRelative;
@@ -2300,6 +2312,8 @@ def inject_layout_composer(document: str) -> str:
         align = re.search(r'data-composition-align="([^"]+)"', tag)
         scale = re.search(r'data-composition-scale="([^"]+)"', tag)
         family_attr = re.search(r'data-bg-family="([^"]*)"', tag)
+        # 通栏组件层：R2 在 section 上留的记号，版面据此给 .scene-ui 留一条横带。
+        ui_full_attr = re.search(r'data-ui-full="([^"]*)"', tag)
         if not (sid and zone):
             continue
         _sid = sid.group(1)
@@ -2333,6 +2347,23 @@ def inject_layout_composer(document: str) -> str:
         else:
             _chars = 0
             _line_chars = 0
+        # 栅格组件的宽度契约（2026-11-21）：量这一屏 .ui-grid c2/c3 里最多字的格子，
+        # 交给 layout_composer 反算 --ui-scale 上限。U54 的 <b>标签</b>值 在 CSS 里已分两行，
+        # 这里按"标签和值里更长的那一边"算，不把两段拼起来当一行。
+        _ui_grid = None
+        if _sec:
+            _grid = re.search(r'ui-grid\s+c([23])', _sec.group(1))
+            _cells = re.findall(r'<div class="[^"]*\bui-cell\b[^"]*"[^>]*>(.*?)</div>', _sec.group(1), re.S)
+            if _grid and _cells:
+                def _cell_chars(markup):
+                    parts = [re.sub(r'<[^>]+>|\s', '', part)
+                             for part in re.findall(r'<b>(.*?)</b>', markup, re.S)]
+                    rest = re.sub(r'<[^>]+>|\s', '', re.sub(r'<b>.*?</b>', '', markup, flags=re.S))
+                    parts.append(rest)
+                    return max([len(part) for part in parts if part] or [0])
+                _ui_grid = {"cols": int(_grid.group(1)),
+                            "cells": [{"chars": _cell_chars(cell)} for cell in _cells]}
+
         scenes.append({
             "id": _sid,
             "zone": zone.group(1),
@@ -2342,8 +2373,10 @@ def inject_layout_composer(document: str) -> str:
             "chars": _chars,
             "line_chars": _line_chars,
             "roles": _roles,
+            "ui_grid": _ui_grid,
             "media": _media_rect(_sid),
             "bg_family": (family_attr.group(1) if family_attr else ""),
+            "ui_full": bool(ui_full_attr),
         })
     # 根节点的 data-bg-tone 必须和每屏的 tone 是同一套判断。
     # 2026-11-16 踩过：模型把根写成 light、九屏全写 dark，背景卡是近黑 #0B0F18，
@@ -2901,7 +2934,7 @@ def resolve_hyperframes() -> tuple[Path, Path]:
         # 优先用仓库内钉死的 CLI：从当前目录向上找 vendor/，覆盖项目和失败项目两种位置。
         here = Path.cwd().resolve()
         for base in [here, *list(here.parents)[:4]]:
-            for rel in ("vendor", "workflow_runtime/vendor"):
+            for rel in ("vendor", "runtime/vendor"):
                 candidate = base / rel / "node_modules/hyperframes/bin/hyperframes.mjs"
                 if candidate.is_file():
                     cli = candidate
@@ -2915,7 +2948,7 @@ def resolve_hyperframes() -> tuple[Path, Path]:
     if cli is None or not cli.is_file():
         raise SystemExit(
             "缺少 HyperFrames CLI（不是 Node 的问题）。"
-            "在 workflow_runtime/vendor 下执行 npm i，或设置 HYPERFRAMES_CLI。"
+            "在 runtime/vendor 下执行 npm i，或设置 HYPERFRAMES_CLI。"
         )
     return node, cli
 

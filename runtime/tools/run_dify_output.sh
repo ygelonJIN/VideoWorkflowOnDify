@@ -2,7 +2,6 @@
 set -euo pipefail
 
 BASE_DIR="$(cd "$(dirname "$0")" && pwd)"
-PROJECTS_ROOT="$(cd "$BASE_DIR/../.." && pwd)"
 if [ "$#" -gt 0 ] && [ "${1#-}" = "$1" ]; then
   NAME="$1"
   shift

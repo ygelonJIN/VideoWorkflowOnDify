@@ -1,9 +1,10 @@
 .env
 .env.*
 !.env.example
-runtime/
 output/
 node_modules/
+# 注意：不要再忽略仓库根的 runtime/ —— 2026-11-21 起它是视频运行时（模板+脚本+CLI），
+# 必须进 git；早先那条泛用的 `runtime/` 会让整目录在 git 里消失。
 
 # Local system and generated cache files
 .DS_Store
@@ -14,13 +15,17 @@ node_modules/
 成品/失败项目/
 
 # Do not upload local video projects or their generated outputs.
-# Keep only the reusable runtime under 成品/.
+# 运行时在仓库根的 runtime/（不在 成品/ 里），成品 只提交说明与索引。
 成品/*
 成品/Dify输出/
-!成品/workflow_runtime/
 # 成品目录只提交"说明与索引"，项目和产物一律不提交
 !成品/README.md
 !成品/项目状态.md
+
+# 仓库根上跑出来的运行产物：项目副本 / Dify 原始输出 / 正式字幕，都不进仓库
+/20[0-9][0-9][0-9][0-9][0-9][0-9]-[0-9][0-9][0-9][0-9]/
+/Dify输出/
+/字幕/
 
 # 本地私密材料，永不提交
 不推送/

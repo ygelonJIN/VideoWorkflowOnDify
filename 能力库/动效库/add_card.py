@@ -33,12 +33,14 @@ import shutil
 import subprocess
 import sys
 
+import contracts
+
 HERE = pathlib.Path(__file__).resolve().parent
 WORK = HERE.parent.parent
 PRESETS = HERE / "presets.json"
-CSS = WORK / "成品" / "workflow_runtime" / "assets" / "vendor" / "components.css"
-SYNC_VIDEO = WORK / "成品" / "workflow_runtime" / "scripts" / "sync_video.py"
-PLUGIN_DIR = WORK / "成品" / "workflow_runtime" / "assets" / "vendor" / "gsap-plugins"
+CSS = WORK / "runtime" / "assets" / "vendor" / "components.css"
+SYNC_VIDEO = WORK / "runtime" / "scripts" / "sync_video.py"
+PLUGIN_DIR = WORK / "runtime" / "assets" / "vendor" / "gsap-plugins"
 REELS = HERE / "样片" / "全卡审阅"
 BATCH_ROOT = HERE / "样片" / "待筛"
 
@@ -155,6 +157,87 @@ def validate(card, existing, kinds, classes):
                 if other.get("text_safe") is False:
                     bad.append("text_swap %s 自己也不能落在文字上，换过去等于没换" % swap)
     role = card["role"]
+    # ---- 状态卡不许把根元素重新藏起来（2026-11-21）----
+    # state_* 的职责是改变一个**已经可见**的元素。它一旦给根元素设了隐藏起始态，就成了
+    # 第二张入场卡：元素先出现在画面上，几秒后又缩回去/散开再飞回来（2026-11-21 s02 的
+    # S19 实测：三行被"打散重来"，观众看到的是左右乱晃）。
+    # 判据只看**目标是谁**：根元素（{{sel}}）不行；自己 createElement 出来的新内容
+    # （文案替换的新 span）随便；动已有子元素的，必须在 params 里声明 child —— 让
+    # "我动的是子元素"成为显式事实，不让落版层去猜代码。
+    if str(role).startswith("state"):
+        code = str(card.get("code") or "")
+        params = card.get("params") if isinstance(card.get("params"), dict) else {}
+        root_vars = set(re.findall(
+            r"var\s+([A-Za-z_$][\w$]*)\s*=\s*document\.querySelector\(\s*['\"]\{\{sel\}\}['\"]\s*\)", code))
+        child_vars = set(re.findall(
+            r"var\s+([A-Za-z_$][\w$]*)\s*=\s*(?:\[\]\.slice\.call\(\s*\w+\.children|document\.querySelectorAll\()", code))
+        created = set(re.findall(r"var\s+([A-Za-z_$][\w$]*)\s*=\s*document\.createElement", code))
+        for m in re.finditer(r"(?:fromTo|\.from)\(\s*([^,]+),\s*\{(.*?)\}", code, re.S):
+            target = m.group(1).strip().strip("'\"")
+            if target in created:
+                continue
+            st = m.group(2)
+            hidden = bool(
+                re.search(r"opacity['\"]?\s*:\s*0(?![.\d])", st)
+                or re.search(r"scaleY['\"]?\s*:\s*0?\.\d+", st)
+                or re.search(r"clipPath['\"]?\s*:\s*['\"]?(?:inset\([^)]*100%|circle\(\s*0%)", st)
+            )
+            if not hidden:
+                continue
+            if target == "{{sel}}" or target in root_vars:
+                bad.append("这是入场卡，不是状态卡（起始态把根元素藏起来）。state_* 卡把根元素"
+                           "重新藏起来，成片里会先出现再缩掉/散开；role 改成 entrance_*")
+                break
+            if target in child_vars and "child" not in params:
+                bad.append("这张 state 卡藏的是子元素，但 params 里没有 child：请声明动的是哪个"
+                           "子元素选择器，否则落版层定位不到")
+                break
+    # ---- 能力契约（2026-11-21）----
+    # 组件必须声明它对外暴露哪些锚点；组件动效必须声明需要哪些锚点、怎么动。
+    # 这是选择层算兼容矩阵、落版层解析目标的唯一依据。
+    if role == "component":
+        provides = card.get("provides")
+        if not isinstance(provides, dict) or not provides:
+            bad.append("组件卡必须有 provides（锚点 → 组件内选择器），否则动效卡不知道能挂什么")
+        else:
+            for anchor, selector in provides.items():
+                if anchor not in contracts.ANCHORS:
+                    bad.append("provides 里的锚点 %s 不在词汇表" % anchor)
+                if not isinstance(selector, str):
+                    bad.append("provides.%s 必须是选择器字符串" % anchor)
+    if role == "component_motion":
+        raw_needs = [str(n) for n in (card.get("needs") or [])]
+        known = contracts.ANCHORS | contracts.CAPABILITY_ONLY
+        for name in raw_needs:
+            if name not in known:
+                bad.append("needs 里的 %s 不是已知锚点/能力词（词汇表见 contracts.py）" % name)
+        anchors = contracts.anchors_of(card)
+        if not anchors:
+            bad.append("组件动效必须在 needs 里声明至少一个锚点（card/row/cell/bar/tag/node/path/...）")
+        mode = str(card.get("target") or "").strip().lower()
+        if mode not in contracts.TARGET_MODES:
+            bad.append("target 必须是 %s" % "/".join(sorted(contracts.TARGET_MODES)))
+        anchor = str(card.get("anchor") or "").strip()
+        if anchor and anchor not in anchors:
+            bad.append("anchor %s 不在 needs 里" % anchor)
+        bind = card.get("bind")
+        if bind is not None and not isinstance(bind, dict):
+            bad.append("bind 必须是 {参数名: 锚点} 的对象")
+        components = [c for c in existing.values() if c.get("role") == "component"]
+        if anchors and not any(contracts.compatible(card, comp) for comp in components):
+            bad.append("没有组件能满足它需要的锚点 %s：先补组件 provides，或改卡" % "/".join(anchors))
+    # 非组件动效也能声明锚点（S36 要 num）。声明了就必须有组件提供，
+    # 否则运行时只能丢卡：卡自己在目标里猜选择器，猜不到就会改错文字（2026-11-21 s07）。
+    if role.startswith(("state_", "entrance_")):
+        anchors = contracts.anchors_of(card)
+        if anchors:
+            known = contracts.ANCHORS | contracts.CAPABILITY_ONLY
+            for name in [str(n) for n in (card.get("needs") or [])]:
+                if name not in known:
+                    bad.append("needs 里的 %s 不是已知锚点/能力词（词汇表见 contracts.py）" % name)
+            components = [c for c in existing.values() if c.get("role") == "component"]
+            if not any(all(a in contracts.provides_of(c) for a in anchors) for c in components):
+                bad.append("没有组件提供这张卡需要的锚点 %s：先补组件 provides，或改卡" % "/".join(anchors))
     if role == "bg":
         if not card.get("note"):
             bad.append("背景卡必须有 note（模型靠它选卡）")

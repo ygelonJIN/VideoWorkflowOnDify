@@ -8,8 +8,8 @@
 // 同一份文件 `yaml.safe_load` 却完全正常。PyYAML 通过 ≠ 能导入。
 //
 // 用法：
-//   node 成品/workflow_runtime/tools/check_dsl_parse.mjs            # 查 Dify工作流/*.yml
-//   node 成品/workflow_runtime/tools/check_dsl_parse.mjs a.yml b.yml
+//   node runtime/tools/check_dsl_parse.mjs            # 查 Dify工作流/*.yml
+//   node runtime/tools/check_dsl_parse.mjs a.yml b.yml
 // 这是格式/环境检查（不是内容检查）：解析不过就退出 1，因为导入一定会失败。
 import fs from 'node:fs';
 import path from 'node:path';
@@ -17,7 +17,7 @@ import {createRequire} from 'node:module';
 import {fileURLToPath} from 'node:url';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const repoRoot = path.resolve(here, '../../..');
+const repoRoot = path.resolve(here, '../..');   // runtime/tools → 仓库根
 
 // 优先用桌面端装的那份 yaml 包——导入走的就是它，版本必须一致
 const require = createRequire(path.join(repoRoot, '桌面端/package.json'));

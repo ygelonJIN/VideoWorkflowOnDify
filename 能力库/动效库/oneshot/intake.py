@@ -32,7 +32,7 @@ WORK = HERE.parent.parent
 LIB_SAMPLES = HERE / "样片"
 BATCH = LIB_SAMPLES / "待筛"
 SRC = BATCH / "源"
-VENDOR = WORK / "成品" / "workflow_runtime" / "assets" / "vendor"
+VENDOR = WORK / "runtime" / "assets" / "vendor"
 REELS = LIB_SAMPLES / "全卡审阅"
 PHOTO_SRC = HERE / "assets" / "demo" / "photo.png"
 PRESETS = HERE / "presets.json"
@@ -146,7 +146,7 @@ def cmd_build(args) -> None:
 
 
 def cmd_render(args) -> None:
-    hf = WORK / "成品" / "workflow_runtime" / "vendor" / "node_modules" / "hyperframes" / "bin" / "hyperframes.mjs"
+    hf = WORK / "runtime" / "vendor" / "node_modules" / "hyperframes" / "bin" / "hyperframes.mjs"
     chrome = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
     node = sorted(pathlib.Path.home().glob(".nvm/versions/node/v22*/bin/node"))
     node = str(node[-1]) if node else shutil.which("node")

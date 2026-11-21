@@ -3,14 +3,14 @@
    只读 design/v2/tokens.css 的语义变量；尺寸走 --sp-* / --radius-* / --text-*。
    零图标：所有操作用文字；连线不带箭头；节点状态用文字。
 
-   骨架（2026-11-16：左栏取消，导航进顶栏）：
+   骨架（2026-11-21：运行台挂到右栏详情下方，画布占满左栏全高）：
    ┌─────────────────────────────────────────────┐
    │ 顶栏：工作流 · 画布/出片/产物 · 撤销 · 运行 · 设置 │
    ├───────────────────────────────┬─────────────┤
-   │ 画布（浮动条：加节点/连线/详情） │ 节点详情(可收)│
-   ├───────────────────────────────┴─────────────┤
-   │ 运行台 / 终端(可收)                          │
-   └─────────────────────────────────────────────┘
+   │ 画布（浮动条：加节点/连线/详情） │ 节点详情     │
+   │                               ├─────────────┤
+   │                               │ 运行台(可收) │
+   └───────────────────────────────┴─────────────┘
    =========================================================================== */
 
 * { box-sizing: border-box; }
@@ -36,7 +36,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
   position: relative;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: var(--top-h) minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
   gap: var(--sp-4);
   height: 100vh;
   padding: var(--sp-4);
@@ -121,6 +121,15 @@ button, input, select, textarea { font: inherit; color: inherit; }
   background: var(--run);
 }
 
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+.topbar-actions > * { -webkit-app-region: no-drag; }
+
 .topbar-meta {
   min-width: 0;
   max-width: 320px;
@@ -138,22 +147,26 @@ button, input, select, textarea { font: inherit; color: inherit; }
   grid-column: 1;
   grid-row: 2;
   display: grid;
-  grid-template-rows: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) clamp(340px, 30vw, var(--insp-w));
   gap: var(--sp-4);
   min-height: 0;
 }
+/* 出片/产物视图、或收起详情时，主区独占一整行 */
+.work.solo { grid-template-columns: minmax(0, 1fr); }
 
 /* 顶栏 */
 
 .topbar {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: var(--sp-2);
+  row-gap: 4px;
   grid-column: 1;
   grid-row: 1;
-  /* 顶栏铺到最左，左侧 84px 留给红绿灯 */
+  /* 顶栏铺到最左，左侧 84px 留给红绿灯；窗口窄时允许折成两行 */
   min-height: var(--top-h);
-  padding: 0 var(--sp-4) 0 84px;
+  padding: 8px var(--sp-4) 8px 84px;
   -webkit-app-region: drag;
 }
 .topbar > * { -webkit-app-region: no-drag; }
@@ -237,17 +250,29 @@ button, input, select, textarea { font: inherit; color: inherit; }
 /* ---------- 主区 ---------- */
 
 .main {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) var(--insp-w);
-  gap: var(--sp-4);
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
   min-height: 0;
 }
-.main.no-inspector { grid-template-columns: minmax(0, 1fr); }
+
+/* 右栏：详情在上、运行台在下 */
+.side {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+  min-width: 0;
+  min-height: 0;
+}
+.side .inspector { flex: 1 1 auto; }
+.side .bottom { flex: 0 0 auto; }
 
 /* ---------- 画布 ---------- */
 
 .canvas-wrap {
   position: relative;
+  flex: 1;
+  min-height: 0;
   overflow: hidden;
   background: var(--bg-canvas);
   background-image: radial-gradient(var(--grid) 1.2px, transparent 1.2px);
@@ -435,7 +460,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
   color: var(--accent);
   box-shadow: inset 0 0 0 1px var(--accent-ring);
 }
-.canvas-dock .sel { flex-shrink: 0; max-width: 132px; }
+.canvas-dock .sel { flex-shrink: 0; width: 124px; }
 .canvas-dock .sel-btn { height: 30px; border-radius: var(--radius-full); font-size: var(--text-12); }
 .canvas-dock .dock-sep {
   flex-shrink: 0;
@@ -451,6 +476,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
   display: grid;
   grid-template-columns: 216px 288px minmax(0, 1fr);
   overflow: hidden;
+  flex: 1;
   min-height: 0;
 }
 .browser .col { overflow: auto; min-height: 0; border-right: 1px solid var(--border); }
@@ -664,7 +690,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
   resize: vertical;
 }
 
-/* ---------- 底部：运行台 / 终端，可收起 ---------- */
+/* ---------- 右栏底部：运行台，可收起 ---------- */
 
 .bottom {
   display: grid;
@@ -679,44 +705,33 @@ button, input, select, textarea { font: inherit; color: inherit; }
 }
 .bottom.collapsed .pane { display: none; }
 
-.tabs {
+.console-head {
   display: flex;
   align-items: center;
-  gap: var(--sp-1);
-  padding: 0 var(--sp-4);
+  gap: var(--sp-2);
+  padding: 0 var(--sp-3) 0 var(--sp-4);
   border-bottom: 1px solid var(--border);
 }
-.tab {
-  padding: var(--sp-3) var(--sp-4);
-  border-radius: var(--radius-sm);
+.console-title {
   color: var(--fg-muted);
-  font-size: var(--text-13);
-  cursor: pointer;
-  transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
+  font-size: var(--text-12);
+  font-weight: var(--fw-medium);
+  white-space: nowrap;
 }
-.tab:hover { background: var(--bg-hover); }
-.tab.on { background: var(--accent-soft); color: var(--accent); font-weight: var(--fw-medium); }
-.tabs .right {
+.console-head .right {
   margin-left: auto;
   display: flex;
   align-items: center;
-  gap: var(--sp-4);
+  gap: var(--sp-3);
   min-width: 0;
   color: var(--fg-faint);
   font-family: var(--font-mono);
   font-size: var(--text-11);
 }
-.tabs .meta {
-  min-width: 0;
-  max-width: 520px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.tabs .toggle { margin-left: var(--sp-2); }
+.console-head .elapsed { white-space: nowrap; }
+.console-head .toggle { flex-shrink: 0; }
 
 .pane { min-height: 0; overflow: hidden; }
-.pane.hidden { display: none; }
 
 .log {
   height: 100%;
@@ -731,55 +746,6 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .log .ok { color: var(--ok); }
 .log .err { color: var(--err); }
 .log .dim { color: var(--fg-faint); }
-
-/* ---------- 终端 ---------- */
-
-.term-panel {
-  display: grid;
-  grid-template-rows: 42px minmax(0, 1fr) 46px;
-  min-height: 0;
-  height: 100%;
-}
-.term-presets {
-  display: flex;
-  align-items: center;
-  gap: var(--sp-2);
-  padding: 0 var(--sp-4);
-  border-bottom: 1px solid var(--border);
-}
-.term-presets .btn { height: 28px; font-size: var(--text-12); padding: 0 var(--sp-3); }
-
-.term-output {
-  margin: 0;
-  padding: var(--sp-3) var(--sp-4);
-  overflow: auto;
-  background: var(--bg-code);
-  color: var(--fg);
-  border-top: 1px solid var(--border);
-  font-family: var(--font-mono);
-  font-size: var(--text-12);
-  line-height: 1.75;
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-.term-input {
-  display: flex;
-  align-items: center;
-  gap: var(--sp-3);
-  padding: 0 var(--sp-4);
-  border-top: 1px solid var(--border);
-}
-.term-input .prompt { color: var(--accent); font-family: var(--font-mono); }
-.term-input input {
-  flex: 1;
-  height: 30px;
-  padding: 0 var(--sp-3);
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--border);
-  background: var(--bg-raised);
-  font-family: var(--font-mono);
-  font-size: var(--text-12);
-}
 
 /* ---------- 运行输入抽屉 ---------- */
 
@@ -1167,7 +1133,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 
 /* ---------- 出片：一条 5 步流程 ---------- */
 
-.produce-layer { min-height: 0; overflow: hidden; display: flex; }
+.produce-layer { flex: 1; min-height: 0; overflow: hidden; display: flex; }
 .produce-layer[hidden] { display: none; }
 
 .produce {
@@ -1244,6 +1210,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .run-next {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: var(--sp-3);
   margin-bottom: var(--sp-3);
   padding: var(--sp-2) var(--sp-3);
@@ -1401,6 +1368,26 @@ button, input, select, textarea { font: inherit; color: inherit; }
 @media (max-width: 1240px) {
   .topbar .brand .sub { display: none; }
   .topbar-meta { max-width: 160px; }
+}
+@media (min-width: 1121px) {
+  /* 宽窗口不折行：待审阅按钮出现时先压缩 meta，避免整组突然跳到第二行 */
+  .topbar { flex-wrap: nowrap; }
+}
+@media (max-width: 1100px) {
+  /* 顶栏信息（节点数/模型/key）在窄窗口最不值钱：画布 HUD 和设置里都能查到 */
+  .topbar-meta { display: none; }
+  /* 顶栏折成两行后抽屉要跟着下移，别盖住第二行按钮 */
+  .drawer { top: 106px; max-height: calc(100vh - 140px); }
+}
+@media (max-width: 980px) {
+  .canvas-dock .sel { width: 104px; }
+  .canvas-search { width: 170px; }
+  .canvas-hud { max-width: calc(100% - 250px); }
+  .canvas-hud .run-live { display: none; }
+}
+@media (max-width: 900px) {
+  /* 画布窄到浮动条 + 搜索放不下一行：搜索下移一行，别和工具条叠住 */
+  .canvas-search { top: 64px; }
 }
 @media (max-width: 1200px) {
   .produce-sub { display: none; }

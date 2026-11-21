@@ -61,7 +61,6 @@ ipcMain.handle("wf:open", async (_event, filePath) => {
   const error = await shell.openPath(safe);
   return { ok: !error, error };
 });
-ipcMain.handle("wf:presets", () => core.termPresets());
 ipcMain.handle("wf:copy", (_event, text) => { clipboard.writeText(String(text ?? "")); return { ok: true }; });
 ipcMain.handle("wf:mimo", () => core.mimoKeyStatus());
 ipcMain.handle("wf:build", (event, payload) =>
@@ -77,19 +76,6 @@ ipcMain.handle("wf:build", (event, payload) =>
 );
 ipcMain.handle("wf:project-images", (_event, payload) => core.listProjectImages(payload));
 ipcMain.handle("wf:project-image-save", (_event, payload) => core.saveProjectImage(payload));
-ipcMain.handle("wf:exec", (event, { cmd, cwd }) => {
-  const run = core.startCommand({
-    cmd,
-    cwd,
-    onData: (payload) => {
-      if (!event.sender.isDestroyed()) event.sender.send("wf:term", payload);
-    },
-    onExit: (payload) => {
-      if (!event.sender.isDestroyed()) event.sender.send("wf:term-done", payload);
-    },
-  });
-  return { id: run.id };
-});
 
 function createWindow() {
   const smoke = process.argv.includes("--smoke");
@@ -98,7 +84,7 @@ function createWindow() {
     show: !(smoke || probe),
     width: 1480,
     height: 940,
-    minWidth: 1080,
+    minWidth: 860,
     minHeight: 680,
     backgroundColor: "#eef1f5",
     titleBarStyle: "hiddenInset",
@@ -148,7 +134,7 @@ function createWindow() {
 
         const pickButton = await run(`[...document.querySelectorAll("button")].some((button) => button.textContent.trim() === "打开…")`);
         const panesEarly = await run(`({ panes: [...document.querySelectorAll(".pane")].map((item) => item.className), imageEls: document.querySelectorAll(".image-prompts").length, hasHintText: document.body.innerText.includes("跑完整条链路") })`);
-        const before = await run(`({ zoom: document.querySelector(".canvas-hud .zoom").textContent, nodes: document.querySelectorAll(".node").length, edges: document.querySelectorAll(".canvas-edges path").length, seg: ${rect(".seg")}, dock: ${rect(".canvas-dock")}, topbar: ${rect(".topbar")}, bottom: ${rect("#root .bottom")}, canvas: ${rect(".canvas-wrap")}, inspector: ${rect(".inspector")}, icons: (document.body.innerText.match(/[▶◀✕✖＋−⤢▤▣✎⌘⚙●]/g) || []).length, termBg: getComputedStyle(document.querySelector(".term-output")).backgroundColor, termFg: getComputedStyle(document.querySelector(".term-output")).color, termPrompt: getComputedStyle(document.querySelector(".term-input .prompt")).color })`);
+        const before = await run(`({ zoom: document.querySelector(".canvas-hud .zoom").textContent, nodes: document.querySelectorAll(".node").length, edges: document.querySelectorAll(".canvas-edges path").length, seg: ${rect(".seg")}, dock: ${rect(".canvas-dock")}, topbar: ${rect(".topbar")}, bottom: ${rect("#root .bottom")}, canvas: ${rect(".canvas-wrap")}, inspector: ${rect(".inspector")}, icons: (document.body.innerText.match(/[▶◀✕✖＋−⤢▤▣✎⌘⚙●]/g) || []).length })`);
 
         const center = await run(`(() => { const n = document.querySelector(".node"); const r = n.getBoundingClientRect(); return { x: Math.round(r.x + r.width / 2), y: Math.round(r.y + r.height / 2) }; })()`);
         win.webContents.sendInputEvent({ type: "mouseDown", x: center.x, y: center.y, button: "left", clickCount: 1 });

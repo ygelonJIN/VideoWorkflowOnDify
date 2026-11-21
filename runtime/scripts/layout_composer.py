@@ -329,7 +329,35 @@ def center_y_of(top, bottom):
     return (float(top) + float(bottom)) / 2.0
 
 
-def build_scene_css(scene_id: str, zone: str, align: str, scale: str, tone: str, chars: int = 0, media: dict | None = None, line_chars: int = 0, bg_family: str = "", avoid: dict | None = None, roles: dict | None = None) -> str:
+def ui_grid_scale_cap(width: int, grid: dict | None) -> float | None:
+    """栅格组件按格子字数反算 --ui-scale 上限。
+
+    .ui-cell 基准 24px、左右 padding 各 22px、列间距 16px；cols 来自 .ui-grid c2/c3。
+    floor 1.55：24px 基准只剩 37px，竖屏再小就不好读——装不下说明文案本身太长，
+    交给排版检查点名，不在这里继续缩。
+    """
+    if not isinstance(grid, dict):
+        return None
+    cols = int(grid.get("cols") or 0)
+    cells = grid.get("cells") or []
+    if cols < 2 or not cells:
+        return None
+    max_chars = 0
+    for cell in cells:
+        try:
+            max_chars = max(max_chars, int(cell.get("chars") or 0))
+        except Exception:
+            continue
+    if max_chars <= 0:
+        return None
+    budget = width - (cols - 1) * 16 - cols * 44
+    if budget <= 0:
+        return 1.55
+    cap = budget / float(cols * max_chars * 24)
+    return max(1.55, min(2.0, cap))
+
+
+def build_scene_css(scene_id: str, zone: str, align: str, scale: str, tone: str, chars: int = 0, media: dict | None = None, line_chars: int = 0, bg_family: str = "", avoid: dict | None = None, roles: dict | None = None, ui_grid: dict | None = None, ui_full: bool = False) -> str:
     """返回一段挂在 [data-scene="xx"] 下的 CSS。
 
     `avoid` 是数字人小窗的矩形（left/right/top/bottom）。有它时，顶部区的文字框
@@ -527,12 +555,28 @@ def build_scene_css(scene_id: str, zone: str, align: str, scale: str, tone: str,
     band_bottom_px = int(round(band_bottom_px))
     if band_bottom_px - band_top_px < 240:             # 照片太大把文字带压没了：保底 240
         band_bottom_px = min(COPY_BOTTOM, band_top_px + 240)
-    copy_top = "%dpx" % band_top_px
-    copy_bottom = "%dpx" % (CANVAS_H - band_bottom_px)
     # 2026-11-19：照片和文字是**一组**——一起在 150–1533 里垂直居中，两者间距恒 GAP。
     # 用 flex 排，不用绝对定位算坐标：文字块的真实高度只有浏览器知道（换行、字体度量），
     # 自己算出来的 top 和真实高度差几十像素，就变成"规则写 24、实际 200"。
     flex_group = bool(has_media and slot != "full")
+
+    # ---- 通栏组件层（span=full，2026-11-21）----
+    # 组件原来一律渲染进 840 文字栏，对话气泡、表格这类"界面"被挤成两个小方块。
+    # span=full 的组件由 R2 落到 .scene-ui（0–1080），这里给它一条横带、文字带让开，
+    # 两边不抢地。带子上沿/下沿按"照片在哪一带"决定，和照片分带同一套规则。
+    ui_band = None
+    if ui_full:
+        _ui_h = 560 if not band_split else 340
+        if flex_group:
+            # 照片和文字是一组 flex 排，组件带只能落在照片的**对面那一端**，
+            # 让位靠 section 的 padding（下面 flex 那段），不靠改文字带上下沿。
+            _ui_top = COPY_TOP if space_above >= space_below else COPY_BOTTOM - _ui_h
+        else:
+            _ui_top = COPY_BOTTOM - _ui_h           # 无照片 / 照片分带：组件放下带
+            band_bottom_px = max(band_top_px + 240, _ui_top - GAP)
+        ui_band = (int(_ui_top), int(_ui_h))
+    copy_top = "%dpx" % band_top_px
+    copy_bottom = "%dpx" % (CANVAS_H - band_bottom_px)
 
     # 2026-11-19：分带时文字**贴着照片排**，不再在带内居中。
     # 以前恒 center 的结果是：横带与文字带之间写着 24px，实际看到的空隙是 200–300px
@@ -592,7 +636,8 @@ def build_scene_css(scene_id: str, zone: str, align: str, scale: str, tone: str,
     _band_top = int(str(copy_top).replace("px", ""))
     _band_bottom = int(str(copy_bottom).replace("px", ""))
     if flex_group:
-        avail_h = max(240, (COPY_BOTTOM - COPY_TOP) - GAP - (m_bottom - m_top))
+        avail_h = max(240, (COPY_BOTTOM - COPY_TOP) - GAP - (m_bottom - m_top)
+                      - (ui_band[1] + GAP if ui_band is not None else 0))
     else:
         avail_h = max(240, (CANVAS_H - _band_bottom) - _band_top)
     fs = solve_scale(roles or {}, width, avail_h)
@@ -611,19 +656,31 @@ def build_scene_css(scene_id: str, zone: str, align: str, scale: str, tone: str,
     # 现在锚在"标题 110 → 1.80"，往下到 70 → 1.60：h3 61–54px、组件正文 43–38px，
     # 和标题 110 / 正文 44 的层级对得上（组件是界面，要比正文大、比标题小）。
     _ui_scale = round(min(2.0, max(1.60, 1.60 + (_primary_size - 70) * 0.005)), 2)
+    # 栅格组件的宽度契约（2026-11-21）：按最多字的格子反算上限，宁可整屏 UI 小一档，
+    # 也不让 .ui-grid 撑出 840 栏。U54 的标签/值已在 components.css 分两行。
+    _grid_cap = ui_grid_scale_cap(width, ui_grid)
+    if _grid_cap is not None and _grid_cap < _ui_scale:
+        _ui_scale = round(_grid_cap, 2)
     parts.append("  --ui-scale:%s;" % _ui_scale)
     parts.append("}\n")
     if flex_group:
         # section 自己当 flex 列：padding 把可用高度锁在 150–1533，justify-content 让整组居中。
         # 照片与文字的顺序按"照片在上带还是下带"用 order 换，不动 DOM（转场和动效都按 DOM 找元素）。
         _pad_top = COPY_TOP
+        _pad_bottom = CANVAS_H - COPY_BOTTOM
         if pip_rect and space_above >= space_below:      # 文字在上带：让开右上角小窗
             _pad_top = max(COPY_TOP, int(pip_rect[1]) + GAP)
+        # 通栏组件带在照片对面那一端：把那一端的 padding 撑开，flex 整组自然让开
+        if ui_band is not None:
+            if ui_band[0] <= COPY_TOP + 1:
+                _pad_top = ui_band[0] + ui_band[1] + GAP
+            else:
+                _pad_bottom = CANVAS_H - ui_band[0] + GAP
         _order_copy, _order_media = (1, 2) if space_above >= space_below else (2, 1)
         parts.append('section[data-scene="%s"]{display:flex;flex-direction:column;'
                      'align-items:center;justify-content:center;box-sizing:border-box;'
                      'padding:%dpx 0 %dpx;gap:%dpx;}\n'
-                     % (sid, _pad_top, CANVAS_H - COPY_BOTTOM, GAP))
+                     % (sid, _pad_top, _pad_bottom, GAP))
         parts.append('[data-scene="%s"] .scene-copy{order:%d;}\n' % (sid, _order_copy))
         parts.append('section[data-scene="%s"] .media[data-media-slot]{position:relative!important;'
                      'left:auto!important;top:auto!important;right:auto!important;bottom:auto!important;'
@@ -645,6 +702,14 @@ def build_scene_css(scene_id: str, zone: str, align: str, scale: str, tone: str,
     # 会撑成 142px 高的一排砖；压小到 21px 又看不清，两头都不对。
     ui_scale = _ui_scale
     parts.append('[data-scene="%s"] .scene-copy [class*="ui-"]{--ui-scale:%s;}\n' % (sid, ui_scale))
+    # 通栏组件层：整幅宽，字号档位和文字栏里的组件同一套（否则同一个 U11 在两屏里大小不一样）。
+    # 位置/高度由上面算出的 ui_band 决定；这里只管"它是 1080 宽、内容在带内居中"。
+    if ui_band is not None:
+        parts.append('[data-scene="%s"] .scene-ui{position:absolute;z-index:5;left:0;width:%dpx;'
+                     'top:%dpx;height:%dpx;display:flex;flex-direction:column;justify-content:center;'
+                     'box-sizing:border-box;color:var(--ui-ink);}\n'
+                     % (sid, CANVAS_W, ui_band[0], ui_band[1]))
+        parts.append('[data-scene="%s"] .scene-ui [class*="ui-"]{--ui-scale:%s;}\n' % (sid, ui_scale))
     # 卡片字号直接锚在「本屏主字号 × 0.5 / 0.3」（2026-11-20 定）：
     # 34:24 不是同一个比例，用同一个 ui-scale 乘固定基准永远对不齐——
     # 标题 80px 时落到 56/40（实测 0.70 / 0.495），卡片比标题的层级差看不出来。
@@ -708,8 +773,12 @@ def build_scene_css(scene_id: str, zone: str, align: str, scale: str, tone: str,
     if slot in ("top", "bottom"):
         _edge = "bottom" if slot == "top" else "top"
         _target = ('[data-media-slot="%s"]' % slot) if not rect.get("cls") else ('.%s' % rect["cls"])
+        # 2026-11-21：渐隐从「槽上的 ::after」改成「槽里的 .media-scrim 子元素」。
+        # ::after 的问题：它在照片入场之前就已经画出来了，空槽 = 一块硬边深色板，
+        # 看着就是占位框（s04 从 16.63s 到 19.26s 一直是这块板）。做成子元素以后，
+        # 凡是动 media 子节点的卡都会把它一起带走，装饰只能跟内容同透明度。
         parts.append(
-            'section[data-scene="%s"] %s::after{content:"";position:absolute;inset:0;'
+            'section[data-scene="%s"] %s > .media-scrim{position:absolute;inset:0;'
             'pointer-events:none;z-index:3;'
             'background:linear-gradient(to %s,var(--scene-base,#0b0f18) 0%%,transparent 240px);}\n'
             % (sid, _target, _edge))
@@ -742,7 +811,8 @@ def build_document_css(scenes, avoid: dict | None = None) -> str:
                               item.get("scale"), item.get("tone"), item.get("chars") or 0,
                               item.get("media"), item.get("line_chars") or 0,
                               item.get("bg_family") or "", avoid,
-                              item.get("roles") or {})
+                              item.get("roles") or {}, item.get("ui_grid"),
+                              bool(item.get("ui_full")))
         if css:
             blocks.append(css)
     return "".join(blocks)

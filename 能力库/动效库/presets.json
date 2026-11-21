@@ -1,6 +1,6 @@
 {
  "version": 2,
- "updated": "2026-11-20",
+ "updated": "2026-11-21",
  "note": "每行 = 一个动作预设。status: ready=可直接用 / archived=有实现有样片但不接生产 / needs-work=先改成确定性 / skip=不入管线。role: bg|component|entrance_text|entrance_block|state_text|state_block|component_motion|decoration|page_transition —— 选择层只认 role。出处只认 src（必须带前缀，规范见 来源台账.md §六）；origin 字段已废弃，不要再写。",
  "presets": [
   {
@@ -956,9 +956,12 @@
    "avoid": "纯文字屏",
    "code": "timeline.fromTo('{{sel}}', {'y':{{y}}, 'opacity':0},\n  {'y':0, 'opacity':1, 'duration':{{dur}}, 'ease':'power3.out'}, {{at}});\ntimeline.fromTo('{{sel}} > *', {'y':14, 'opacity':0},\n  {'y':0, 'opacity':1, 'duration':{{dur}}, 'ease':'power2.out', 'stagger':{{stagger}}}, {{at}} + .16);",
    "needs": [
-    "ui"
+    "ui",
+    "card"
    ],
-   "role": "component_motion"
+   "role": "component_motion",
+   "target": "root",
+   "anchor": "card"
   },
   {
    "id": "UA02",
@@ -977,9 +980,12 @@
    "avoid": "超过 8 行（会拖）",
    "code": "timeline.fromTo('{{sel}}', {'x':{{x}}, 'opacity':0},\n  {'x':0, 'opacity':1, 'duration':{{dur}}, 'ease':'power2.out', 'stagger':{{stagger}}}, {{at}});",
    "needs": [
-    "ui"
+    "ui",
+    "row"
    ],
-   "role": "component_motion"
+   "role": "component_motion",
+   "target": "items",
+   "anchor": "row"
   },
   {
    "id": "UA03",
@@ -998,9 +1004,12 @@
    "avoid": "和 S02 同时抢焦点",
    "code": "timeline.fromTo('{{sel}}', {'opacity':0, 'scale':.94},\n  {'opacity':{{to}}, 'scale':1, 'duration':{{dur}}, 'ease':'power2.out', 'stagger':{{stagger}}}, {{at}});",
    "needs": [
-    "ui"
+    "ui",
+    "tag"
    ],
-   "role": "component_motion"
+   "role": "component_motion",
+   "target": "items",
+   "anchor": "tag"
   },
   {
    "id": "X11",
@@ -1070,9 +1079,12 @@
    "avoid": "柱子超过 10 根",
    "code": "timeline.fromTo('{{sel}}', {'scaleY':0, 'opacity':.4},\n  {'scaleY':1, 'opacity':1, 'duration':{{dur}}, 'ease':'power3.out', 'stagger':{{stagger}}}, {{at}});",
    "needs": [
-    "ui"
+    "ui",
+    "bar"
    ],
-   "role": "component_motion"
+   "role": "component_motion",
+   "target": "items",
+   "anchor": "bar"
   },
   {
    "id": "UA06",
@@ -1090,9 +1102,12 @@
    "avoid": "超过 6 个节点",
    "code": "timeline.fromTo('{{sel}}', {'opacity':.35, 'x':-10},\n  {'opacity':1, 'x':0, 'duration':{{dur}}, 'ease':'power2.out', 'stagger':{{stagger}}}, {{at}});",
    "needs": [
-    "ui"
+    "ui",
+    "node"
    ],
-   "role": "component_motion"
+   "role": "component_motion",
+   "target": "items",
+   "anchor": "node"
   },
   {
    "id": "S08",
@@ -1618,7 +1633,7 @@
   {
    "id": "S19",
    "name": "种子散布",
-   "family": "状态",
+   "family": "入场",
    "layer": "element",
    "status": "ready",
    "cap": "utils.random(…, true) 固定种子：看着随机、每次一样",
@@ -1634,8 +1649,8 @@
    },
    "use": "多元素错落入场",
    "avoid": "要求严格网格对齐时",
-   "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t || !window.gsap) return;\n  var _els = [].slice.call(_t.children);\n  if (!_els.length) { _els = [_t]; }\n  var _r = gsap.utils.random(0, 1, true);\n  var _sc = gsap.utils.random({{minScale}}, {{maxScale}}, true);\n  var _rt = gsap.utils.random(-{{maxRot}}, {{maxRot}}, true);\n  var _from = _els.map(function () {\n    return {x: (_r() * 2 - 1) * {{dist}}, y: (_r() * 2 - 1) * {{dist}}, rotation: _rt(), scale: _sc(), opacity: 0};\n  });\n  _els.forEach(function (el, i) {\n    timeline.fromTo(el, _from[i], {'x': 0, 'y': 0, 'rotation': 0, 'scale': 1, 'opacity': 1,\n      'duration': {{dur}}, 'ease': '{{ease}}'}, {{at}} + i * {{stagger}});\n  });\n})();",
-   "role": "state_text"
+   "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t || !window.gsap) return;\n  var _els = [].slice.call(_t.children);\n  if (!_els.length) { _els = [_t]; }\n  /* 2026-11-21：不用 GSAP 的随机工具。它每次重建都重新取值，同样的输入渲两遍\n     画面不一样；改成按下标算的固定 seed，同一屏永远得到同一组偏移。 */\n  var _seed = function (i, salt) {\n    var v = Math.sin((i + 1) * (salt + 3) * 12.9898) * 43758.5453;\n    return (v - Math.floor(v)) * 2 - 1;\n  };\n  var _from = _els.map(function (el, i) {\n    return {x: _seed(i, 1) * {{dist}}, y: _seed(i, 2) * {{dist}},\n      rotation: _seed(i, 3) * {{maxRot}},\n      scale: {{minScale}} + (_seed(i, 4) * 0.5 + 0.5) * ({{maxScale}} - {{minScale}}),\n      opacity: 0};\n  });\n  _els.forEach(function (el, i) {\n    timeline.fromTo(el, _from[i], {'x': 0, 'y': 0, 'rotation': 0, 'scale': 1, 'opacity': 1,\n      'duration': {{dur}}, 'ease': '{{ease}}'}, {{at}} + i * {{stagger}});\n  });\n})();",
+   "role": "entrance_block"
   },
   {
    "id": "UA08",
@@ -1654,9 +1669,12 @@
    "avoid": "只出现一次的元素（没必要注册）",
    "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t || !window.gsap || !gsap.registerEffect) return;\n  gsap.registerEffect({\n    name: 'kitCardIn',\n    effect: function (targets, cfg) {\n      return gsap.timeline().from(targets, {'opacity': 0, 'y': cfg.y, 'scale': cfg.scale,\n        'duration': cfg.dur, 'stagger': cfg.stagger, 'ease': 'power3.out'});\n    },\n    defaults: {'y': {{y}}, 'scale': 0.94, 'dur': {{dur}}, 'stagger': {{stagger}}}\n  });\n  var _tw = gsap.effects.kitCardIn(_t.children.length ? _t.children : _t);\n  if (!_tw || !_tw.pause) return;\n  _tw.pause(0);\n  var _dv = {p: 0};\n  timeline.to(_dv, {'p': 1, 'duration': {{dur}} * 1.6, 'ease': 'none', 'onUpdate': function () { _tw.progress(_dv.p); }}, {{at}});\n})();",
    "needs": [
-    "ui"
+    "ui",
+    "card"
    ],
-   "role": "component_motion"
+   "role": "component_motion",
+   "target": "root",
+   "anchor": "card"
   },
   {
    "id": "G07",
@@ -1712,7 +1730,7 @@
   {
    "id": "X30",
    "name": "圆形裁切错落",
-   "family": "结构",
+   "family": "入场",
    "layer": "element",
    "status": "ready",
    "cap": "circle(0%→75%) 张开，逐块错开：转场做虹膜不做淡入",
@@ -1726,7 +1744,7 @@
    "use": "一屏内容整体进入/离场",
    "avoid": "单元素（没有错落可言）",
    "code": "(function () {\n  var _els = [].slice.call(document.querySelectorAll('{{sel}}'));\n  if (!_els.length) return;\n  _els.forEach(function (el) {\n    el.style.clipPath = 'circle(0% at 50% 50%)';\n  });\n  timeline.to(_els, {'clipPath': 'circle({{pct}}% at 50% 50%)', 'duration': {{dur}},\n    'ease': '{{ease}}', 'stagger': {{stagger}}}, {{at}});\n})();",
-   "role": "state_block"
+   "role": "entrance_block"
   },
   {
    "id": "X31",
@@ -1835,7 +1853,10 @@
     "kind": "html"
    },
    "role": "component",
-   "note": "标题 + 2–3 行正文；一屏一个主张，最通用"
+   "note": "标题 + 2–3 行正文；一屏一个主张，最通用",
+   "provides": {
+    "card": ""
+   }
   },
   {
    "id": "U02",
@@ -1856,7 +1877,10 @@
     "kind": "html"
    },
    "role": "component",
-   "note": "横向 3–4 步带完成态；讲流程、先后"
+   "note": "横向 3–4 步带完成态；讲流程、先后",
+   "provides": {
+    "node": ".ui-step"
+   }
   },
   {
    "id": "U03",
@@ -1877,7 +1901,10 @@
     "kind": "html"
    },
    "role": "component",
-   "note": "2×2 / 3×2 标签格；并列概念、清单"
+   "note": "2×2 / 3×2 标签格；并列概念、清单",
+   "provides": {
+    "cell": ".ui-cell"
+   }
   },
   {
    "id": "U04",
@@ -1898,7 +1925,10 @@
     "kind": "html"
    },
    "role": "component",
-   "note": "一排 pill 标签；状态、等级、分类"
+   "note": "一排 pill 标签；状态、等级、分类",
+   "provides": {
+    "tag": ".ui-chip"
+   }
   },
   {
    "id": "U05",
@@ -1919,7 +1949,11 @@
     "kind": "html"
    },
    "role": "component",
-   "note": "标签与数值对齐成行；有数字指标"
+   "note": "标签与数值对齐成行；有数字指标",
+   "provides": {
+    "row": ".ui-row",
+    "num": ".v"
+   }
   },
   {
    "id": "U06",
@@ -1940,7 +1974,10 @@
     "kind": "html"
    },
    "role": "component",
-   "note": "大小格混排；一件事 + 三个证据"
+   "note": "大小格混排；一件事 + 三个证据",
+   "provides": {
+    "cell": ".ui-bento-cell"
+   }
   },
   {
    "id": "U07",
@@ -1961,7 +1998,10 @@
     "kind": "html"
    },
    "role": "component",
-   "note": "两列不等高卡片；多条同质信息"
+   "note": "两列不等高卡片；多条同质信息",
+   "provides": {
+    "card": ".ui-masonry-item"
+   }
   },
   {
    "id": "U08",
@@ -1982,7 +2022,11 @@
     "kind": "html"
    },
    "role": "component",
-   "note": "标识 + 两行身份；讲人、讲机构"
+   "note": "标识 + 两行身份；讲人、讲机构",
+   "provides": {
+    "card": "",
+    "avatar": ".av"
+   }
   },
   {
    "id": "U09",
@@ -2003,7 +2047,10 @@
     "kind": "html"
    },
    "role": "component",
-   "note": "横向一排卡片；时间线、阶段"
+   "note": "横向一排卡片；时间线、阶段",
+   "provides": {
+    "card": ""
+   }
   },
   {
    "id": "U10",
@@ -2024,7 +2071,10 @@
     "kind": "html"
    },
    "role": "component",
-   "note": "纯色块矩阵；分类、覆盖、密度"
+   "note": "纯色块矩阵；分类、覆盖、密度",
+   "provides": {
+    "cell": "i"
+   }
   },
   {
    "id": "U11",
@@ -2035,8 +2085,8 @@
    "cap": "component-html",
    "src": "components.css",
    "params": {},
-   "use": "本屏的信息结构；只填文案与数字，样式在 components.css",
-   "avoid": "自己改样式、加图形、加图标",
+   "use": "本屏的信息结构；只填文案与数字，样式在 components.css。对话、客户回复、两种声音对撞",
+   "avoid": "同屏再放第二条正文（气泡本身就是文案，重复说两遍观众读两次）",
    "code": "<div class=\"ui-chat\" data-anim=\"chat\"><div class=\"b\">对方说的</div><div class=\"b right\">我方回的</div></div>",
    "needs": [
     "ui"
@@ -2045,7 +2095,11 @@
     "kind": "html"
    },
    "role": "component",
-   "note": "一来一回两条消息；讲对话、客户回复"
+   "note": "一来一回两条消息；讲对话、客户回复。整幅通栏：一条贴左、一条贴右",
+   "provides": {
+    "bubble": ".b"
+   },
+   "span": "full"
   },
   {
    "id": "U12",
@@ -2066,7 +2120,11 @@
     "kind": "html"
    },
    "role": "component",
-   "note": "多行多列对照；横向比参数、核清单"
+   "note": "多行多列对照；横向比参数、核清单",
+   "provides": {
+    "head": "th",
+    "row": "tr"
+   }
   },
   {
    "id": "U13",
@@ -2087,7 +2145,10 @@
     "kind": "html"
    },
    "role": "component",
-   "note": "一组柱子比高低；有量级对比"
+   "note": "一组柱子比高低；有量级对比",
+   "provides": {
+    "bar": "i"
+   }
   },
   {
    "id": "U14",
@@ -2108,7 +2169,11 @@
     "kind": "html"
    },
    "role": "component",
-   "note": "一条走势线；讲趋势、增长、波动"
+   "note": "一条走势线；讲趋势、增长、波动",
+   "provides": {
+    "path": "svg path",
+    "svg": "svg"
+   }
   },
   {
    "id": "U15",
@@ -2129,7 +2194,10 @@
     "kind": "html"
    },
    "role": "component",
-   "note": "两档并列、突出其中一档；讲方案与定价"
+   "note": "两档并列、突出其中一档；讲方案与定价",
+   "provides": {
+    "card": ".p"
+   }
   },
   {
    "id": "U16",
@@ -2150,7 +2218,11 @@
     "kind": "html"
    },
    "role": "component",
-   "note": "单条即时提示；讲新消息、提醒、告警"
+   "note": "单条即时提示；讲新消息、提醒、告警",
+   "provides": {
+    "card": "",
+    "dot": ".dot"
+   }
   },
   {
    "id": "U17",
@@ -2171,7 +2243,10 @@
     "kind": "html"
    },
    "role": "component",
-   "note": "一排头像；讲团队、用户规模"
+   "note": "一排头像；讲团队、用户规模",
+   "provides": {
+    "avatar": "i"
+   }
   },
   {
    "id": "U20",
@@ -2192,7 +2267,10 @@
     "kind": "html"
    },
    "role": "component",
-   "note": "几个节点串成一条线；讲阶段、里程碑"
+   "note": "几个节点串成一条线；讲阶段、里程碑",
+   "provides": {
+    "node": ".t"
+   }
   },
   {
    "id": "T23",
@@ -2215,7 +2293,8 @@
     "text"
    ],
    "cand": "EX01",
-   "role": "entrance_block"
+   "role": "entrance_block",
+   "media_safe": true
   },
   {
    "id": "T24",
@@ -2342,7 +2421,7 @@
   {
    "id": "S23",
    "name": "节点综合变换",
-   "family": "状态",
+   "family": "入场",
    "layer": "element",
    "status": "ready",
    "cap": "opacity + scale + rotation 三合一入场，一个元素一次到位",
@@ -2360,7 +2439,7 @@
     "text"
    ],
    "cand": "CP23",
-   "role": "state_text"
+   "role": "entrance_block"
   },
   {
    "id": "U48",
@@ -2381,6 +2460,11 @@
    ],
    "impl": {
     "kind": "html"
+   },
+   "provides": {
+    "card": "",
+    "badge": ".badge",
+    "icon": ".play"
    }
   },
   {
@@ -2402,6 +2486,9 @@
    ],
    "impl": {
     "kind": "html"
+   },
+   "provides": {
+    "card": ""
    }
   },
   {
@@ -2423,6 +2510,10 @@
    ],
    "impl": {
     "kind": "html"
+   },
+   "provides": {
+    "card": "",
+    "pin": ".pin"
    }
   },
   {
@@ -2444,6 +2535,9 @@
    ],
    "impl": {
     "kind": "html"
+   },
+   "provides": {
+    "row": ".i"
    }
   },
   {
@@ -2465,6 +2559,9 @@
    ],
    "impl": {
     "kind": "html"
+   },
+   "provides": {
+    "field": ".f"
    }
   },
   {
@@ -2486,6 +2583,9 @@
    ],
    "impl": {
     "kind": "html"
+   },
+   "provides": {
+    "tag": ".g"
    }
   },
   {
@@ -2727,12 +2827,14 @@
    "avoid": "不是 path 的图形（矩形/圆形走 U40/U39）；同屏两条以上要错开起始",
    "code": "(function () {\n  var _ps = document.querySelectorAll('{{sel}}');\n  if (!_ps.length) return;\n  Array.prototype.forEach.call(_ps, function (_p, _i) {\n    var _len = 0;\n    try { _len = _p.getTotalLength(); } catch (e) { _len = 0; }\n    if (!_len) return;\n    _p.style.strokeDasharray = _len;\n    _p.style.strokeDashoffset = _len;\n    timeline.to(_p, {strokeDashoffset: 0, duration: {{dur}}, ease: '{{ease}}'}, {{at}} + _i * {{stagger}});\n  });\n})();",
    "needs": [
-    "svg"
+    "path"
    ],
    "sample": {
     "sel": "#line",
     "stage": "<div class=\"paper\" style=\"padding:36px\"><div class=\"kick\">线索走势</div><svg viewBox=\"0 0 840 620\" style=\"width:100%;height:100%;overflow:visible\"><g stroke=\"rgba(255,255,255,.09)\" stroke-width=\"1\"><line x1=\"0\" y1=\"500\" x2=\"840\" y2=\"500\"/><line x1=\"0\" y1=\"360\" x2=\"840\" y2=\"360\"/><line x1=\"0\" y1=\"220\" x2=\"840\" y2=\"220\"/></g><path id=\"line\" fill=\"none\" stroke=\"#86F0C0\" stroke-width=\"9\" stroke-linecap=\"round\" stroke-linejoin=\"round\" d=\"M30 520 L 190 430 L 350 470 L 510 300 L 670 240 L 810 120\"/></svg></div>"
-   }
+   },
+   "target": "items",
+   "anchor": "path"
   },
   {
    "id": "PT09",
@@ -2966,18 +3068,19 @@
    "cap": "stroke+color",
    "src": "ui2v:hero-blueprint-draw",
    "params": {
-    "w": 2,
+    "w": 1.8,
     "color": "#86F0C0",
     "fill": "#F4F1E9",
     "dur": 0.7,
     "ease": "power2.out"
    },
    "use": "空心字被墨填满；适合点名、定调",
-   "avoid": "字号小于 40px（描边糊成一团）",
-   "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t) return;\n  _t.style.webkitTextStroke = '{{w}}px {{color}}';\n  _t.style.color = 'transparent';\n  timeline.to(_t, {color: '{{fill}}', duration: {{dur}}, ease: '{{ease}}'}, {{at}});\n  timeline.to(_t, {webkitTextStrokeWidth: 0, duration: {{dur}}, ease: '{{ease}}'}, {{at}});\n})();",
+   "avoid": "字号小于 30px 的脚注（描边再按比例也会把笔画吃掉）；和同屏第二种加字装饰叠加",
+   "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t) return;\n  // 描边宽度按字号算（2026-11-21）：以前写死 {{w}}px，在 110px 标题上是\"细边\"，\n  // 落到 44px 正文上就是一圈糊死的黑边。现在 {{w}} 是\"占字号百分之几\"，\n  // 110px → 约 2px、44px → 约 0.8px，两种字号观感一致。\n  var _fs = parseFloat(getComputedStyle(_t).fontSize) || 110;\n  var _w = Math.max(0.5, _fs * {{w}} / 100);\n  _t.style.webkitTextStroke = _w.toFixed(2) + 'px {{color}}';\n  _t.style.color = 'transparent';\n  timeline.to(_t, {color: '{{fill}}', duration: {{dur}}, ease: '{{ease}}'}, {{at}});\n  timeline.to(_t, {webkitTextStrokeWidth: 0, duration: {{dur}}, ease: '{{ease}}'}, {{at}});\n})();",
    "needs": [
     "text"
-   ]
+   ],
+   "note": "字的描边先亮、再落到填充色；参数 w 是描边占字号的百分比"
   },
   {
    "id": "S25",
@@ -3261,8 +3364,14 @@
    "avoid": "超过 8 行；和 UA02 同屏",
    "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t) return;\n  var _k = _t.querySelectorAll('{{child}}');\n  if (!_k.length) { _k = [_t]; }\n  timeline.fromTo(_k, {y: {{y}}, opacity: 0},\n    {y: 0, opacity: 1, duration: {{dur}}, ease: '{{ease}}', stagger: {{stagger}}}, {{at}});\n})();",
    "needs": [
-    "ui"
-   ]
+    "ui",
+    "row"
+   ],
+   "target": "container",
+   "anchor": "row",
+   "bind": {
+    "child": "row"
+   }
   },
   {
    "id": "UA19",
@@ -3283,8 +3392,16 @@
    "avoid": "没有表头的布局",
    "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t) return;\n  var _h = _t.querySelector('{{head}}');\n  var _k = _t.querySelectorAll('{{child}}');\n  if (_h) { timeline.fromTo(_h, {opacity: 0, y: -14}, {opacity: 1, y: 0, duration: {{dur}}, ease: 'power2.out'}, {{at}}); }\n  if (_k.length) {\n    timeline.fromTo(_k, {opacity: 0, y: 18}, {opacity: 1, y: 0, duration: {{dur}}, ease: 'power2.out', stagger: {{stagger}}}, {{at}} + {{dur}} * 0.8);\n  }\n})();",
    "needs": [
-    "ui"
-   ]
+    "ui",
+    "head",
+    "row"
+   ],
+   "target": "container",
+   "anchor": "head",
+   "bind": {
+    "head": "head",
+    "child": "row"
+   }
   },
   {
    "id": "UA20",
@@ -3305,33 +3422,13 @@
    "avoid": "同屏超过 6 个标签",
    "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t) return;\n  var _k = _t.querySelectorAll('{{child}}');\n  if (!_k.length) { _k = [_t]; }\n  timeline.fromTo(_k, {scale: 0.6, opacity: 0}, {scale: 1, opacity: 1, duration: {{dur}}, ease: '{{ease}}', stagger: {{stagger}}}, {{at}});\n  timeline.fromTo(_k, {boxShadow: '0 0 0 rgba(134,240,192,0)'}, {boxShadow: '0 0 22px rgba(134,240,192,.45)', duration: {{dur}}, stagger: {{stagger}}}, {{at}});\n})();",
    "needs": [
-    "ui"
-   ]
-  },
-  {
-   "id": "UA21",
-   "name": "环形进度",
-   "family": "UI",
-   "role": "component_motion",
-   "layer": "element",
-   "status": "ready",
-   "cap": "conic",
-   "src": "ui2v:conic-progress-ring",
-   "params": {
-    "to": 72,
-    "dur": 1.1,
-    "ease": "power2.inOut",
-    "color": "#86F0C0"
-   },
-   "use": "U53 标签云旁的仪表、单指标进度：环从 0 画到目标",
-   "avoid": "同时两个环以上（读不过来）",
-   "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t) return;\n  var _r = _t.querySelector('[data-anim=\"ring\"], .ui-ring') || _t;\n  var _o = {p: 0};\n  function _paint() {\n    _r.style.background = 'conic-gradient({{color}} 0% ' + _o.p.toFixed(1) + '%, rgba(255,255,255,.12) ' + _o.p.toFixed(1) + '% 100%)';\n  }\n  _paint();\n  timeline.to(_o, {p: {{to}}, duration: {{dur}}, ease: '{{ease}}', onUpdate: _paint}, {{at}});\n})();",
-   "needs": [
-    "ui"
+    "ui",
+    "tag"
    ],
-   "sample": {
-    "sel": "#ringwrap",
-    "stage": "<div class=\"paper\" style=\"display:grid;place-items:center\"><div id=\"ringwrap\" data-anim=\"subject\" style=\"width:520px;height:520px;border-radius:50%;background:conic-gradient(#86F0C0 0% 0%, rgba(255,255,255,.12) 0% 100%);display:grid;place-items:center\"><div style=\"width:390px;height:390px;border-radius:50%;background:#0d1214;display:grid;place-items:center;font-size:96px;font-weight:780\">72%</div></div></div>"
+   "target": "container",
+   "anchor": "tag",
+   "bind": {
+    "child": "tag"
    }
   },
   {
@@ -3353,11 +3450,17 @@
    "avoid": "超过 24 格（时长会撑爆）",
    "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t) return;\n  var _k = _t.querySelectorAll('{{child}}');\n  if (!_k.length) { _k = [_t]; }\n  timeline.fromTo(_k, {opacity: 0.12}, {opacity: {{to}}, duration: {{dur}}, ease: 'none', stagger: {{stagger}}}, {{at}});\n})();",
    "needs": [
-    "ui"
+    "ui",
+    "cell"
    ],
    "sample": {
     "sel": "#grid",
     "stage": "<div class=\"paper\" style=\"padding:40px\"><div class=\"kick\">分布</div><div id=\"grid\" style=\"margin-top:36px;display:grid;grid-template-columns:repeat(5,1fr);gap:18px\"><div class=\"gtile\" style=\"height:120px;border-radius:12px;background:#86F0C0\"></div><div class=\"gtile\" style=\"height:120px;border-radius:12px;background:#86F0C0\"></div><div class=\"gtile\" style=\"height:120px;border-radius:12px;background:#86F0C0\"></div><div class=\"gtile\" style=\"height:120px;border-radius:12px;background:#86F0C0\"></div><div class=\"gtile\" style=\"height:120px;border-radius:12px;background:#86F0C0\"></div><div class=\"gtile\" style=\"height:120px;border-radius:12px;background:#86F0C0\"></div><div class=\"gtile\" style=\"height:120px;border-radius:12px;background:#86F0C0\"></div><div class=\"gtile\" style=\"height:120px;border-radius:12px;background:#86F0C0\"></div><div class=\"gtile\" style=\"height:120px;border-radius:12px;background:#86F0C0\"></div><div class=\"gtile\" style=\"height:120px;border-radius:12px;background:#86F0C0\"></div><div class=\"gtile\" style=\"height:120px;border-radius:12px;background:#86F0C0\"></div><div class=\"gtile\" style=\"height:120px;border-radius:12px;background:#86F0C0\"></div><div class=\"gtile\" style=\"height:120px;border-radius:12px;background:#86F0C0\"></div><div class=\"gtile\" style=\"height:120px;border-radius:12px;background:#86F0C0\"></div><div class=\"gtile\" style=\"height:120px;border-radius:12px;background:#86F0C0\"></div></div></div>"
+   },
+   "target": "container",
+   "anchor": "cell",
+   "bind": {
+    "child": "cell"
    }
   },
   {
@@ -3381,11 +3484,17 @@
    "avoid": "单位数低于 8（看不出密度）",
    "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t) return;\n  var _k = _t.querySelectorAll('[data-anim=\"dot\"], .gtile');\n  if (!_k.length) { _k = [_t]; }\n  timeline.fromTo(_k, {opacity: {{off}}, scale: 0.8}, {opacity: {{on}}, scale: 1, duration: {{dur}}, ease: 'power2.out', stagger: {{stagger}}}, {{at}});\n})();",
    "needs": [
-    "ui"
+    "ui",
+    "dot"
    ],
    "sample": {
     "sel": "#dots",
     "stage": "<div class=\"paper\" style=\"padding:40px\"><div class=\"kick\">每点 = 1 个单位</div><div id=\"dots\" style=\"margin-top:36px;display:grid;grid-template-columns:repeat(6,1fr);gap:20px\"><div class=\"gtile\" data-anim=\"dot\" style=\"height:110px;border-radius:50%;background:#86F0C0\"></div><div class=\"gtile\" data-anim=\"dot\" style=\"height:110px;border-radius:50%;background:#86F0C0\"></div><div class=\"gtile\" data-anim=\"dot\" style=\"height:110px;border-radius:50%;background:#86F0C0\"></div><div class=\"gtile\" data-anim=\"dot\" style=\"height:110px;border-radius:50%;background:#86F0C0\"></div><div class=\"gtile\" data-anim=\"dot\" style=\"height:110px;border-radius:50%;background:#86F0C0\"></div><div class=\"gtile\" data-anim=\"dot\" style=\"height:110px;border-radius:50%;background:#86F0C0\"></div><div class=\"gtile\" data-anim=\"dot\" style=\"height:110px;border-radius:50%;background:#86F0C0\"></div><div class=\"gtile\" data-anim=\"dot\" style=\"height:110px;border-radius:50%;background:#86F0C0\"></div><div class=\"gtile\" data-anim=\"dot\" style=\"height:110px;border-radius:50%;background:#86F0C0\"></div><div class=\"gtile\" data-anim=\"dot\" style=\"height:110px;border-radius:50%;background:#86F0C0\"></div><div class=\"gtile\" data-anim=\"dot\" style=\"height:110px;border-radius:50%;background:#86F0C0\"></div><div class=\"gtile\" data-anim=\"dot\" style=\"height:110px;border-radius:50%;background:#86F0C0\"></div><div class=\"gtile\" data-anim=\"dot\" style=\"height:110px;border-radius:50%;background:#86F0C0\"></div><div class=\"gtile\" data-anim=\"dot\" style=\"height:110px;border-radius:50%;background:#86F0C0\"></div><div class=\"gtile\" data-anim=\"dot\" style=\"height:110px;border-radius:50%;background:#86F0C0\"></div><div class=\"gtile\" data-anim=\"dot\" style=\"height:110px;border-radius:50%;background:#86F0C0\"></div><div class=\"gtile\" data-anim=\"dot\" style=\"height:110px;border-radius:50%;background:#86F0C0\"></div><div class=\"gtile\" data-anim=\"dot\" style=\"height:110px;border-radius:50%;background:#86F0C0\"></div><div class=\"gtile\" data-anim=\"dot\" style=\"height:110px;border-radius:50%;background:#86F0C0\"></div><div class=\"gtile\" data-anim=\"dot\" style=\"height:110px;border-radius:50%;background:#86F0C0\"></div><div class=\"gtile\" data-anim=\"dot\" style=\"height:110px;border-radius:50%;background:#86F0C0\"></div><div class=\"gtile\" data-anim=\"dot\" style=\"height:110px;border-radius:50%;background:#86F0C0\"></div><div class=\"gtile\" data-anim=\"dot\" style=\"height:110px;border-radius:50%;background:#86F0C0\"></div><div class=\"gtile\" data-anim=\"dot\" style=\"height:110px;border-radius:50%;background:#86F0C0\"></div></div></div>"
+   },
+   "target": "container",
+   "anchor": "dot",
+   "bind": {
+    "child": "dot"
    }
   },
   {
@@ -3408,8 +3517,14 @@
    "avoid": "超过 5 行；行高不一致",
    "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t) return;\n  var _k = _t.querySelectorAll('{{child}}');\n  if (_k.length < 2) return;\n  timeline.to(_k[0], {y: {{dy}}, duration: {{dur}}, ease: '{{ease}}'}, {{at}});\n  timeline.to(_k[1], {y: -{{dy}}, duration: {{dur}}, ease: '{{ease}}'}, {{at}});\n})();",
    "needs": [
-    "ui"
-   ]
+    "ui",
+    "row"
+   ],
+   "target": "container",
+   "anchor": "row",
+   "bind": {
+    "child": "row"
+   }
   },
   {
    "id": "UA27",
@@ -3429,8 +3544,14 @@
    "avoid": "行数超过 8 行",
    "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t) return;\n  var _k = _t.querySelectorAll('{{child}}');\n  if (!_k.length) { _k = [_t]; }\n  timeline.fromTo(_k, {backgroundColor: 'rgba(134,240,192,0)'}, {backgroundColor: 'rgba(134,240,192,.16)', duration: {{dur}}, ease: 'none', stagger: {{stagger}}}, {{at}});\n})();",
    "needs": [
-    "ui"
-   ]
+    "ui",
+    "row"
+   ],
+   "target": "container",
+   "anchor": "row",
+   "bind": {
+    "child": "row"
+   }
   },
   {
    "id": "UA28",
@@ -3450,8 +3571,14 @@
    "avoid": "同屏超过 6 个图标同时换",
    "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t) return;\n  var _k = _t.querySelectorAll('{{child}}');\n  if (!_k.length) { _k = [_t]; }\n  timeline.to(_k, {scale: 0.4, opacity: 0.2, duration: {{dur}}, ease: 'power2.in', stagger: {{stagger}}}, {{at}});\n  timeline.to(_k, {scale: 1, opacity: 1, duration: {{dur}}, ease: 'back.out(2)', stagger: {{stagger}}}, {{at}} + {{dur}} * 1.4);\n})();",
    "needs": [
-    "ui"
-   ]
+    "ui",
+    "icon"
+   ],
+   "target": "container",
+   "anchor": "icon",
+   "bind": {
+    "child": "icon"
+   }
   },
   {
    "id": "UA29",
@@ -3473,8 +3600,14 @@
    "avoid": "柱数超过 10 根",
    "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t) return;\n  var _k = _t.querySelectorAll('{{child}}');\n  if (!_k.length) { _k = [_t]; }\n  Array.prototype.forEach.call(_k, function (_el, _i) {\n    timeline.fromTo(_el, {height: _el.style.height || '10%'},\n      {height: ({{to}} - _i * 9) + '%', duration: {{dur}}, ease: '{{ease}}'}, {{at}} + _i * {{stagger}});\n  });\n})();",
    "needs": [
-    "ui"
-   ]
+    "ui",
+    "bar"
+   ],
+   "target": "container",
+   "anchor": "bar",
+   "bind": {
+    "child": "bar"
+   }
   },
   {
    "id": "T34",
@@ -3654,8 +3787,9 @@
   {
    "id": "S31",
    "name": "折叠展开",
-   "family": "状态",
-   "role": "state_block",
+   "family": "入场",
+   "role": "entrance_block",
+   "media_safe": false,
    "layer": "element",
    "status": "ready",
    "cap": "scale-y",
@@ -3747,18 +3881,19 @@
    "cap": "shadow",
    "src": "ui2v:chromatic-split",
    "params": {
-    "dx": 14,
-    "dy": 6,
+    "dx": 0.13,
+    "dy": 0.055,
     "dur": 0.5,
     "ease": "power3.out",
     "color": "rgba(134,240,192,.55)"
    },
    "use": "字的影子从远处收回来；强调、定音",
-   "avoid": "和 T33 双层错位同屏",
-   "code": "timeline.fromTo('{{sel}}', {textShadow: '{{dx}}px {{dy}}px 0 {{color}}'},\n  {textShadow: '0px 0px 0 rgba(0,0,0,0)', duration: {{dur}}, ease: '{{ease}}'}, {{at}});",
+   "avoid": "和别的描边/阴影字卡同屏（同一块字上两层影会脏）",
+   "code": "timeline.fromTo('{{sel}}', {textShadow: '{{dx}}em {{dy}}em 0 {{color}}'},\n  {textShadow: '0em 0em 0 rgba(0,0,0,0)', duration: {{dur}}, ease: '{{ease}}'}, {{at}});",
    "needs": [
     "text"
-   ]
+   ],
+   "note": "错位硬影从有到收干净；偏移用 em，字号一变影子跟着变，不会在小字上糊成一块"
   },
   {
    "id": "UA30",
@@ -3778,8 +3913,14 @@
    "avoid": "没有合计行的表",
    "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t) return;\n  var _k = _t.querySelectorAll('{{child}}');\n  if (!_k.length) { _k = [_t]; }\n  var _b = _k[_k.length - 1];\n  timeline.fromTo(_b, {opacity: 0, y: 18}, {opacity: 1, y: 0, duration: {{dur}}, ease: '{{ease}}'}, {{at}});\n  timeline.fromTo(_b, {backgroundColor: 'rgba(134,240,192,0)'}, {backgroundColor: 'rgba(134,240,192,.12)', duration: {{dur}}}, {{at}});\n})();",
    "needs": [
-    "ui"
-   ]
+    "ui",
+    "row"
+   ],
+   "target": "container",
+   "anchor": "row",
+   "bind": {
+    "child": "row"
+   }
   },
   {
    "id": "UA31",
@@ -3801,11 +3942,17 @@
    "avoid": "超过 6 张",
    "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t) return;\n  var _k = _t.querySelectorAll('{{child}}');\n  if (!_k.length) { _k = [_t]; }\n  timeline.fromTo(_k, {y: {{y}}, opacity: 0, scale: 0.94},\n    {y: 0, opacity: 1, scale: 1, duration: {{dur}}, ease: '{{ease}}', stagger: {{stagger}}}, {{at}});\n})();",
    "needs": [
-    "ui"
+    "ui",
+    "cell"
    ],
    "sample": {
     "sel": "#grid",
     "stage": "<div class=\"paper\" style=\"padding:40px\"><div class=\"kick\">三张卡</div><div id=\"grid\" style=\"margin-top:36px;display:grid;grid-template-columns:repeat(3,1fr);gap:20px\"><div class=\"gtile\" style=\"height:260px;border-radius:16px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12)\"></div><div class=\"gtile\" style=\"height:260px;border-radius:16px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12)\"></div><div class=\"gtile\" style=\"height:260px;border-radius:16px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12)\"></div><div class=\"gtile\" style=\"height:260px;border-radius:16px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12)\"></div><div class=\"gtile\" style=\"height:260px;border-radius:16px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12)\"></div><div class=\"gtile\" style=\"height:260px;border-radius:16px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12)\"></div></div></div>"
+   },
+   "target": "container",
+   "anchor": "cell",
+   "bind": {
+    "child": "cell"
    }
   },
   {
@@ -3827,8 +3974,14 @@
    "avoid": "超过 3 位数字",
    "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t) return;\n  var _k = _t.querySelectorAll('{{child}}');\n  if (!_k.length) { _k = [_t]; }\n  Array.prototype.forEach.call(_k, function (_el, _i) {\n    var _o = {v: 0};\n    var _to = {{to}} + _i;\n    timeline.to(_o, {v: _to, duration: {{dur}}, ease: 'none', onUpdate: function () { _el.textContent = String(Math.round(_o.v)); }}, {{at}} + _i * {{stagger}});\n  });\n})();",
    "needs": [
-    "ui"
-   ]
+    "ui",
+    "badge"
+   ],
+   "target": "container",
+   "anchor": "badge",
+   "bind": {
+    "child": "badge"
+   }
   },
   {
    "id": "UA33",
@@ -3848,8 +4001,14 @@
    "avoid": "一次插多条（会看成重排）",
    "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t) return;\n  var _k = _t.querySelectorAll('{{child}}');\n  if (!_k.length) { _k = [_t]; }\n  var _n = _k[_k.length - 1];\n  timeline.fromTo(_n, {opacity: 0, x: -22}, {opacity: 1, x: 0, duration: {{dur}}, ease: '{{ease}}'}, {{at}});\n  timeline.fromTo(_n, {backgroundColor: 'rgba(134,240,192,.3)'}, {backgroundColor: 'rgba(255,255,255,.03)', duration: {{dur}} * 2}, {{at}});\n})();",
    "needs": [
-    "ui"
-   ]
+    "ui",
+    "row"
+   ],
+   "target": "container",
+   "anchor": "row",
+   "bind": {
+    "child": "row"
+   }
   },
   {
    "id": "UA34",
@@ -3869,8 +4028,14 @@
    "avoid": "次数超过两下（会像循环）",
    "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t) return;\n  var _k = _t.querySelectorAll('{{child}}');\n  if (!_k.length) { _k = [_t]; }\n  timeline.fromTo(_k, {scale: 1}, {scale: 1.18, duration: {{dur}}, ease: 'power2.out'}, {{at}});\n  timeline.to(_k, {scale: 1, duration: {{dur}}, ease: 'power2.in'}, {{at}} + {{dur}});\n  timeline.to(_k, {scale: 1.12, duration: {{dur}}, ease: 'power2.out'}, {{at}} + {{dur}} * 2 + {{gap}});\n  timeline.to(_k, {scale: 1, duration: {{dur}}, ease: 'power2.in'}, {{at}} + {{dur}} * 3 + {{gap}});\n})();",
    "needs": [
-    "ui"
-   ]
+    "ui",
+    "icon"
+   ],
+   "target": "container",
+   "anchor": "icon",
+   "bind": {
+    "child": "icon"
+   }
   },
   {
    "id": "UA35",
@@ -3891,8 +4056,14 @@
    "avoid": "超过 5 条",
    "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t) return;\n  var _k = _t.querySelectorAll('{{child}}');\n  if (!_k.length) { _k = [_t]; }\n  Array.prototype.forEach.call(_k, function (_el) {\n    var _c = document.createElement('i');\n    _c.textContent = '✓';\n    _c.style.cssText = 'margin-left:auto;color:{{color}};font-style:normal;opacity:0;';\n    _el.appendChild(_c);\n  });\n  var _cs = _t.querySelectorAll('{{child}} i');\n  timeline.to(_cs, {opacity: 1, duration: {{dur}}, ease: 'power2.out', stagger: {{stagger}}}, {{at}});\n})();",
    "needs": [
-    "ui"
-   ]
+    "ui",
+    "row"
+   ],
+   "target": "container",
+   "anchor": "row",
+   "bind": {
+    "child": "row"
+   }
   },
   {
    "id": "G17",
@@ -4231,7 +4402,11 @@
    "impl": {
     "kind": "html"
    },
-   "note": "三个并列指标；有量级对比"
+   "note": "三个并列指标；有量级对比",
+   "provides": {
+    "cell": ".ui-cell",
+    "num": ".ui-cell b"
+   }
   },
   {
    "id": "U55",
@@ -4252,7 +4427,10 @@
    "impl": {
     "kind": "html"
    },
-   "note": "左右对照两卡；讲前后差别"
+   "note": "左右对照两卡；讲前后差别",
+   "provides": {
+    "card": ".ui-card"
+   }
   },
   {
    "id": "U56",
@@ -4273,7 +4451,10 @@
    "impl": {
     "kind": "html"
    },
-   "note": "横向三段进程；当前段高亮"
+   "note": "横向三段进程；当前段高亮",
+   "provides": {
+    "node": ".t"
+   }
   },
   {
    "id": "U57",
@@ -4294,7 +4475,11 @@
    "impl": {
     "kind": "html"
    },
-   "note": "三行记录 + 状态列"
+   "note": "三行记录 + 状态列",
+   "provides": {
+    "head": "th",
+    "row": "tr"
+   }
   },
   {
    "id": "S34",
@@ -4357,11 +4542,11 @@
     "dur": 0.7,
     "ease": "power2.out"
    },
-   "use": "把总数拆成两部分讲；128 → 100+28",
+   "use": "把总数拆成两部分讲；128 → 100+28。必须落在组件声明的 num 锚点上（U05/U54/U58/U67）",
    "avoid": "总和与实际不符（会穿帮）",
-   "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t) return;\n  var _n = _t.querySelector('[data-anim=\"num\"], .num') || _t;\n  var _o = {v: {{total}}};\n  function _paint() {\n    var _v = Math.round(_o.v);\n    _n.textContent = _v > {{total}} - {{part}} ? String(_v) : (_v - {{part}}) + ' + {{part}}';\n  }\n  _paint();\n  timeline.fromTo(_o, {v: {{total}}}, {v: {{total}} + {{part}}, duration: {{dur}}, ease: '{{ease}}', onUpdate: _paint}, {{at}});\n})();",
+   "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t) return;\n  var _o = {p: 0};\n  function _paint() {\n    _t.textContent = _o.p < 0.45 ? String({{total}}) : ({{total}} - {{part}}) + ' + {{part}}';\n  }\n  _paint();\n  timeline.to(_o, {p: 1, duration: {{dur}}, ease: '{{ease}}', onUpdate: _paint}, {{at}});\n})();",
    "needs": [
-    "text"
+    "num"
    ]
   },
   {
@@ -4412,6 +4597,7 @@
    "name": "整块淡入",
    "family": "入场",
    "role": "entrance_block",
+   "media_safe": true,
    "layer": "element",
    "status": "ready",
    "cap": "fade",
@@ -4433,6 +4619,7 @@
    "name": "上下揭开",
    "family": "入场",
    "role": "entrance_block",
+   "media_safe": true,
    "layer": "element",
    "status": "ready",
    "cap": "clip-vert",
@@ -4620,8 +4807,14 @@
    "avoid": "行数超过 10",
    "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t) return;\n  var _k = _t.querySelectorAll('{{child}}');\n  if (!_k.length) { _k = [_t]; }\n  var _odd = [];\n  Array.prototype.forEach.call(_k, function (_el, _i) { if (_i % 2 === 1) { _odd.push(_el); } });\n  timeline.fromTo(_odd, {backgroundColor: 'rgba(255,255,255,0)'},\n    {backgroundColor: 'rgba(255,255,255,{{alpha}})', duration: {{dur}}, ease: 'none', stagger: {{stagger}}}, {{at}});\n})();",
    "needs": [
-    "ui"
-   ]
+    "ui",
+    "row"
+   ],
+   "target": "container",
+   "anchor": "row",
+   "bind": {
+    "child": "row"
+   }
   },
   {
    "id": "UA37",
@@ -4642,11 +4835,17 @@
    "avoid": "超过 9 张",
    "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t) return;\n  var _k = _t.querySelectorAll('{{child}}');\n  if (!_k.length) { _k = [_t]; }\n  Array.prototype.forEach.call(_k, function (_el, _i) {\n    var _a = (_i % 2 === 0) ? 1 : -1;\n    timeline.fromTo(_el, {x: 26 * _a, y: 18 * _a, opacity: 0.4},\n      {x: 0, y: 0, opacity: 1, duration: {{dur}}, ease: '{{ease}}'}, {{at}} + _i * {{stagger}});\n  });\n})();",
    "needs": [
-    "ui"
+    "ui",
+    "card"
    ],
    "sample": {
     "sel": "#grid",
     "stage": "<div class=\"paper\" style=\"padding:40px\"><div class=\"kick\">对齐</div><div id=\"grid\" style=\"margin-top:36px;display:grid;grid-template-columns:repeat(3,1fr);gap:18px\"><div class=\"gtile\" style=\"height:220px;border-radius:14px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12)\"></div><div class=\"gtile\" style=\"height:220px;border-radius:14px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12)\"></div><div class=\"gtile\" style=\"height:220px;border-radius:14px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12)\"></div><div class=\"gtile\" style=\"height:220px;border-radius:14px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12)\"></div><div class=\"gtile\" style=\"height:220px;border-radius:14px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12)\"></div><div class=\"gtile\" style=\"height:220px;border-radius:14px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12)\"></div><div class=\"gtile\" style=\"height:220px;border-radius:14px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12)\"></div><div class=\"gtile\" style=\"height:220px;border-radius:14px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12)\"></div><div class=\"gtile\" style=\"height:220px;border-radius:14px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12)\"></div></div></div>"
+   },
+   "target": "container",
+   "anchor": "card",
+   "bind": {
+    "child": "card"
    }
   },
   {
@@ -4762,11 +4961,17 @@
    "avoid": "超过 8 根柱子",
    "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t) return;\n  var _k = _t.querySelectorAll('{{child}}');\n  if (!_k.length) return;\n  Array.prototype.forEach.call(_k, function (_el, _i) {\n    timeline.fromTo(_el, {height: '6%', opacity: 0.5}, {height: ({{base}} + _i * {{step}}) + '%', opacity: 1, duration: {{dur}}, ease: '{{ease}}'}, {{at}} + _i * {{stagger}});\n  });\n})();",
    "needs": [
-    "ui"
+    "ui",
+    "bar"
    ],
    "sample": {
     "sel": "#bars",
     "stage": "<div class=\"paper\" style=\"padding:40px\"><div class=\"kick\">柱赛跑</div><div id=\"bars\" style=\"margin-top:60px;display:flex;align-items:flex-end;gap:26px;height:620px\"><b style=\"flex:1;height:26%;border-radius:8px 8px 0 0;background:rgba(134,240,192,.55)\"></b><b style=\"flex:1;height:38%;border-radius:8px 8px 0 0;background:rgba(134,240,192,.55)\"></b><b style=\"flex:1;height:52%;border-radius:8px 8px 0 0;background:rgba(134,240,192,.55)\"></b><b style=\"flex:1;height:70%;border-radius:8px 8px 0 0;background:rgba(134,240,192,.55)\"></b><b style=\"flex:1;height:88%;border-radius:8px 8px 0 0;background:rgba(134,240,192,.55)\"></b></div></div>"
+   },
+   "target": "container",
+   "anchor": "bar",
+   "bind": {
+    "child": "bar"
    }
   },
   {
@@ -4788,11 +4993,17 @@
    "avoid": "和 UA26 列表重排同屏",
    "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t) return;\n  var _k = _t.querySelectorAll('{{child}}');\n  if (!_k.length) return;\n  Array.prototype.forEach.call(_k, function (_el, _i) {\n    timeline.fromTo(_el, {scaleX: 0, transformOrigin: '0% 50%', opacity: 0.4},\n      {scaleX: 1, opacity: 1, duration: {{dur}} * (1 - _i * 0.12), ease: '{{ease}}'}, {{at}} + _i * {{stagger}});\n  });\n})();",
    "needs": [
-    "ui"
+    "ui",
+    "bar"
    ],
    "sample": {
     "sel": "#rows",
     "stage": "<div class=\"paper\" style=\"padding:40px\"><div class=\"kick\">排名</div><div id=\"rows\" style=\"margin-top:50px;display:flex;flex-direction:column;gap:26px\"><div style=\"height:64px;border-radius:12px;background:rgba(255,255,255,.05);display:flex;align-items:center;padding:0 24px\"><i style=\"width:88%;height:26px;border-radius:8px;background:rgba(134,240,192,.6)\"></i></div><div style=\"height:64px;border-radius:12px;background:rgba(255,255,255,.05);display:flex;align-items:center;padding:0 24px\"><i style=\"width:72%;height:26px;border-radius:8px;background:rgba(134,240,192,.6)\"></i></div><div style=\"height:64px;border-radius:12px;background:rgba(255,255,255,.05);display:flex;align-items:center;padding:0 24px\"><i style=\"width:54%;height:26px;border-radius:8px;background:rgba(134,240,192,.6)\"></i></div><div style=\"height:64px;border-radius:12px;background:rgba(255,255,255,.05);display:flex;align-items:center;padding:0 24px\"><i style=\"width:40%;height:26px;border-radius:8px;background:rgba(134,240,192,.6)\"></i></div></div></div>"
+   },
+   "target": "container",
+   "anchor": "bar",
+   "bind": {
+    "child": "bar"
    }
   },
   {
@@ -4814,11 +5025,17 @@
    "avoid": "和 UA09–UA16 的 diff 卡同屏",
    "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t) return;\n  var _k = _t.querySelectorAll('[data-line], pre div, .mono > div');\n  if (!_k.length) { _k = [_t]; }\n  timeline.fromTo(_k, {opacity: 0, y: {{y}}}, {opacity: 1, y: 0, duration: {{dur}}, ease: '{{ease}}', stagger: {{stagger}}}, {{at}});\n})();",
    "needs": [
-    "ui"
+    "ui",
+    "line"
    ],
    "sample": {
     "sel": "#code",
     "stage": "<div class=\"paper\" style=\"padding:36px\"><div class=\"kick\">代码</div><div id=\"code\" class=\"mono\" style=\"margin-top:26px;font-size:30px;line-height:1.8;color:#C9D3CC\"><div>def run(q):</div><div>    leads = search.run(q)</div><div>    leads = leads.enrich()</div><div>    return leads</div></div></div>"
+   },
+   "target": "container",
+   "anchor": "line",
+   "bind": {
+    "child": "line"
    }
   },
   {
@@ -4842,11 +5059,17 @@
    "avoid": "柱数超过 24（时长会散）",
    "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t) return;\n  var _k = _t.querySelectorAll('{{child}}');\n  if (!_k.length) return;\n  Array.prototype.forEach.call(_k, function (_el, _i) {\n    var _h = 14 + Math.abs(Math.sin((_i + 1) * {{seed}})) * {{amp}};\n    timeline.fromTo(_el, {height: '6%', opacity: 0.5},\n      {height: _h + '%', opacity: 1, duration: {{dur}}, ease: '{{ease}}'}, {{at}} + _i * {{stagger}});\n  });\n})();",
    "needs": [
-    "ui"
+    "ui",
+    "bar"
    ],
    "sample": {
     "sel": "#wave",
     "stage": "<div class=\"paper\" style=\"padding:40px\"><div class=\"kick\">频谱</div><div id=\"wave\" style=\"margin-top:60px;display:flex;align-items:center;gap:12px;height:520px\"><b style=\"flex:1;height:12%%;border-radius:6px;background:rgba(134,240,192,.5)\"></b><b style=\"flex:1;height:12%%;border-radius:6px;background:rgba(134,240,192,.5)\"></b><b style=\"flex:1;height:12%%;border-radius:6px;background:rgba(134,240,192,.5)\"></b><b style=\"flex:1;height:12%%;border-radius:6px;background:rgba(134,240,192,.5)\"></b><b style=\"flex:1;height:12%%;border-radius:6px;background:rgba(134,240,192,.5)\"></b><b style=\"flex:1;height:12%%;border-radius:6px;background:rgba(134,240,192,.5)\"></b><b style=\"flex:1;height:12%%;border-radius:6px;background:rgba(134,240,192,.5)\"></b><b style=\"flex:1;height:12%%;border-radius:6px;background:rgba(134,240,192,.5)\"></b><b style=\"flex:1;height:12%%;border-radius:6px;background:rgba(134,240,192,.5)\"></b><b style=\"flex:1;height:12%%;border-radius:6px;background:rgba(134,240,192,.5)\"></b><b style=\"flex:1;height:12%%;border-radius:6px;background:rgba(134,240,192,.5)\"></b><b style=\"flex:1;height:12%%;border-radius:6px;background:rgba(134,240,192,.5)\"></b><b style=\"flex:1;height:12%%;border-radius:6px;background:rgba(134,240,192,.5)\"></b><b style=\"flex:1;height:12%%;border-radius:6px;background:rgba(134,240,192,.5)\"></b><b style=\"flex:1;height:12%%;border-radius:6px;background:rgba(134,240,192,.5)\"></b><b style=\"flex:1;height:12%%;border-radius:6px;background:rgba(134,240,192,.5)\"></b></div></div>"
+   },
+   "target": "container",
+   "anchor": "bar",
+   "bind": {
+    "child": "bar"
    }
   },
   {
@@ -4922,7 +5145,12 @@
     "kind": "html"
    },
    "role": "component",
-   "note": "428×868 机身装一块 390×830 屏；演示 App 界面、讲产品操作"
+   "note": "428×868 机身装一块 390×830 屏；演示 App 界面、讲产品操作",
+   "provides": {
+    "screen": ".ui-device-screen",
+    "row": ".ui-row",
+    "card": ".ui-card"
+   }
   },
   {
    "id": "U59",
@@ -4943,7 +5171,11 @@
     "kind": "html"
    },
    "role": "component",
-   "note": "428×868 机身 + 宽刘海；演示单步操作、讲一个界面"
+   "note": "428×868 机身 + 宽刘海；演示单步操作、讲一个界面",
+   "provides": {
+    "screen": ".ui-device-screen",
+    "card": ".ui-card"
+   }
   },
   {
    "id": "U60",
@@ -4964,7 +5196,11 @@
     "kind": "html"
    },
    "role": "component",
-   "note": "428×868 全银边老机型；讲流程、讲前后两代对比"
+   "note": "428×868 全银边老机型；讲流程、讲前后两代对比",
+   "provides": {
+    "screen": ".ui-device-screen",
+    "card": ".ui-card"
+   }
   },
   {
    "id": "U61",
@@ -4985,7 +5221,11 @@
     "kind": "html"
    },
    "role": "component",
-   "note": "404×862 居中打孔、直角边框；讲安卓端、讲参数面板"
+   "note": "404×862 居中打孔、直角边框；讲安卓端、讲参数面板",
+   "provides": {
+    "screen": ".ui-device-screen",
+    "cell": ".ui-bento-cell"
+   }
   },
   {
    "id": "U62",
@@ -5006,7 +5246,11 @@
     "kind": "html"
    },
    "role": "component",
-   "note": "380×828 上下留边、圆角屏；讲多端覆盖、讲清单"
+   "note": "380×828 上下留边、圆角屏；讲多端覆盖、讲清单",
+   "provides": {
+    "screen": ".ui-device-screen",
+    "cell": ".ui-cell"
+   }
   },
   {
    "id": "U63",
@@ -5027,7 +5271,12 @@
     "kind": "html"
    },
    "role": "component",
-   "note": "560×778 宽体屏；整屏当主视觉用，窄栏放不进"
+   "note": "560×778 宽体屏；整屏当主视觉用，窄栏放不进",
+   "provides": {
+    "screen": ".ui-device-screen",
+    "cell": ".ui-cell",
+    "card": ".ui-card"
+   }
   },
   {
    "id": "B49",
@@ -5252,62 +5501,6 @@
    }
   },
   {
-   "id": "K41",
-   "name": "极光流动字",
-   "family": "字形",
-   "role": "entrance_text",
-   "layer": "element",
-   "status": "ready",
-   "cap": "aurora-type",
-   "src": "magicui:animated-gradient-text + aurora-text",
-   "params": {
-    "dur": 2.8,
-    "c1": "#FF0080",
-    "c2": "#7928CA",
-    "c3": "#0070F3",
-    "c4": "#38bdf8"
-   },
-   "use": "字面自己流着一段彩色渐变；新章节、发布会标题、要一点未来感",
-   "avoid": "和 K40 同屏（都是往字上刷）；深底色上用，浅底会脏",
-   "needs": [
-    "text"
-   ],
-   "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t) return;\n  _t.style.backgroundImage = 'linear-gradient(120deg,{{c1}} 0%,{{c2}} 26%,{{c3}} 52%,{{c4}} 74%,{{c1}} 100%)';\n  _t.style.backgroundSize = '260% 100%';\n  _t.style.backgroundRepeat = 'no-repeat';\n  _t.style.webkitBackgroundClip = 'text';\n  _t.style.backgroundClip = 'text';\n  _t.style.color = 'transparent';\n  timeline.fromTo(_t, { backgroundPosition: '0% 0' },\n    { backgroundPosition: '100% 0', duration: {{dur}}, ease: 'none' }, {{at}});\n})();",
-   "sample": {
-    "sel": "[data-anim=\"subject\"]",
-    "stage": "<div style=\"position:absolute;left:80px;right:80px;top:700px\"><div style=\"font-family:'SF Mono',Menlo,monospace;font-size:24px;letter-spacing:.2em;color:#86F0C0\">K41</div><div data-anim=\"subject\" style=\"margin-top:34px;font-size:140px;line-height:1.12;font-weight:700;letter-spacing:-.045em\">一个新的开始</div><div style=\"margin-top:36px;font-size:32px;color:#8b968f\">颜色自己会动，字还是那四个字</div></div>"
-   }
-  },
-  {
-   "id": "K42",
-   "name": "漫画字",
-   "family": "字形",
-   "role": "entrance_text",
-   "layer": "element",
-   "status": "ready",
-   "cap": "comic-type",
-   "src": "magicui:comic-text",
-   "params": {
-    "dur": 0.8,
-    "ease": "power2.out",
-    "sw": 10,
-    "off": 12,
-    "burst": "rgba(255,209,102,.20)",
-    "stroke": "#0a0b0b",
-    "shadow": "#0a0b0b"
-   },
-   "use": "粗描边加错位硬影，背后炸开一朵锯齿；吐槽、质疑、把一句话喊出来",
-   "avoid": "一屏只用一次；正文字号小于 60px 时描边会糊掉（要配大字）",
-   "needs": [
-    "text"
-   ],
-   "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t) return;\n  var _p = _t.parentNode;\n  if (getComputedStyle(_p).position === 'static') { _p.style.position = 'relative'; }\n  var _b = document.createElement('i');\n  _b.style.cssText = 'position:absolute;left:50%;top:50%;width:104%;height:150%;' +\n    'margin-left:-52%;margin-top:-75%;pointer-events:none;z-index:0;' +\n    'background:linear-gradient(180deg,{{burst}},transparent);' +\n    'clip-path:polygon(50% 0%,58% 16%,74% 8%,76% 26%,93% 24%,84% 40%,100% 50%,84% 60%,93% 76%,' +\n    '76% 74%,74% 92%,58% 84%,50% 100%,42% 84%,26% 92%,24% 74%,7% 76%,16% 60%,0% 50%,' +\n    '16% 40%,7% 24%,24% 26%,26% 8%,42% 16%);';\n  _p.appendChild(_b);\n  _t.style.position = 'relative';\n  _t.style.zIndex = '1';\n  _t.style.webkitTextStrokeColor = '{{stroke}}';\n  _t.style.webkitTextStrokeWidth = '0px';\n  var _o = { v: 0 };\n  timeline.fromTo(_b, { scale: 0.2, opacity: 0, rotation: -14 },\n    { scale: 1, opacity: 1, rotation: -4, duration: {{dur}} * 0.55, ease: 'back.out(2.6)' }, {{at}});\n  timeline.to(_o, { v: 1, duration: {{dur}}, ease: '{{ease}}', onUpdate: function () {\n    var k = _o.v;\n    _t.style.webkitTextStrokeWidth = (k * {{sw}}) + 'px';\n    _t.style.textShadow = (k * {{off}}) + 'px ' + (k * {{off}}) + 'px 0 {{shadow}}';\n  } }, {{at}} + {{dur}} * 0.15);\n})();",
-   "sample": {
-    "sel": "[data-anim=\"subject\"]",
-    "stage": "<div style=\"position:absolute;left:70px;right:70px;top:760px;text-align:center\"><div data-anim=\"subject\" style=\"font-size:200px;font-weight:900;letter-spacing:-.03em;line-height:1;color:#FFD166\">真的吗</div><div style=\"margin-top:60px;font-size:44px;font-weight:700;color:#F4F1E9\">这句话，<span style=\"background:#FFD166;color:#0a0b0b;padding:4px 16px;border-radius:8px\">我不信</span></div></div>"
-   }
-  },
-  {
    "id": "W32",
    "name": "像素化照片",
    "family": "照片",
@@ -5377,7 +5570,10 @@
     "ui"
    ],
    "code": "<div class=\"ui-term\"><div class=\"ui-term-bar\"><i class=\"dot\"></i><i class=\"dot\"></i><i class=\"dot\"></i><span class=\"ttl\">zsh — 项目目录</span></div><div class=\"ui-term-body\"><div class=\"ui-term-ln\"><b>$</b> npx magicui add shine-border</div><div class=\"ui-term-ln ok\">✔ 组件已写入 components/ui</div><div class=\"ui-term-ln ok\">✔ 依赖：motion · tailwind-merge</div><div class=\"ui-term-ln dim\">3 个文件，0 个冲突</div><div class=\"ui-term-ln\"><b>$</b> npm run dev<i class=\"ui-term-cur\"></i></div><div class=\"ui-term-ln ok\">ready in 412 ms — localhost:3000</div></div></div>",
-   "note": "标题栏三点 + 等宽命令行；配色只用 ui-* 变量，不写死颜色"
+   "note": "标题栏三点 + 等宽命令行；配色只用 ui-* 变量，不写死颜色",
+   "provides": {
+    "line": ".ui-term-ln"
+   }
   },
   {
    "id": "U66",
@@ -5395,7 +5591,10 @@
     "ui"
    ],
    "code": "<div class=\"ui-tree\"><div class=\"ui-tree-row dir\"><span class=\"ic\">▾</span>src/</div><div class=\"ui-tree-row dir l2\"><span class=\"ic\">▾</span>components/</div><div class=\"ui-tree-row l3\"><span class=\"ic\">◦</span>hero.tsx<span class=\"tag\">新增</span></div><div class=\"ui-tree-row l3\"><span class=\"ic\">◦</span>card.tsx</div><div class=\"ui-tree-row dir l2\"><span class=\"ic\">▾</span>lib/</div><div class=\"ui-tree-row l3\"><span class=\"ic\">◦</span>utils.ts</div><div class=\"ui-tree-row l2\"><span class=\"ic\">◦</span>app.tsx</div><div class=\"ui-tree-row l2\"><span class=\"ic\">◦</span>globals.css</div></div>",
-   "note": "目录行带三角、文件行带圆点，缩进两级；新增文件挂 tag"
+   "note": "目录行带三角、文件行带圆点，缩进两级；新增文件挂 tag",
+   "provides": {
+    "row": ".ui-tree-row"
+   }
   },
   {
    "id": "U67",
@@ -5413,7 +5612,13 @@
     "ui"
    ],
    "code": "<div class=\"ui-browser\"><div class=\"ui-browser-bar\"><i class=\"dot\"></i><i class=\"dot\"></i><i class=\"dot\"></i><div class=\"ui-browser-url\"><b>https://</b>app.example.com/dashboard</div></div><div class=\"ui-browser-body\"><div class=\"ui-browser-side\"><i class=\"i on\"></i><i class=\"i\"></i><i class=\"i\"></i><i class=\"i\"></i></div><div class=\"ui-browser-main\"><div class=\"ui-browser-kpi\"><div class=\"k\"><b>1,284</b><span>本周活跃</span></div><div class=\"k\"><b>+18%</b><span>环比</span></div></div><div class=\"ui-browser-chart\"><i class=\"bar\" style=\"left:4%;height:34%\"></i><i class=\"bar\" style=\"left:22%;height:52%\"></i><i class=\"bar\" style=\"left:40%;height:44%\"></i><i class=\"bar\" style=\"left:58%;height:68%\"></i><i class=\"bar\" style=\"left:76%;height:82%\"></i></div></div></div></div>",
-   "note": "浏览器外框 + 侧栏 + KPI + 柱图；数字是自己填的示例数据"
+   "note": "浏览器外框 + 侧栏 + KPI + 柱图；数字是自己填的示例数据",
+   "provides": {
+    "card": "",
+    "icon": ".ui-browser-side .i",
+    "bar": ".ui-browser-chart .bar",
+    "num": ".ui-browser-kpi b"
+   }
   },
   {
    "id": "U68",
@@ -5431,7 +5636,11 @@
     "ui"
    ],
    "code": "<div class=\"ui-tweet\"><div class=\"ui-tweet-hd\"><i class=\"ui-tweet-av\"></i><div><div class=\"ui-tweet-name\">林小满</div><div class=\"ui-tweet-handle\">@xiaoman · 产品</div></div></div><div class=\"ui-tweet-body\">把一件事讲清楚，比把它讲完重要。</div><div class=\"ui-tweet-meta\">上午 9:12 · 2026 年 11 月 17 日</div><div class=\"ui-tweet-line\"></div><div class=\"ui-tweet-stats\"><span><b>128</b> 转发</span><span><b>1.2K</b> 喜欢</span><span><b>36</b> 回复</span></div></div>",
-   "note": "头像 + 昵称 + 账号 + 正文 + 时间 + 转赞评；内容一律虚构"
+   "note": "头像 + 昵称 + 账号 + 正文 + 时间 + 转赞评；内容一律虚构",
+   "provides": {
+    "card": "",
+    "avatar": ".ui-tweet-av"
+   }
   },
   {
    "id": "K43",
@@ -6274,15 +6483,16 @@
     "color": "#FFE9A3"
    },
    "use": "文字四周撒一圈小星星，先亮后收；高光、亮点、点睛、值得被记住的一句",
-   "avoid": "和 K42 漫画字同屏（两个都在抢注意力）；字块要够大，小字上星星会挤成一团",
+   "avoid": "同屏别再叠第二种加字装饰（都在抢注意力）；字块要够大，小字上星星会挤成一团",
    "needs": [
     "text"
    ],
-   "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t) return;\n  if (getComputedStyle(_t).position === 'static') { _t.style.position = 'relative'; }\n  var _box = document.createElement('div');\n  _box.style.cssText = 'position:absolute;left:-14%;top:-34%;width:128%;height:168%;pointer-events:none;z-index:{{z}};';\n  var _s = {{seed}};\n  var _r = function () { _s = (_s * 9301 + 49297) % 233280; return _s / 233280; };\n  var _n = {{count}}, _stars = [];\n  for (var i = 0; i < _n; i++) {\n    var _d = document.createElement('i');\n    var _sz = {{size}} * (0.6 + _r() * 0.8);\n    _d.style.cssText = 'position:absolute;left:' + (_r() * 96).toFixed(2) + '%;top:' +\n      (_r() * 92).toFixed(2) + '%;width:' + _sz.toFixed(1) + 'px;height:' + _sz.toFixed(1) + 'px;' +\n      'background:{{color}};opacity:0;' +\n      'clip-path:polygon(50% 0%,61% 39%,100% 50%,61% 61%,50% 100%,39% 61%,0% 50%,39% 39%);';\n    _box.appendChild(_d);\n    _stars.push(_d);\n  }\n  _t.appendChild(_box);\n  timeline.to(_stars, { opacity: {{peak}}, scale: 1, duration: {{dur}} * 0.32, ease: 'back.out(3)',\n    stagger: {{stagger}} }, {{at}});\n  timeline.to(_stars, { opacity: {{low}}, duration: {{dur}} * 0.22, ease: 'none',\n    stagger: {{stagger}} }, {{at}} + {{dur}} * 0.42);\n})();",
+   "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t) return;\n  if (getComputedStyle(_t).position === 'static') { _t.style.position = 'relative'; }\n  // 星星尺寸按字号算（2026-11-21）：写死 13px 在 110px 标题上刚好，落到 44px 正文上\n  // 就成了压在字上的大块亮斑。现在 size 是\"占字号百分之几\"。\n  var _fs = parseFloat(getComputedStyle(_t).fontSize) || 110;\n  var _base = Math.max(3, _fs * {{size}} / 100 * 1.4);\n  var _box = document.createElement('div');\n  _box.style.cssText = 'position:absolute;left:-14%;top:-34%;width:128%;height:168%;pointer-events:none;z-index:{{z}};';\n  var _s = {{seed}};\n  var _r = function () { _s = (_s * 9301 + 49297) % 233280; return _s / 233280; };\n  var _n = {{count}}, _stars = [];\n  for (var i = 0; i < _n; i++) {\n    var _d = document.createElement('i');\n    var _sz = _base * (0.6 + _r() * 0.8);\n    _d.style.cssText = 'position:absolute;left:' + (_r() * 96).toFixed(2) + '%;top:' +\n      (_r() * 92).toFixed(2) + '%;width:' + _sz.toFixed(1) + 'px;height:' + _sz.toFixed(1) + 'px;' +\n      'background:{{color}};opacity:0;' +\n      'clip-path:polygon(50% 0%,61% 39%,100% 50%,61% 61%,50% 100%,39% 61%,0% 50%,39% 39%);';\n    _box.appendChild(_d);\n    _stars.push(_d);\n  }\n  _t.appendChild(_box);\n  timeline.to(_stars, { opacity: {{peak}}, scale: 1, duration: {{dur}} * 0.32, ease: 'back.out(3)',\n    stagger: {{stagger}} }, {{at}});\n  timeline.to(_stars, { opacity: {{low}}, duration: {{dur}} * 0.22, ease: 'none',\n    stagger: {{stagger}} }, {{at}} + {{dur}} * 0.42);\n})();",
    "sample": {
     "sel": "[data-anim=\"subject\"]",
     "stage": "<div style=\"position:absolute;left:80px;right:80px;top:780px;text-align:center\"><div data-anim=\"subject\" style=\"display:inline-block;font-size:118px;line-height:1.16;font-weight:700;letter-spacing:-.04em\">点亮这一句</div></div>"
-   }
+   },
+   "note": "文字四周撒一圈小星星，先亮后收；高光、亮点、点睛、值得被记住的一句（size 是占字号百分比）"
   },
   {
    "id": "B53",
@@ -6571,18 +6781,18 @@
    "params": {
     "win": 0.34,
     "pop": 0.16,
-    "glow": 26,
+    "glow": 24,
     "color": "#86F0C0",
     "dur": 1.5,
     "z": 6
    },
    "use": "一道光窗扫过文字：窗口内的字放大并从字面透光，窗外保持原样",
-   "avoid": "深色底才看得出光（浅底只剩放大）",
-   "note": "范围权重型：窗口宽度 win 是可调参数，两端用三角权重渐变",
+   "avoid": "整行少于 3 个字（光斑铺不开）",
+   "note": "一行字被一道光扫过、扫到的字亮起；两端强度归零，屏尾是干净的原标题（glow 是占字号百分比）",
    "sample": {
     "text": "<div data-anim=\"subject\">线索自动分好，跟进自动记上</div>"
    },
-   "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t) return;\n  if (getComputedStyle(_t).position === 'static') { _t.style.position = 'relative'; }\n  var NS = 'http://www.w3.org/2000/svg';\n  var CX = 540, CY = 960;\n  var _s = document.createElementNS(NS, 'svg');\n  _s.setAttribute('class', 'kt-svg');\n  _s.setAttribute('viewBox', '0 0 1080 1920');\n  _s.setAttribute('preserveAspectRatio', 'xMidYMid meet');\n  _s.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;overflow:visible;'\n    + 'pointer-events:none;z-index:{{z}}';\n  var _c = kit.split('{{sel}}', 'chars');\n  if (!_c.length) { return; }\n  var _n = _c.length;\n  var _o = { p: 0 };\n  function _draw() {\n    var p = _o.p, i, c, d, w;\n    for (i = 0; i < _n; i++) {\n      c = i / (_n - 1 || 1);\n      d = (c - (p * (1 + {{win}}) - {{win}} / 2)) / ({{win}} / 2);\n      w = Math.max(0, 1 - Math.abs(d));\n      w = w * w * (3 - 2 * w);\n      _c[i].style.transform = 'scale(' + (1 + {{pop}} * w).toFixed(3) + ')';\n      _c[i].style.textShadow = w > 0.03\n        ? '0 0 ' + ({{glow}} * w).toFixed(0) + 'px {{color}}' : 'none';\n    }\n  }\n  _draw();\n  timeline.to(_o, { p: 1, duration: {{dur}}, ease: 'none', onUpdate: _draw }, {{at}});\n})();"
+   "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t) return;\n  if (getComputedStyle(_t).position === 'static') { _t.style.position = 'relative'; }\n  var _c = kit.split('{{sel}}', 'chars');\n  if (!_c.length) { return; }\n  var _n = _c.length;\n  var _o = { p: 0 };\n  function _draw() {\n    // 点亮强度两端归零（2026-11-21）：以前只有 p，扫到行尾就停在 p=1，\n    // 最后一个字永远带着描边放大、永远比前面的字大（和 K81 同一个病）。\n    var p = _o.p, a = Math.min(1, p * 6) * Math.min(1, (1 - p) * 4), i, c, d, w;\n    var glow = Math.max(2, (parseFloat(getComputedStyle(_t).fontSize) || 110) * {{glow}} / 100);\n    for (i = 0; i < _n; i++) {\n      c = i / (_n - 1 || 1);\n      d = (c - (p * (1 + {{win}}) - {{win}} / 2)) / ({{win}} / 2);\n      w = Math.max(0, 1 - Math.abs(d));\n      w = w * w * (3 - 2 * w) * a;\n      _c[i].style.transform = 'scale(' + (1 + {{pop}} * w).toFixed(3) + ')';\n      _c[i].style.textShadow = w > 0.03\n        ? '0 0 ' + (glow * w).toFixed(0) + 'px {{color}}' : 'none';\n    }\n  }\n  _draw();\n  timeline.to(_o, { p: 1, duration: {{dur}}, ease: 'none', onUpdate: _draw }, {{at}});\n})();"
   },
   {
    "id": "K79",
@@ -6642,16 +6852,15 @@
    "params": {
     "zoom": 1.16,
     "sigma": 1.9,
-    "dur": 1.5,
-    "z": 6
+    "dur": 1.5
    },
-   "use": "一个放大镜从行首扫到行尾：经过的字被放大抬起，其余字被压小后退",
-   "avoid": "整行只剩 3 个字时（放大后撑出栏外）",
-   "note": "范围权重型：放大与缩小同时发生，中心字与两侧形成透镜",
+   "use": "一个放大镜从行首扫到行尾：经过的字被放大抬起，其余字被压小后退，扫完自动收回原样",
+   "avoid": "整行少于 3 个字（透镜铺不开，放大还会压到邻居）；它动的是字形本身，别再叠同屏第二种加字装饰",
+   "note": "范围权重型：放大与缩小同时发生，中心字与两侧形成透镜；强度两端归零，屏尾是干净的原标题",
    "sample": {
     "text": "线索自动分好"
    },
-   "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t) return;\n  if (getComputedStyle(_t).position === 'static') { _t.style.position = 'relative'; }\n  var NS = 'http://www.w3.org/2000/svg';\n  var CX = 540, CY = 960;\n  var _s = document.createElementNS(NS, 'svg');\n  _s.setAttribute('class', 'kt-svg');\n  _s.setAttribute('viewBox', '0 0 1080 1920');\n  _s.setAttribute('preserveAspectRatio', 'xMidYMid meet');\n  _s.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;overflow:visible;'\n    + 'pointer-events:none;z-index:{{z}}';\n  var _c = kit.split('{{sel}}', 'chars');\n  if (!_c.length) { return; }\n  var _n = _c.length;\n  var _o = { p: 0 };\n  function _draw() {\n    var p = _o.p, i, c, d, w;\n    for (i = 0; i < _n; i++) {\n      c = i / (_n - 1 || 1);\n      d = (c - (p * 1.2 - 0.1)) * {{sigma}};\n      w = 1 / (1 + d * d * 6);\n      _c[i].style.transform = 'translateY(' + (-14 * w).toFixed(1) + 'px) scale('\n        + (1 + ({{zoom}} - 1) * w).toFixed(3) + ')';\n      _c[i].style.opacity = (0.62 + 0.38 * w).toFixed(2);\n    }\n  }\n  _draw();\n  timeline.to(_o, { p: 1, duration: {{dur}}, ease: 'sine.inOut', onUpdate: _draw }, {{at}});\n})();"
+   "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t) return;\n  if (getComputedStyle(_t).position === 'static') { _t.style.position = 'relative'; }\n  var _c = kit.split('{{sel}}', 'chars');\n  if (!_c.length) { return; }\n  var _n = _c.length;\n  var _o = { p: 0 };\n  function _draw() {\n    // 透镜强度由进度自己算：进场 0→1、收尾 1→0（2026-11-21）。\n    // 以前只有 p 一条：扫到行尾就停在 p=1，最后一个字永远放 1.16 倍、永远比前面的字大\n    // （1955 s08 的「受」）。现在 p=1 时权重回到 0，标题落回原样，seek 到屏尾也不会留下偏心的字。\n    var p = _o.p, a = Math.min(1, p * 7) * Math.min(1, (1 - p) * 5), i, c, d, w;\n    for (i = 0; i < _n; i++) {\n      c = i / (_n - 1 || 1);\n      d = (c - (p * 1.2 - 0.1)) * {{sigma}};\n      w = a / (1 + d * d * 6);\n      _c[i].style.transform = 'translateY(' + (-14 * w).toFixed(1) + 'px) scale('\n        + (1 + ({{zoom}} - 1) * w).toFixed(3) + ')';\n      _c[i].style.opacity = (1 - 0.38 * (a - w)).toFixed(2);\n    }\n  }\n  _draw();\n  timeline.to(_o, { p: 1, duration: {{dur}}, ease: 'sine.inOut', onUpdate: _draw }, {{at}});\n})();"
   },
   {
    "id": "T47",
@@ -8454,81 +8663,6 @@
     "js": "timeline.fromTo('[data-anim=\"subject\"] .dn',{opacity:0,y:16},{opacity:1,y:0,duration:.4,ease:'power2.out',stagger:.07},0.3);timeline.fromTo('[data-anim=\"subject\"] .de',{drawSVG:'0%'},{drawSVG:'100%',duration:.4,ease:'power2.inOut',stagger:.06},0.55);if(!window.DrawSVGPlugin){timeline.set('[data-anim=\"subject\"] .de',{opacity:1},0);}"
    },
    "selectable": false
-  },
-  {
-   "id": "MX01",
-   "name": "逐边推进·一条接一条",
-   "family": "图示",
-   "role": "component_motion",
-   "status": "ready",
-   "cap": "gsap-draw",
-   "src": "mermaid:rendering-elements/edgeStepAnimation.ts",
-   "params": {
-    "dur": 0.45,
-    "stagger": 0.18
-   },
-   "use": "流程图一步步走：每条边走完才走下一条",
-   "avoid": "边超过 5 条就太快，拆两屏",
-   "code": "timeline.fromTo('{{sel}} .de',{drawSVG:'0%'},{drawSVG:'100%',duration:{{dur}},ease:'power2.inOut',stagger:{{stagger}}},{{at}});",
-   "sample": {
-    "stage": "<div data-anim=\"subject\"><svg class=\"dsvg\" viewBox=\"0 0 1080 1920\" xmlns=\"http://www.w3.org/2000/svg\" style=\"position:absolute;inset:0;width:1080px;height:1920px\"><defs><marker id=\"arw\" viewBox=\"0 0 12 12\" refX=\"10\" refY=\"6\" markerWidth=\"7\" markerHeight=\"7\" orient=\"auto\"><path d=\"M1 1 L11 6 L1 11\" fill=\"none\" stroke=\"#86F0C0\" stroke-width=\"2\"/></marker></defs><g class=\"dn\"><rect x=\"330.0\" y=\"525.0\" width=\"420\" height=\"150\" rx=\"20\" fill=\"rgba(255,255,255,.05)\" stroke=\"#86F0C0\" stroke-width=\"4\"/><text x=\"540\" y=\"612\" text-anchor=\"middle\" font-size=\"34\" font-weight=\"650\" fill=\"#F4F1E9\">接到线索</text></g><g class=\"dn\"><rect x=\"330.0\" y=\"785.0\" width=\"420\" height=\"150\" rx=\"20\" fill=\"rgba(255,255,255,.05)\" stroke=\"#86F0C0\" stroke-width=\"4\"/><text x=\"540\" y=\"872\" text-anchor=\"middle\" font-size=\"34\" font-weight=\"650\" fill=\"#F4F1E9\">自动分级</text></g><g class=\"dn\"><rect x=\"330.0\" y=\"1045.0\" width=\"420\" height=\"150\" rx=\"20\" fill=\"rgba(255,255,255,.05)\" stroke=\"#86F0C0\" stroke-width=\"4\"/><text x=\"540\" y=\"1132\" text-anchor=\"middle\" font-size=\"34\" font-weight=\"650\" fill=\"#F4F1E9\">分配跟进</text></g><g class=\"dn\"><rect x=\"330.0\" y=\"1305.0\" width=\"420\" height=\"150\" rx=\"20\" fill=\"rgba(255,255,255,.05)\" stroke=\"#86F0C0\" stroke-width=\"4\"/><text x=\"540\" y=\"1392\" text-anchor=\"middle\" font-size=\"34\" font-weight=\"650\" fill=\"#F4F1E9\">回写记录</text></g><path class=\"e1\" data-step=\"1\" d=\"M540 675 V785\" fill=\"none\" stroke=\"#86F0C0\" stroke-width=\"5\" marker-end=\"url(#arw)\"/><path class=\"e2\" data-step=\"2\" d=\"M540 935 V1045\" fill=\"none\" stroke=\"#86F0C0\" stroke-width=\"5\" marker-end=\"url(#arw)\"/><path class=\"e3\" data-step=\"3\" d=\"M540 1195 V1305\" fill=\"none\" stroke=\"#86F0C0\" stroke-width=\"5\" marker-end=\"url(#arw)\"/></svg></div>",
-    "sel": "[data-anim=\"subject\"]",
-    "plugins": [
-     "DrawSVGPlugin",
-     "MotionPathPlugin"
-    ],
-    "js": "timeline.fromTo('[data-anim=\"subject\"] .dn rect',{opacity:0},{opacity:1,duration:.35,stagger:.1},0.25);timeline.fromTo('[data-anim=\"subject\"] .dn text',{opacity:0},{opacity:1,duration:.3,stagger:.1},0.35);for(var i=1;i<=3;i++){timeline.fromTo('[data-anim=\"subject\"] .e'+i+'',{drawSVG:'0%'},{drawSVG:'100%',duration:.42,ease:'power2.inOut'},0.6+(i-1)*0.28);}"
-   }
-  },
-  {
-   "id": "MX02",
-   "name": "光点沿路径走",
-   "family": "图示",
-   "role": "component_motion",
-   "status": "ready",
-   "cap": "gsap-draw",
-   "src": "mermaid:rendering-elements/edgeStepAnimation.ts",
-   "params": {
-    "dur": 0.45,
-    "stagger": 0.18
-   },
-   "use": "沿一条线交代'经过哪几步'",
-   "avoid": "路径自己不要同时抖动，会晕",
-   "code": "timeline.fromTo('{{sel}} .de',{drawSVG:'0%'},{drawSVG:'100%',duration:{{dur}},ease:'power2.inOut',stagger:{{stagger}}},{{at}});",
-   "sample": {
-    "stage": "<div data-anim=\"subject\"><svg class=\"dsvg\" viewBox=\"0 0 1080 1920\" xmlns=\"http://www.w3.org/2000/svg\" style=\"position:absolute;inset:0;width:1080px;height:1920px\"><defs><marker id=\"arw\" viewBox=\"0 0 12 12\" refX=\"10\" refY=\"6\" markerWidth=\"7\" markerHeight=\"7\" orient=\"auto\"><path d=\"M1 1 L11 6 L1 11\" fill=\"none\" stroke=\"#86F0C0\" stroke-width=\"2\"/></marker></defs><path class=\"de\" d=\"M200 1420 C 200 900, 660 1180, 660 760 S 900 620, 900 900\" fill=\"none\" stroke=\"rgba(134,240,192,.25)\" stroke-width=\"6\"/><circle class=\"dot\" cx=\"0\" cy=\"0\" r=\"26\" fill=\"#86F0C0\"/><g class=\"badge\"><circle cx=\"0\" cy=\"0\" r=\"34\" fill=\"#0a0b0b\" stroke=\"#86F0C0\" stroke-width=\"4\"/><text x=\"0\" y=\"11\" text-anchor=\"middle\" font-size=\"28\" font-weight=\"700\" fill=\"#F4F1E9\">1</text></g></svg></div>",
-    "sel": "[data-anim=\"subject\"]",
-    "plugins": [
-     "DrawSVGPlugin",
-     "MotionPathPlugin"
-    ],
-    "js": "var _p=document.querySelector('[data-anim=\"subject\"] .de');timeline.fromTo('[data-anim=\"subject\"] .de',{drawSVG:'0%'},{drawSVG:'100%',duration:1.1,ease:'power1.inOut'},0.3);timeline.fromTo('[data-anim=\"subject\"] .dot',{motionPath:{path:_p,align:_p,alignOrigin:[0.5,0.5],start:0,end:1},opacity:0},{opacity:1,duration:.2},0.55);timeline.to('[data-anim=\"subject\"] .dot',{motionPath:{path:_p,align:_p,alignOrigin:[0.5,0.5],start:0,end:1},duration:1.5,ease:'none'},0.55);timeline.fromTo('[data-anim=\"subject\"] .badge',{opacity:0,scale:0,transformOrigin:'50% 50%'},{opacity:1,scale:1,duration:.3,ease:'back.out(2)'},0.95);"
-   }
-  },
-  {
-   "id": "MX04",
-   "name": "步骤徽章挂边",
-   "family": "图示",
-   "role": "component_motion",
-   "status": "ready",
-   "cap": "gsap-draw",
-   "src": "mermaid:rendering-elements/edgeStepAnimation.ts",
-   "params": {
-    "dur": 0.45,
-    "stagger": 0.18
-   },
-   "use": "在边上标 1、2，讲先后顺序",
-   "avoid": "边上文字已经很多时不要再挂徽章",
-   "code": "timeline.fromTo('{{sel}} .de',{drawSVG:'0%'},{drawSVG:'100%',duration:{{dur}},ease:'power2.inOut',stagger:{{stagger}}},{{at}});",
-   "sample": {
-    "stage": "<div data-anim=\"subject\"><svg class=\"dsvg\" viewBox=\"0 0 1080 1920\" xmlns=\"http://www.w3.org/2000/svg\" style=\"position:absolute;inset:0;width:1080px;height:1920px\"><defs><marker id=\"arw\" viewBox=\"0 0 12 12\" refX=\"10\" refY=\"6\" markerWidth=\"7\" markerHeight=\"7\" orient=\"auto\"><path d=\"M1 1 L11 6 L1 11\" fill=\"none\" stroke=\"#86F0C0\" stroke-width=\"2\"/></marker></defs><g class=\"dn\"><rect x=\"330.0\" y=\"545.0\" width=\"420\" height=\"150\" rx=\"18\" fill=\"rgba(255,255,255,.05)\" stroke=\"#86F0C0\" stroke-width=\"4\"/><text x=\"540\" y=\"632\" text-anchor=\"middle\" font-size=\"34\" font-weight=\"650\" fill=\"#F4F1E9\">提交申请</text></g><g class=\"dn\"><rect x=\"330.0\" y=\"925.0\" width=\"420\" height=\"150\" rx=\"18\" fill=\"rgba(255,255,255,.05)\" stroke=\"#86F0C0\" stroke-width=\"4\"/><text x=\"540\" y=\"1012\" text-anchor=\"middle\" font-size=\"34\" font-weight=\"650\" fill=\"#F4F1E9\">系统校验</text></g><g class=\"dn\"><rect x=\"330.0\" y=\"1305.0\" width=\"420\" height=\"150\" rx=\"18\" fill=\"rgba(255,255,255,.05)\" stroke=\"#86F0C0\" stroke-width=\"4\"/><text x=\"540\" y=\"1392\" text-anchor=\"middle\" font-size=\"34\" font-weight=\"650\" fill=\"#F4F1E9\">结果回传</text></g><path class=\"e1\" d=\"M540 695 V925\" fill=\"none\" stroke=\"#86F0C0\" stroke-width=\"5\" marker-end=\"url(#arw)\"/><path class=\"e2\" d=\"M540 1075 V1305\" fill=\"none\" stroke=\"#86F0C0\" stroke-width=\"5\" marker-end=\"url(#arw)\"/><g class=\"bd1\"><circle cx=\"540\" cy=\"778\" r=\"30\" fill=\"#0a0b0b\" stroke=\"#86F0C0\" stroke-width=\"4\"/><text x=\"540\" y=\"789\" text-anchor=\"middle\" font-size=\"26\" font-weight=\"700\" fill=\"#F4F1E9\">1</text></g><g class=\"bd2\"><circle cx=\"540\" cy=\"1158\" r=\"30\" fill=\"#0a0b0b\" stroke=\"#86F0C0\" stroke-width=\"4\"/><text x=\"540\" y=\"1169\" text-anchor=\"middle\" font-size=\"26\" font-weight=\"700\" fill=\"#F4F1E9\">2</text></g></svg></div>",
-    "sel": "[data-anim=\"subject\"]",
-    "plugins": [
-     "DrawSVGPlugin",
-     "MotionPathPlugin"
-    ],
-    "js": "timeline.fromTo('[data-anim=\"subject\"] .dn',{opacity:0,scale:.92,transformOrigin:'50% 50%'},{opacity:1,scale:1,duration:.45,ease:'power2.out',stagger:.14},0.3);timeline.fromTo('[data-anim=\"subject\"] .e1',{drawSVG:'0%'},{drawSVG:'100%',duration:.5,ease:'power2.inOut'},0.7);timeline.fromTo('[data-anim=\"subject\"] .e2',{drawSVG:'0%'},{drawSVG:'100%',duration:.5,ease:'power2.inOut'},1.35);timeline.fromTo('[data-anim=\"subject\"] .bd1',{opacity:0,scale:0,transformOrigin:'50% 50%'},{opacity:1,scale:1,duration:.3,ease:'back.out(2)'},1.0);timeline.fromTo('[data-anim=\"subject\"] .bd2',{opacity:0,scale:0,transformOrigin:'50% 50%'},{opacity:1,scale:1,duration:.3,ease:'back.out(2)'},1.35);"
-   }
   },
   {
    "id": "MT01",

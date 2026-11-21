@@ -18,7 +18,13 @@ from pathlib import Path
 
 TOOLS_DIR = Path(__file__).resolve().parent
 RUNTIME_DIR = TOOLS_DIR.parent
-BASE = RUNTIME_DIR.parent
+# runtime/ 在仓库根（2026-11-21 从 成品/ 搬出来），项目仍在 成品/ 下。
+WORKSPACE = RUNTIME_DIR.parent
+BASE = WORKSPACE / "成品"
+# 布局假设写成断言：runtime/ 不在仓库根时，这里立刻报清楚，
+# 不要让项目被建到盘根或别的目录去（2026-11-21 就是这么丢了出图提示词的）。
+if not (WORKSPACE / "Dify工作流").is_dir():
+    raise SystemExit("runtime/ 必须放在仓库根（和 Dify工作流/ 同级），当前是 %s" % WORKSPACE)
 sys.path.insert(0, str(TOOLS_DIR))
 from dify_auto_build import clean_html_document, decode_json_value, parse_json_object  # noqa: E402
 

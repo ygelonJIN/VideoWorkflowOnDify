@@ -37,13 +37,13 @@ if [ "$NODE_MAJOR" -lt 22 ]; then
   echo "HyperFrames 需要 Node.js 22+，当前：$("$NODE_BIN" -v)"
   exit 1
 fi
-# 优先使用仓库内钉死的 CLI（workflow_runtime/vendor），再退回 npx 缓存和全局命令。
+# 优先使用仓库内钉死的 CLI（runtime/vendor），再退回 npx 缓存和全局命令。
 if [ -z "$HF_CLI" ] || [ ! -f "$HF_CLI" ]; then
   SEARCH_DIR="$PROJECT_DIR"
   for _ in 1 2 3 4; do
     for CANDIDATE in \
       "$SEARCH_DIR/vendor/node_modules/hyperframes/bin/hyperframes.mjs" \
-      "$SEARCH_DIR/workflow_runtime/vendor/node_modules/hyperframes/bin/hyperframes.mjs"; do
+      "$SEARCH_DIR/runtime/vendor/node_modules/hyperframes/bin/hyperframes.mjs"; do
       if [ -f "$CANDIDATE" ]; then
         HF_CLI="$CANDIDATE"
         break 2
@@ -60,7 +60,7 @@ if [ -z "$HF_CLI" ] || [ ! -f "$HF_CLI" ]; then
 fi
 if [ -z "$HF_CLI" ] || [ ! -f "$HF_CLI" ]; then
   echo "缺少 HyperFrames CLI（不是 Node 的问题）。"
-  echo "修复：cd \"$(dirname "$PROJECT_DIR")/workflow_runtime/vendor\" 后执行 npm i（需 Node 22+），"
+  echo "修复：在仓库根的 runtime/vendor 下执行 npm i（需 Node 22+），"
   echo "或把可用的 hyperframes.mjs 路径写进 HYPERFRAMES_CLI 环境变量。"
   exit 1
 fi
@@ -162,8 +162,13 @@ STAGE="检查动效编号"
 echo "检查动效编号与 kit 调用（只报告）..."
 if [ -f 脚本/check_presets.py ]; then
   python3 脚本/check_presets.py --html index.html || true
-elif [ -f "$PROJECT_DIR/../workflow_runtime/tools/check_presets.py" ]; then
-  python3 "$PROJECT_DIR/../workflow_runtime/tools/check_presets.py" --html index.html || true
+else
+  for _d in "$PROJECT_DIR/.." "$PROJECT_DIR/../.." "$PROJECT_DIR/../../.."; do
+    if [ -f "$_d/runtime/tools/check_presets.py" ]; then
+      python3 "$_d/runtime/tools/check_presets.py" --html index.html || true
+      break
+    fi
+  done
 fi
 
 STAGE="检查动效差异"

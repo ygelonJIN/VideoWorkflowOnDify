@@ -387,7 +387,7 @@ document.getElementById("folder").addEventListener("click", async function(){
 document.getElementById("back").addEventListener("click", function(){ goStep(1); });
 </script>
 </html>"""
-    cmd = ("bash \"成品/workflow_runtime/tools/run_dify_output.sh\" %s "
+    cmd = ("bash \"runtime/tools/run_dify_output.sh\" %s "
            "\"成品/Dify输出/%s-blackframe-input.json\" --replace --skip-images") % (project, project)
     names = "".join("<span>%s.png</span>" % html_lib.escape(row["id"]) for row in rows)
     page = (page

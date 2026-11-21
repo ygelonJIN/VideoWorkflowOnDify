@@ -10,7 +10,8 @@ import time
 from pathlib import Path
 
 TOOLS_DIR = Path(__file__).resolve().parent
-BASE = TOOLS_DIR.parent.parent
+# BASE = 成品/（项目、Dify输出、HTML预览都在这下面）；runtime/ 在仓库根。
+BASE = TOOLS_DIR.parent.parent / "成品"
 sys.path.insert(0, str(TOOLS_DIR))
 sys.path.insert(0, str(TOOLS_DIR.parent / "scripts"))
 

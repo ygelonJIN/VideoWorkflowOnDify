@@ -30,12 +30,12 @@ import sys
 
 HERE = pathlib.Path(__file__).resolve().parent
 WORK = HERE.parent.parent
-VENDOR = WORK / "成品" / "workflow_runtime" / "assets" / "vendor"
+VENDOR = WORK / "runtime" / "assets" / "vendor"
 PHOTO = HERE / "assets" / "demo" / "photo.png"
 BATCH = HERE / "样片" / "待筛" / "revideo"
 SRC = BATCH / "src"
 OUT = BATCH / "out"
-HF = WORK / "成品" / "workflow_runtime" / "vendor" / "node_modules" / "hyperframes" / "bin" / "hyperframes.mjs"
+HF = WORK / "runtime" / "vendor" / "node_modules" / "hyperframes" / "bin" / "hyperframes.mjs"
 CHROME = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
 NODE = "/Users/jinfeiqing/.nvm/versions/node/v22.23.3/bin/node"
 

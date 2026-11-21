@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Canvas } from "./Canvas.js";
 import { Inspector } from "./Inspector.js";
-import { Terminal } from "./Terminal.js";
 import { Artifacts } from "./Artifacts.js";
 import { InputPanel } from "./InputPanel.js";
 import { Select } from "./Select.js";
@@ -14,7 +13,6 @@ import type { EnvInfo, RunInputs, RunResult, TraceEvent, WorkflowInfo } from "./
 
 const api = bridge();
 
-type Tab = "run" | "terminal";
 type View = "canvas" | "produce" | "artifacts";
 
 const EMPTY_INPUTS: RunInputs = {};
@@ -144,7 +142,6 @@ export function App() {
   const [events, setEvents] = useState<TraceEvent[]>([]);
   const [result, setResult] = useState<RunResult | null>(null);
   const [running, setRunning] = useState(false);
-  const [tab, setTab] = useState<Tab>("run");
   const [env, setEnv] = useState<EnvInfo | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [inputs, setInputs] = useState<RunInputs>(EMPTY_INPUTS);
@@ -253,7 +250,9 @@ export function App() {
     setError(null);
     setNotice(null);
     setRunningNodeId(null);
-    setTab("run");
+    // 运行台挂在画布页右栏：开始跑就切回画布并展开右栏，保证能看见逐节点日志
+    setView("canvas");
+    setInspectorOpen(true);
     const unsubscribe = api.onEvent((event) => {
       setEvents((previous) => [...previous, event]);
       if (event.nodeId) {
@@ -665,46 +664,49 @@ export function App() {
           {env ? ` · ${env.model}` : ""}
           {env?.hasKey ? " · key 已配置" : " · 无 key"}
         </span>
-        <button
-          className="btn sm ghost"
-          onClick={() => void undo()}
-          disabled={!canUndo || view !== "canvas"}
-          title="撤销（⌘Z）"
-        >
-          撤销
-        </button>
-        <button
-          className="btn sm ghost"
-          onClick={() => void redo()}
-          disabled={!canRedo || view !== "canvas"}
-          title="重做（⇧⌘Z）"
-        >
-          重做
-        </button>
-        <span className="vline" />
-        <button className="btn sm" onClick={() => setShowInput(true)}>输入</button>
-        {running ? (
-          <button className="btn sm danger" onClick={() => void stop()}>停止</button>
-        ) : (
-          <button className="btn sm primary" onClick={() => setShowInput(true)} disabled={!graph}>运行</button>
-        )}
-        <button className="btn sm ghost" onClick={() => setShowSettings(true)}>设置</button>
-        {review && !reviewOpen && (
+        {/* 撤销/重做/输入/运行/设置是一组：换行时整组一起换，不拆散 */}
+        <div className="topbar-actions">
           <button
-            className="btn sm pending"
-            onClick={() => {
-              setReviewOpen(true);
-              setNotice(null);
-            }}
-            title="回到 A07 口播审阅卡：重跑文案 / 继续生成画面 / 放弃这次运行"
+            className="btn sm ghost"
+            onClick={() => void undo()}
+            disabled={!canUndo || view !== "canvas"}
+            title="撤销（⌘Z）"
           >
-            文案待审阅 · 点开
+            撤销
           </button>
-        )}
+          <button
+            className="btn sm ghost"
+            onClick={() => void redo()}
+            disabled={!canRedo || view !== "canvas"}
+            title="重做（⇧⌘Z）"
+          >
+            重做
+          </button>
+          <span className="vline" />
+          <button className="btn sm" onClick={() => setShowInput(true)}>输入</button>
+          {running ? (
+            <button className="btn sm danger" onClick={() => void stop()}>停止</button>
+          ) : (
+            <button className="btn sm primary" onClick={() => setShowInput(true)} disabled={!graph}>运行</button>
+          )}
+          <button className="btn sm ghost" onClick={() => setShowSettings(true)}>设置</button>
+          {review && !reviewOpen && (
+            <button
+              className="btn sm pending"
+              onClick={() => {
+                setReviewOpen(true);
+                setNotice(null);
+              }}
+              title="回到 A07 口播审阅卡：重跑文案 / 继续生成画面 / 放弃这次运行"
+            >
+              文案待审阅 · 点开
+            </button>
+          )}
+        </div>
       </header>
 
-      <div className="work">
-        <div className={`main ${!inspectorOpen || view !== "canvas" ? "no-inspector" : ""}`}>
+      <div className={`work ${view === "canvas" && inspectorOpen && graph ? "" : "solo"}`}>
+        <div className="main">
           {view === "artifacts" ? (
             <Artifacts result={result} />
           ) : view === "canvas" ? (
@@ -720,7 +722,7 @@ export function App() {
                 runningNodeId={runningNodeId}
                 toolbar={
                   <>
-                    <Select value={addType} width={124} options={ADD_TYPE_OPTIONS} onChange={setAddType} />
+                    <Select value={addType} options={ADD_TYPE_OPTIONS} onChange={setAddType} />
                     <button className="btn sm" onClick={() => void addNode()}>添加节点</button>
                     <button
                       className={`btn sm ${connecting ? "primary" : ""}`}
@@ -735,7 +737,7 @@ export function App() {
                     <button
                       className={`btn sm insp-toggle ${inspectorOpen ? "on" : ""}`}
                       onClick={() => setInspectorOpen((value) => !value)}
-                      title={inspectorOpen ? "收起右侧节点详情" : "展开右侧节点详情"}
+                      title={inspectorOpen ? "收起右侧详情和运行台" : "展开右侧详情和运行台"}
                     >
                       详情
                     </button>
@@ -748,12 +750,25 @@ export function App() {
               </section>
             )
           ) : null}
-          {view === "canvas" && inspectorOpen && graph ? (
+          <div className="produce-layer" hidden={view !== "produce"}>
+            <Produce
+              result={result}
+              inputs={inputs}
+              onRun={() => setShowInput(true)}
+              onArtifacts={() => setView("artifacts")}
+              onNotice={setNotice}
+            />
+          </div>
+        </div>
+
+        {view === "canvas" && inspectorOpen && graph ? (
+          <div className="side">
             <Inspector
               graph={graph}
               node={selected}
               result={result}
               status={selectedId ? (statuses[selectedId] ?? "") : ""}
+              runtimeModel={env?.model}
               onUpdate={async (field, value, messageIndex) => {
                 if (!selected) return;
                 const updated = await api.updateNode({
@@ -769,66 +784,51 @@ export function App() {
               onRerun={runFromNode}
               onProduce={() => setView("produce")}
             />
-          ) : null}
-          <div className="produce-layer" hidden={view !== "produce"}>
-            <Produce
-              result={result}
-              inputs={inputs}
-              onRun={() => setShowInput(true)}
-              onArtifacts={() => setView("artifacts")}
-              onNotice={setNotice}
-            />
-          </div>
-        </div>
-
-        <footer className={`bottom card ${consoleOpen ? "" : "collapsed"}`}>
-          <div className="tabs">
-            <span className={`tab ${tab === "run" ? "on" : ""}`} onClick={() => setTab("run")}>运行台</span>
-            <span className={`tab ${tab === "terminal" ? "on" : ""}`} onClick={() => setTab("terminal")}>终端</span>
-            <span className="right">
-              <span className="meta" title={graph?.path ?? ""}>
-                {graph ? `${graph.name} · ${graph.nodes.length} 节点` : "未载入"}
-                {env ? ` · ${env.model}` : ""}
-                {env?.hasKey ? " · key 已配置" : " · 无 key"}
-              </span>
-              <span>{result ? `${result.status === "stopped" ? (result.error ? "已停止" : "已完成") : result.status} · ${(result.ms / 1000).toFixed(2)}s` : running ? "运行中" : "就绪"}</span>
-            </span>
-            <button className="btn sm ghost toggle" onClick={() => setConsoleOpen((value) => !value)}>
-              {consoleOpen ? "收起" : "展开"}
-            </button>
-          </div>
-          <div className={`pane ${tab === "run" ? "" : "hidden"}`}>
-            <div className="log">
-              {result && result.status === "success" && typeof result.outputs.html_document === "string" && (
-                <div className="run-next">
-                  <span>运行完成 · {result.nodes.length} 节点 · {(result.ms / 1000).toFixed(1)}s</span>
-                  <span className="spacer" />
-                  <button className="btn sm primary" onClick={() => setView("produce")}>下一步：去出片</button>
-                </div>
-              )}
-              {error && <div className="err">{error}</div>}
-              {[...events].reverse().filter((event) => event.type !== "node_start").slice(0, 300).map((event) => (
-                <div key={event.seq}>
-                  <span className="t">{timeOf(event.at)}</span>
-                  <span className={event.type === "node_error" ? "err" : event.type === "run_end" ? "ok" : "dim"}>
-                    {event.type === "node_end" ? "完成" : event.type === "node_error" ? "失败" : "事件"}
+            <footer className={`bottom card ${consoleOpen ? "" : "collapsed"}`}>
+              <div className="console-head">
+                <span className="console-title">运行台</span>
+                <span className="right">
+                  <span className="elapsed">
+                    {result
+                      ? `${result.status === "stopped" ? (result.error ? "已停止" : "已完成") : result.status} · ${(result.ms / 1000).toFixed(2)}s`
+                      : running ? "运行中" : "就绪"}
                   </span>
-                  <span>{event.title ?? event.type}</span>
-                  {event.ms !== undefined && <span className="dim">{event.ms}ms</span>}
-                  {event.error && <span className="err">{event.error}</span>}
+                </span>
+                <button className="btn sm ghost toggle" onClick={() => setConsoleOpen((value) => !value)}>
+                  {consoleOpen ? "收起" : "展开"}
+                </button>
+              </div>
+              <div className="pane">
+                <div className="log">
+                  {result && result.status === "success" && typeof result.outputs.html_document === "string" && (
+                    <div className="run-next">
+                      <span>运行完成 · {result.nodes.length} 节点 · {(result.ms / 1000).toFixed(1)}s</span>
+                      <span className="spacer" />
+                      <button className="btn sm primary" onClick={() => setView("produce")}>下一步：去出片</button>
+                    </div>
+                  )}
+                  {error && <div className="err">{error}</div>}
+                  {[...events].reverse().filter((event) => event.type !== "node_start").slice(0, 300).map((event) => (
+                    <div key={event.seq}>
+                      <span className="t">{timeOf(event.at)}</span>
+                      <span className={event.type === "node_error" ? "err" : event.type === "run_end" ? "ok" : "dim"}>
+                        {event.type === "node_end" ? "完成" : event.type === "node_error" ? "失败" : "事件"}
+                      </span>
+                      <span>{event.title ?? event.type}</span>
+                      {event.ms !== undefined && <span className="dim">{event.ms}ms</span>}
+                      {event.error && <span className="err">{event.error}</span>}
+                    </div>
+                  ))}
+                  {events.length === 0 && !result && <div className="dim">点右上「运行」开始；会真实调用模型（先在顶栏「设置」里配 Key）。</div>}
+                  {events.length === 0 && result && <div className="dim">逐节点事件没有保留（应用重启过）；End 输出已恢复，可直接去「出片」。</div>}
+                  {result && Object.keys(result.outputs).length > 0 && (
+                    <div className="dim">产物：{Object.keys(result.outputs).join("、")}</div>
+                  )}
                 </div>
-              ))}
-              {events.length === 0 && !result && <div className="dim">点右上「运行」开始；会真实调用模型（先在顶栏「设置」里配 Key）。</div>}
-              {events.length === 0 && result && <div className="dim">逐节点事件没有保留（应用重启过）；End 输出已恢复，可直接去「出片」。</div>}
-              {result && Object.keys(result.outputs).length > 0 && (
-                <div className="dim">产物：{Object.keys(result.outputs).join("、")}</div>
-              )}
-            </div>
+              </div>
+            </footer>
           </div>
-          <div className={`pane term-pane ${tab === "terminal" ? "" : "hidden"}`}>
-            <Terminal />
-          </div>
-        </footer>
+        ) : null}
       </div>
 
       {showInput && (

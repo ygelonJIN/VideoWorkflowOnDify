@@ -113,7 +113,6 @@ const server = createServer(async (request, response) => {
       const { path: filePath } = await jsonBody(request);
       return send(response, 200, { url: `/files?path=${encodeURIComponent(filePath)}`, href: await core.fileUrl(filePath) });
     }
-    if (url.pathname === "/api/presets") return send(response, 200, core.termPresets());
     if (url.pathname === "/api/rev" && request.method === "POST") {
       const { path: filePath } = await jsonBody(request);
       return send(response, 200, await core.fileRevision(filePath));
@@ -141,16 +140,6 @@ const server = createServer(async (request, response) => {
     if (url.pathname === "/api/cancel" && request.method === "POST") {
       const { clientId } = await jsonBody(request);
       return send(response, 200, core.cancelRun(clientId));
-    }
-    if (url.pathname === "/api/exec" && request.method === "POST") {
-      const { cmd, cwd } = await jsonBody(request);
-      const run = core.startCommand({
-        cmd,
-        cwd,
-        onData: (payload) => broadcast("term", payload),
-        onExit: (payload) => broadcast("term-done", payload),
-      });
-      return send(response, 200, { id: run.id });
     }
     if (url.pathname === "/files") {
       const filePath = url.searchParams.get("path") ?? "";

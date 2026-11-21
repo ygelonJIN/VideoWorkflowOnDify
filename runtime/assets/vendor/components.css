@@ -99,10 +99,17 @@
    （卡片跟内容走，不拉成整栏空板），但一张卡被放进栅格里时，格子已经按内容
    定好了宽，卡片再按内容撑就会在格子里留一块对不齐的空档。所以栅格里的卡片取格宽。 */
 .ui-grid > .ui-card{width:100%;}
+/* 网格只剩一个子元素时铺满整行（2026-11-21）：双卡对照只填了一张卡时不留下半格空位。
+   组数由 S2N 按完整槽位切出来，可能只剩一格；铺满比缩在左半边自然。 */
+.ui-grid > :only-child{grid-column:1 / -1;}
 .ui-cell{
   border-radius:12px;border:1px solid var(--ui-border);background:var(--ui-surface-2);
   padding:20px 22px;font-size:calc(24px * var(--ui-scale,1));color:var(--ui-ink);
 }
+/* U54 指标三连：标签独占一行、值在下一行（2026-11-21 定）。
+ * 3 列 × 8 字一行在 --ui-scale 1.8 时是 1074px，会把 840 栏顶出安全区；
+ * 分两行后按 4 字算，三列 683px。排版器还会按格子字数给 --ui-scale 设上限。 */
+.ui-grid.c3 .ui-cell b{display:block;margin-bottom:6px;}
 
 /* U04 状态标签 */
 .ui-chip{
@@ -153,11 +160,22 @@
 
 /* ---------- U11–U20：编号制组件（2026-11 新增） ---------- */
 
-/* U11 聊天气泡 */
-.ui-chat{display:flex;flex-direction:column;gap:14px;align-items:stretch;}
-.ui-chat .b{max-width:78%;padding:16px 20px;border-radius:18px;font-size:calc(26px * var(--ui-scale,1));line-height:1.5;
+/* 多根组件的包层（R2 生成，2026-11-21）
+   U04 这类模板本来就是"一排"平级元素，外面必须有唯一根才能挂 data-anim；
+   根拿到动效、子元素各自入场。默认横排、可折行。 */
+.ui-comp-row{display:flex;flex-wrap:wrap;align-items:center;gap:12px;}
+
+/* U11 聊天气泡（span=full：通栏层里一条贴左、一条贴右，2026-11-21）
+   以前只有 max-width:78%，容器又被 .scene-copy 的 align-self:flex-start 收成内容宽，
+   两条气泡各 367px 挤在 840 栏里，看着是"两个小方块"而不是对话。
+   现在容器吃满自己的父级（文字栏 840 / 通栏层 1080），气泡最多 72% 并各自贴边。 */
+.ui-chat{display:flex;flex-direction:column;gap:18px;align-items:stretch;width:100%;}
+.ui-chat .b{max-width:72%;padding:18px 22px;border-radius:18px;font-size:calc(26px * var(--ui-scale,1));line-height:1.5;
   background:var(--ui-surface-2);border:1px solid var(--ui-border);}
 .ui-chat .b.right{align-self:flex-end;background:rgba(56,214,255,.14);border-color:rgba(56,214,255,.30);}
+/* 通栏层的对话：气泡字比文字栏里的大一档，两条各自顶到边上，中间留出"对话的空隙" */
+.scene-ui .ui-chat{gap:22px;padding:0 20px;box-sizing:border-box;}
+.scene-ui .ui-chat .b{font-size:calc(31px * var(--ui-scale,1));max-width:66%;}
 
 /* U12 表格 */
 .ui-table{width:100%;border-collapse:collapse;font-size:calc(24px * var(--ui-scale,1));}

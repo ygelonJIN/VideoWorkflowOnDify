@@ -31,7 +31,7 @@ WORK = HERE.parent.parent
 BATCH_ROOT = HERE / "样片" / "待筛"
 PRESETS = HERE / "presets.json"
 LEDGER = HERE / "来源台账.md"
-HF_BIN = WORK / "成品" / "workflow_runtime" / "vendor" / "node_modules" / "hyperframes" / "bin" / "hyperframes.mjs"
+HF_BIN = WORK / "runtime" / "vendor" / "node_modules" / "hyperframes" / "bin" / "hyperframes.mjs"
 CHROME = os.environ.get("HYPERFRAMES_BROWSER_PATH",
                         "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome")
 

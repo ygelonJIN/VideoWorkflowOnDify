@@ -3,7 +3,8 @@ set -euo pipefail
 
 BASE_DIR="$(cd "$(dirname "$0")" && pwd)"
 TEMPLATE_DIR="$(cd "$BASE_DIR/.." && pwd)"
-PROJECTS_ROOT="$(cd "$BASE_DIR/../.." && pwd)"
+# runtime/ 在仓库根，项目在 成品/ 下（2026-11-21 搬目录后）
+PROJECTS_ROOT="$(cd "$BASE_DIR/../.." && pwd)/成品"
 
 normalize_path() {
   local value="$1"
@@ -25,7 +26,7 @@ if [ "$#" -eq 3 ] || [ "$#" -eq 4 ]; then
   PLAN_INPUT="${4:-}"
 else
   echo "用法：bash render_new_project.sh 项目名 /path/to/html_document.html /path/to/heygen_response.json [/path/to/image_plan.json]"
-  echo "workflow_runtime/ 是通用运行资产目录，不是可复用的项目文件夹。"
+  echo "runtime/ 是通用运行资产目录，不是可复用的项目文件夹。"
   exit 2
 fi
 

@@ -22,6 +22,8 @@ interface Props {
   node: WorkflowNode | null;
   result: RunResult | null;
   status: string;
+  /** 设置里保存的模型：本地执行真正用它；YAML 里的 model 只是给 Dify 导入的声明。 */
+  runtimeModel?: string;
   onUpdate: (field: EditableField, value: string, messageIndex?: number) => Promise<void>;
   onDelete: () => void;
   onRerun?: (nodeId: string) => void;
@@ -40,7 +42,7 @@ function Section({ title, action, children }: { title: string; action?: React.Re
   );
 }
 
-export function Inspector({ graph, node, result, status, onUpdate, onDelete, onRerun, onProduce }: Props) {
+export function Inspector({ graph, node, result, status, runtimeModel, onUpdate, onDelete, onRerun, onProduce }: Props) {
   const [editor, setEditor] = useState<{ field: EditableField; value: string; index?: number } | null>(null);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -136,7 +138,10 @@ export function Inspector({ graph, node, result, status, onUpdate, onDelete, onR
         <>
           {node.model && (
             <Section title="模型">
-              <div className="input">{node.model}</div>
+              <div className="input">{runtimeModel || "未配置"}</div>
+              <div className="hint-text">
+                运行时统一用顶栏「设置」里的模型；这个节点 YAML 里写的是 {node.model}，只用于导入 Dify，本地引擎不读它。
+              </div>
             </Section>
           )}
 

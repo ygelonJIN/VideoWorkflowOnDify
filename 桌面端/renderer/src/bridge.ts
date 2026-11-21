@@ -1,4 +1,4 @@
-import type { BuildEvent, BuildRequest, BuildStarted, EnvInfo, FileEntry, InboxFile, Project, RunInputs, RunResult, SettingsInfo, TermEvent, TermPreset, TraceEvent, WorkflowInfo } from "./types.js";
+import type { BuildEvent, BuildRequest, BuildStarted, EnvInfo, FileEntry, InboxFile, Project, RunInputs, RunResult, SettingsInfo, TraceEvent, WorkflowInfo } from "./types.js";
 
 export interface Bridge {
   workflows(): Promise<Array<{ name: string; path: string }>>;
@@ -26,15 +26,12 @@ export interface Bridge {
   files(dirPath: string): Promise<FileEntry[]>;
   readText(filePath: string): Promise<{ path: string; text: string; truncated: boolean }>;
   open(filePath: string): Promise<{ ok: boolean; error?: string }>;
-  presets(): Promise<TermPreset[]>;
   copyText(text: string): Promise<{ ok: boolean }>;
   projectImages(payload: { projectPath: string }): Promise<{ dir: string; files: InboxFile[] }>;
   projectImageSave(payload: { projectPath: string; name: string; base64: string; mtime?: number }): Promise<InboxFile>;
   mimoStatus(): Promise<{ hasKey: boolean; hint: string }>;
   build(payload: BuildRequest): Promise<BuildStarted>;
   onBuild(handler: (event: BuildEvent) => void): () => void;
-  exec(options: { cmd: string; cwd?: string }): Promise<{ id: string }>;
-  onTerm(handler: (event: TermEvent) => void): () => void;
 }
 
 async function post<T>(url: string, body: unknown): Promise<T> {
@@ -82,7 +79,6 @@ const httpBridge: Bridge = {
     window.open(`/files?path=${encodeURIComponent(filePath)}`, "_blank");
     return { ok: true };
   },
-  presets: () => fetch("/api/presets").then((response) => response.json()),
   copyText: async (text) => {
     await navigator.clipboard.writeText(text);
     return { ok: true };
@@ -115,7 +111,6 @@ const httpBridge: Bridge = {
       source.close();
     };
   },
-  exec: (options) => post<{ id: string }>("/api/exec", options),
   onEvent: (handler) => {
     const source = new EventSource("/api/events");
     source.addEventListener("trace", (event) => {
@@ -126,25 +121,6 @@ const httpBridge: Bridge = {
       }
     });
     return () => source.close();
-  },
-  onTerm: (handler) => {
-    const source = new EventSource("/api/events");
-    const listen = (name: string, kind: "data" | "done") => (event: MessageEvent) => {
-      try {
-        handler({ kind, ...(JSON.parse(String(event.data)) as Omit<TermEvent, "kind">) });
-      } catch {
-        /* ignore */
-      }
-    };
-    const data = listen("term", "data");
-    const done = listen("term-done", "done");
-    source.addEventListener("term", data as EventListener);
-    source.addEventListener("term-done", done as EventListener);
-    return () => {
-      source.removeEventListener("term", data as EventListener);
-      source.removeEventListener("term-done", done as EventListener);
-      source.close();
-    };
   },
 };
 

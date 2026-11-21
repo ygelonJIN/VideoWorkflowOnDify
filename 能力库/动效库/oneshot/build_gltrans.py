@@ -3,7 +3,7 @@
 """把 gl-transitions 的 GLSL 转场做成 gltrans-kit 能吃的数据文件。
 
 来源：https://github.com/gl-transitions/gl-transitions（MIT，每个 shader 自带作者与 License 注释）
-产物：成品/workflow_runtime/assets/vendor/gl-transitions.glsl.js
+产物：runtime/assets/vendor/gl-transitions.glsl.js
       每个 shader = 原文（含注释、uniform 声明、transition 函数）+ 解析出的参数默认值。
 
 用法：
@@ -27,7 +27,7 @@ import sys
 HERE = pathlib.Path(__file__).resolve().parent
 WORKSPACE = HERE.parent.parent
 DEFAULT_SRC = pathlib.Path.home() / "Downloads" / "gl-transitions-master"
-DEFAULT_OUT = WORKSPACE / "成品" / "workflow_runtime" / "assets" / "vendor" / "gl-transitions.glsl.js"
+DEFAULT_OUT = WORKSPACE / "runtime" / "assets" / "vendor" / "gl-transitions.glsl.js"
 
 META_RE = {
     "author": re.compile(r"^//\s*Author:\s*(.*)$", re.M),

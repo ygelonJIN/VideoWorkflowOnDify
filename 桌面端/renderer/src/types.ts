@@ -108,23 +108,6 @@ export interface FileEntry {
   depth: number;
 }
 
-export interface TermEvent {
-  kind: "data" | "done";
-  id: string;
-  stream?: "out" | "err";
-  text?: string;
-  code?: number;
-  ms?: number;
-  output?: string;
-  error?: string;
-}
-
-export interface TermPreset {
-  id: string;
-  label: string;
-  cmd: string;
-}
-
 export type RunInputs = Record<string, string>;
 
 export interface StartVariable {
