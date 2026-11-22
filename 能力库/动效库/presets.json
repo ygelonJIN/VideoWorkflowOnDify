@@ -1,6 +1,6 @@
 {
  "version": 2,
- "updated": "2026-11-21",
+ "updated": "2026-11-22",
  "note": "每行 = 一个动作预设。status: ready=可直接用 / archived=有实现有样片但不接生产 / needs-work=先改成确定性 / skip=不入管线。role: bg|component|entrance_text|entrance_block|state_text|state_block|component_motion|decoration|page_transition —— 选择层只认 role。出处只认 src（必须带前缀，规范见 来源台账.md §六）；origin 字段已废弃，不要再写。",
  "presets": [
   {
@@ -140,8 +140,8 @@
    "params": {
     "step": 13
    },
-   "use": "网点密度随位置变化；canvas 背景，由 bgkit 按 t 重绘",
-   "avoid": "和照片满屏同时用（会互相抢）",
+   "use": "这一屏在讲社会评价、舆论、被审视时选它；网点自带「被印刷、被记录」的味道",
+   "avoid": "满屏照片（会和照片抢）；标题压在网纹最密处会糊，字区先垫柔光",
    "code": "/* canvas 背景：由 H02SX 调 bgkit.bind/ draw，不展开 GSAP */",
    "layer": "overlay",
    "surface": "opaque",
@@ -186,8 +186,8 @@
    "params": {
     "gap": 4
    },
-   "use": "细线 + 扫描带；canvas 背景，由 bgkit 按 t 重绘",
-   "avoid": "和照片满屏同时用（会互相抢）",
+   "use": "讲检测、审核、一条条过目、读数据时选它；扫描带就是「正在读」",
+   "avoid": "满屏照片；横线正好穿过正文行距会把字切碎，让文字带避开扫描线",
    "code": "/* canvas 背景：由 H02SX 调 bgkit.bind/ draw，不展开 GSAP */",
    "layer": "overlay",
    "surface": "opaque",
@@ -235,8 +235,8 @@
    "params": {
     "step": 30
    },
-   "use": "密集点阵，中心亮；canvas 背景，由 bgkit 按 t 重绘",
-   "avoid": "和照片满屏同时用（会互相抢）",
+   "use": "这一屏有数字指标、成绩、金额，需要「仪表感」时选它",
+   "avoid": "满屏照片；最亮的中心别落标题（抢焦点）",
    "code": "/* canvas 背景：由 H02SX 调 bgkit.bind/ draw，不展开 GSAP */",
    "layer": "overlay",
    "surface": "opaque",
@@ -282,8 +282,8 @@
    "params": {
     "count": 7
    },
-   "use": "单次扩散的圆环；canvas 背景，由 bgkit 按 t 重绘",
-   "avoid": "和照片满屏同时用（会互相抢）",
+   "use": "要把注意力收回一个点、讲聚焦、回到自身时选它",
+   "avoid": "满屏照片；一屏只留一个视觉中心，别再叠第二个放射图形",
    "code": "/* canvas 背景：由 H02SX 调 bgkit.bind/ draw，不展开 GSAP */",
    "layer": "overlay",
    "surface": "opaque",
@@ -329,8 +329,8 @@
    "params": {
     "count": 16
    },
-   "use": "波纹线场；canvas 背景，由 bgkit 按 t 重绘",
-   "avoid": "和照片满屏同时用（会互相抢）",
+   "use": "讲门槛、尺度、被衡量、一层层往下压时选它",
+   "avoid": "满屏照片；波纹和小字正文会互相干扰，正文区留干净",
    "code": "/* canvas 背景：由 H02SX 调 bgkit.bind/ draw，不展开 GSAP */",
    "layer": "overlay",
    "surface": "opaque",
@@ -378,8 +378,8 @@
    "params": {
     "count": 60
    },
-   "use": "细横线掠过；canvas 背景，由 bgkit 按 t 重绘",
-   "avoid": "和照片满屏同时用（会互相抢）",
+   "use": "讲迭代、速度、赶、一批批往前推时选它",
+   "avoid": "满屏照片；一屏别同时用两种「横向流动」的东西（会显得乱）",
    "code": "/* canvas 背景：由 H02SX 调 bgkit.bind/ draw，不展开 GSAP */",
    "layer": "overlay",
    "surface": "opaque",
@@ -426,8 +426,8 @@
    "params": {
     "count": 220
    },
-   "use": "漂浮小点；canvas 背景，由 bgkit 按 t 重绘",
-   "avoid": "和照片满屏同时用（会互相抢）",
+   "use": "讲时间、回忆、等待这种慢下来的段落时选它",
+   "avoid": "满屏照片；和 B51 流星同屏（都是粒子，看不出谁在动）",
    "code": "/* canvas 背景：由 H02SX 调 bgkit.bind/ draw，不展开 GSAP */",
    "layer": "overlay",
    "surface": "opaque",
@@ -474,8 +474,8 @@
    "params": {
     "count": 90
    },
-   "use": "斜向雨丝；canvas 背景，由 bgkit 按 t 重绘",
-   "avoid": "和照片满屏同时用（会互相抢）",
+   "use": "情绪往下压、讲压力、怕、低落时选它",
+   "avoid": "满屏照片；同一片别连用三屏以上（情绪会一直沉下去）",
    "code": "/* canvas 背景：由 H02SX 调 bgkit.bind/ draw，不展开 GSAP */",
    "layer": "overlay",
    "surface": "opaque",
@@ -524,8 +524,8 @@
    "params": {
     "size": 22
    },
-   "use": "像素块聚散；canvas 背景，由 bgkit 按 t 重绘",
-   "avoid": "和照片满屏同时用（会互相抢）",
+   "use": "讲推翻、重塑、换掉旧东西、转折时选它",
+   "avoid": "满屏照片；和 B32 棋盘相邻两屏（都是大块面，观感重）",
    "code": "/* canvas 背景：由 H02SX 调 bgkit.bind/ draw，不展开 GSAP */",
    "layer": "overlay",
    "surface": "opaque",
@@ -571,8 +571,8 @@
    "params": {
     "size": 64
    },
-   "use": "明暗方格；canvas 背景，由 bgkit 按 t 重绘",
-   "avoid": "和照片满屏同时用（会互相抢）",
+   "use": "这一屏是两种选择、取舍、规则对照时选它",
+   "avoid": "满屏照片；和 B31 像素溶解相邻（同族大块面）",
    "code": "/* canvas 背景：由 H02SX 调 bgkit.bind/ draw，不展开 GSAP */",
    "layer": "overlay",
    "surface": "opaque",
@@ -619,8 +619,8 @@
    "params": {
     "count": 5
    },
-   "use": "锥形光；canvas 背景，由 bgkit 按 t 重绘",
-   "avoid": "和照片满屏同时用（会互相抢）",
+   "use": "讲出路、方向、被照亮、找到答案时选它",
+   "avoid": "满屏照片；亮部别落在标题上（吃掉文字对比）",
    "code": "/* canvas 背景：由 H02SX 调 bgkit.bind/ draw，不展开 GSAP */",
    "layer": "overlay",
    "surface": "opaque",
@@ -667,8 +667,8 @@
    "params": {
     "count": 140
    },
-   "use": "漂浮颗粒；canvas 背景，由 bgkit 按 t 重绘",
-   "avoid": "和照片满屏同时用（会互相抢）",
+   "use": "讲日常、痕迹、资料感、安静的记录时选它",
+   "avoid": "满屏照片；和 B54 纵深粒子同屏（都是点，看不出谁在动）",
    "code": "/* canvas 背景：由 H02SX 调 bgkit.bind/ draw，不展开 GSAP */",
    "layer": "overlay",
    "surface": "opaque",
@@ -712,8 +712,8 @@
    "cap": "canvas-t",
    "src": "remotion:b36",
    "params": {},
-   "use": "四色光斑游走；canvas 背景，由 bgkit 按 t 重绘",
-   "avoid": "和照片满屏同时用（会互相抢）",
+   "use": "语气温和、讲包容、自由、不需要强图形时选它；最安全的一张",
+   "avoid": "满屏照片；这一屏需要一个明确的结构感时别用（太柔）",
    "code": "/* canvas 背景：由 H02SX 调 bgkit.bind/ draw，不展开 GSAP */",
    "layer": "overlay",
    "surface": "opaque",
@@ -788,7 +788,8 @@
    "use": "一切屏的收尾；切点前 0.35–0.5s 走完",
    "avoid": "和进入同一时刻（会互相打断）",
    "code": "timeline.to('{{sel}}', {'opacity':0, 'y':-{{dist}}, 'duration':{{dur}}, 'ease':'power2.in', 'stagger':{{stagger}}}, {{at}});",
-   "role": "decoration"
+   "role": "decoration",
+   "exit": true
   },
   {
    "id": "X05",
@@ -806,7 +807,8 @@
    "use": "横向切镜前的收尾",
    "avoid": "竖向版面里横向飞出会撞边",
    "code": "timeline.to('{{sel}}', {'opacity':0, 'x':{{dist}}, 'duration':{{dur}}, 'ease':'power2.in', 'stagger':{{stagger}}}, {{at}});",
-   "role": "decoration"
+   "role": "decoration",
+   "exit": true
   },
   {
    "id": "K01",
@@ -867,7 +869,11 @@
    "use": "比例、完成度、加载",
    "avoid": "没有真实数值时（会变装饰）",
    "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t) return;\n  if (getComputedStyle(_t).position === 'static') { _t.style.position = 'relative'; }\n  var _b = document.createElement('i');\n  _b.style.cssText = 'position:absolute;left:0;bottom:0;height:{{h}}px;width:0%;right:auto;background:{{color}};border-radius:2px;';\n  _t.appendChild(_b);\n  timeline.to(_b, {'width':'100%', 'duration':{{dur}}, 'ease':'power2.inOut'}, {{at}});\n})();",
-   "role": "state_text"
+   "role": "state_text",
+   "needs": [
+    "row"
+   ],
+   "requires_number": true
   },
   {
    "id": "S04",
@@ -884,24 +890,11 @@
    "use": "清单项被确认",
    "avoid": "同一屏勾五个以上（会变成装饰）",
    "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t) return;\n  if (getComputedStyle(_t).position === 'static') { _t.style.position = 'relative'; }\n  var _c = document.createElement('i');\n  _c.style.cssText = 'position:absolute;left:0;top:50%;width:{{size}}px;height:{{size}}px;margin-top:-11px;border:2px solid {{color}};border-radius:50%;transform:scale(0);';\n  var _k = document.createElement('i');\n  _k.style.cssText = 'position:absolute;left:0;top:50%;width:{{size}}px;height:{{size}}px;margin-top:-11px;border-radius:50%;background:{{color}};transform:scale(0);';\n  _t.appendChild(_c); _t.appendChild(_k);\n  timeline.to(_c, {'scale':1, 'duration':.3, 'ease':'back.out'}, {{at}});\n  timeline.to(_k, {'scale':.55, 'duration':.3, 'ease':'power2.out'}, {{at}} + .12);\n})();",
-   "role": "state_text"
-  },
-  {
-   "id": "S05",
-   "name": "输入",
-   "family": "状态",
-   "layer": "element",
-   "status": "ready",
-   "cap": "sequence",
-   "src": "自建:state-type",
-   "params": {
-    "speed": 0.045,
-    "cursor": "#7BE8BE"
-   },
-   "use": "搜索框、表单、命令",
-   "avoid": "长文本；和 K09 同屏",
-   "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t) return;\n  var _txt = _t.textContent; _t.textContent = '';\n  var _cur = document.createElement('i');\n  _cur.style.cssText = 'display:inline-block;width:.06em;height:1.1em;background:{{cursor}};vertical-align:-.18em;margin-left:.04em;';\n  _t.appendChild(_cur);\n  for (var i = 1; i <= _txt.length; i++) {\n    timeline.set(_t, {'textContent': _txt.slice(0, i)}, {{at}} + i * {{speed}});\n    _t.appendChild(_cur);\n  }\n})();",
-   "role": "state_text"
+   "role": "state_text",
+   "needs": [
+    "row"
+   ],
+   "trigger": true
   },
   {
    "id": "S06",
@@ -919,7 +912,11 @@
    "use": "按钮、卡片被按下；证明界面在运行",
    "avoid": "一屏点三次以上",
    "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t) return;\n  if (getComputedStyle(_t).position === 'static') { _t.style.position = 'relative'; }\n  var _p = document.createElement('i');\n  _p.style.cssText = 'position:absolute;left:50%;top:50%;width:{{size}}px;height:{{size}}px;border-radius:50%;border:2px solid {{color}};transform:translate(-50%,-50%) scale(.2);opacity:0;';\n  _t.appendChild(_p);\n  timeline.fromTo(_p, {'opacity':.9, 'scale':.2},\n    {'opacity':0, 'scale':2.6, 'duration':{{dur}}, 'ease':'power2.out'}, {{at}});\n})();",
-   "role": "state_text"
+   "role": "state_text",
+   "needs": [
+    "card"
+   ],
+   "trigger": true
   },
   {
    "id": "S07",
@@ -1141,7 +1138,8 @@
    "use": "标签页下的指示条滑到新位置",
    "avoid": "没有同级标签时",
    "code": "timeline.fromTo('{{sel}}', {'scaleX':0, 'transformOrigin':'0% 50%'},\n  {'scaleX':1, 'duration':{{dur}}, 'ease':'{{ease}}'}, {{at}});",
-   "role": "state_text"
+   "role": "state_text",
+   "trigger": true
   },
   {
    "id": "S11",
@@ -1159,7 +1157,11 @@
    "use": "卡片被拖动后归位；表现“可操作”",
    "avoid": "一屏拖两次",
    "code": "timeline.fromTo('{{sel}}', {'x':{{from}}, 'rotation':{{rot}}},\n  {'x':0, 'rotation':0, 'duration':{{dur}}, 'ease':'power2.out'}, {{at}});",
-   "role": "state_text"
+   "role": "state_text",
+   "needs": [
+    "card"
+   ],
+   "trigger": true
   },
   {
    "id": "G03",
@@ -1186,7 +1188,7 @@
   {
    "id": "S12",
    "text_safe": false,
-   "text_swap": "S05",
+   "text_swap": "T05",
    "name": "页面滚动",
    "family": "状态",
    "layer": "element",
@@ -1628,7 +1630,11 @@
    "use": "比例条、进度、达成度",
    "avoid": "没有真实数值时（要标场景演示）",
    "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t || !window.gsap) return;\n  if (getComputedStyle(_t).position === 'static') { _t.style.position = 'relative'; }\n  var _bar = document.createElement('i');\n  _bar.style.cssText = 'position:absolute;left:0;bottom:-{{h}}px;height:{{h}}px;width:0;background:{{color}};border-radius:{{h}}px;display:block;';\n  _t.appendChild(_bar);\n  var _map = gsap.utils.mapRange(0, 1, 0, {{maxWidth}});\n  var _clamp = gsap.utils.clamp(0, {{maxWidth}});\n  var _dv = {p: 0};\n  timeline.to(_dv, {'p': 1, 'duration': {{dur}}, 'ease': '{{ease}}', 'onUpdate': function () {\n    _bar.style.width = _clamp(_map(_dv.p)).toFixed(1) + 'px';\n  }}, {{at}});\n})();",
-   "role": "state_text"
+   "role": "state_text",
+   "needs": [
+    "row"
+   ],
+   "requires_number": true
   },
   {
    "id": "S19",
@@ -1794,7 +1800,7 @@
   {
    "id": "S21",
    "text_safe": false,
-   "text_swap": "S05",
+   "text_swap": "T05",
    "name": "中途打断",
    "family": "状态",
    "layer": "element",
@@ -1843,8 +1849,8 @@
    "cap": "component-html",
    "src": "components.css",
    "params": {},
-   "use": "本屏的信息结构；只填文案与数字，样式在 components.css",
-   "avoid": "自己改样式、加图形、加图标",
+   "use": "一屏一个主张、要「标题 + 2–3 行说明」时选它；没有更贴的结构就它",
+   "avoid": "同屏再放第二块同级内容（一屏一块）；只有数字没有说明时换 U05 / U54",
    "code": "<div class=\"ui-card\" data-anim=\"card-1\">\n  <h3>标题最多两行</h3>\n  <p>一句解释，不超过 24 字。</p>\n</div>",
    "needs": [
     "ui"
@@ -1867,8 +1873,8 @@
    "cap": "component-html",
    "src": "components.css",
    "params": {},
-   "use": "本屏的信息结构；只填文案与数字，样式在 components.css",
-   "avoid": "自己改样式、加图形、加图标",
+   "use": "讲流程、先后，屏上有 3–4 个阶段时选它",
+   "avoid": "超过 4 段；阶段之间没有先后关系时别用（那是 U03）",
    "code": "<div class=\"ui-steps\" data-anim=\"steps\">\n  <div class=\"ui-step is-done\"><b>第一步</b><span>说明</span></div>\n  <div class=\"ui-step\"><b>第二步</b><span>说明</span></div>\n  <div class=\"ui-step\"><b>第三步</b><span>说明</span></div>\n</div>",
    "needs": [
     "ui"
@@ -1891,8 +1897,8 @@
    "cap": "component-html",
    "src": "components.css",
    "params": {},
-   "use": "本屏的信息结构；只填文案与数字，样式在 components.css",
-   "avoid": "自己改样式、加图形、加图标",
+   "use": "并列的概念、清单、要点，2×2 或 3×2 排得下时选它",
+   "avoid": "超过 6 格；每格超过 8 个字（会挤成一团）",
    "code": "<div class=\"ui-grid c2\" data-anim=\"grid\">\n  <div class=\"ui-cell\">一格</div>\n  <div class=\"ui-cell\">一格</div>\n</div>",
    "needs": [
     "ui"
@@ -1915,8 +1921,8 @@
    "cap": "component-html",
    "src": "components.css",
    "params": {},
-   "use": "本屏的信息结构；只填文案与数字，样式在 components.css",
-   "avoid": "自己改样式、加图形、加图标",
+   "use": "状态、等级、分类这种「一排短标签」时选它",
+   "avoid": "同屏超过 8 个标签；标签本身是整句时换 U53 或 U03",
    "code": "<span class=\"ui-chip is-on\" data-anim=\"chip-1\">已接通</span>\n<span class=\"ui-chip\">待跟进</span>",
    "needs": [
     "ui"
@@ -1939,8 +1945,8 @@
    "cap": "component-html",
    "src": "components.css",
    "params": {},
-   "use": "本屏的信息结构；只填文案与数字，样式在 components.css",
-   "avoid": "自己改样式、加图形、加图标",
+   "use": "有数字指标、要「标签 + 数值」对齐时选它；两三条最稳",
+   "avoid": "超过 6 行（会拖）；只有描述没有数值时换 U03",
    "code": "<div class=\"ui-row\" data-anim=\"row-1\"><span class=\"k\">标签</span><span class=\"v\" data-anim=\"num-1\">128</span></div>",
    "needs": [
     "ui"
@@ -1964,8 +1970,8 @@
    "cap": "component-html",
    "src": "components.css",
    "params": {},
-   "use": "本屏的信息结构；只填文案与数字，样式在 components.css",
-   "avoid": "自己改样式、加图形、加图标",
+   "use": "一件事 + 几个证据，主次分明时选它（大格放主张，小格放证据）",
+   "avoid": "四块一样重（那就不是便当，用 U03）；每格文字超过 10 字",
    "code": "<div class=\"ui-bento\" data-anim=\"bento\">\n  <div class=\"ui-bento-cell w2\"><b>128</b>说明</div>\n  <div class=\"ui-bento-cell\">32%</div>\n  <div class=\"ui-bento-cell h2\"><b>7</b>说明</div>\n  <div class=\"ui-bento-cell\">3 天</div>\n</div>",
    "needs": [
     "ui"
@@ -1988,8 +1994,8 @@
    "cap": "component-html",
    "src": "components.css",
    "params": {},
-   "use": "本屏的信息结构；只填文案与数字，样式在 components.css",
-   "avoid": "自己改样式、加图形、加图标",
+   "use": "多条同质信息、两列不等高时选它",
+   "avoid": "少于 4 条（撑不住两列）；需要严格对齐时换 U03",
    "code": "<div class=\"ui-masonry\" data-anim=\"masonry\">\n  <div class=\"ui-masonry-item\">A</div>\n  <div class=\"ui-masonry-item\">B</div>\n  <div class=\"ui-masonry-item\">C</div>\n</div>",
    "needs": [
     "ui"
@@ -2012,8 +2018,8 @@
    "cap": "component-html",
    "src": "components.css",
    "params": {},
-   "use": "本屏的信息结构；只填文案与数字，样式在 components.css",
-   "avoid": "自己改样式、加图形、加图标",
+   "use": "讲一个人或一个机构、要「标识 + 两行身份」时选它",
+   "avoid": "同屏放两张（分不清主次）；不是真实人物或机构时文案里标「场景演示」",
    "code": "<div class=\"ui-profile\" data-anim=\"profile\">\n  <div class=\"av\"></div><b>姓名</b><p>职位</p>\n</div>",
    "needs": [
     "ui"
@@ -2037,8 +2043,8 @@
    "cap": "component-html",
    "src": "components.css",
    "params": {},
-   "use": "本屏的信息结构；只填文案与数字，样式在 components.css",
-   "avoid": "自己改样式、加图形、加图标",
+   "use": "横向一排、把时间线或阶段切成几张卡时选它",
+   "avoid": "超过 5 张（溢出）；内容有强先后时换 U02 / U20",
    "code": "<div class=\"ui-swipe\" data-anim=\"swipe\"><span>左滑删除</span></div>",
    "needs": [
     "ui"
@@ -2061,8 +2067,8 @@
    "cap": "component-html",
    "src": "components.css",
    "params": {},
-   "use": "本屏的信息结构；只填文案与数字，样式在 components.css",
-   "avoid": "自己改样式、加图形、加图标",
+   "use": "分类、覆盖、密度这种「不用读字」的矩阵时选它",
+   "avoid": "每格都要写字（换 U03）；同屏再放一张图表（两种图形会打架）",
    "code": "<div class=\"ui-chroma\" data-anim=\"chroma\"><i></i><i></i><i></i><i></i></div>",
    "needs": [
     "ui"
@@ -2085,8 +2091,8 @@
    "cap": "component-html",
    "src": "components.css",
    "params": {},
-   "use": "本屏的信息结构；只填文案与数字，样式在 components.css。对话、客户回复、两种声音对撞",
-   "avoid": "同屏再放第二条正文（气泡本身就是文案，重复说两遍观众读两次）",
+   "use": "一来一回、讲对话或客户回复时选它；整幅通栏，一条贴左一条贴右",
+   "avoid": "同屏再放第二条正文（气泡本身就是文案）；超过三轮对话",
    "code": "<div class=\"ui-chat\" data-anim=\"chat\"><div class=\"b\">对方说的</div><div class=\"b right\">我方回的</div></div>",
    "needs": [
     "ui"
@@ -2110,8 +2116,8 @@
    "cap": "component-html",
    "src": "components.css",
    "params": {},
-   "use": "本屏的信息结构；只填文案与数字，样式在 components.css",
-   "avoid": "自己改样式、加图形、加图标",
+   "use": "多行多列对照、横向比参数、核清单时选它",
+   "avoid": "列数超过 3；同屏再放第二个表格",
    "code": "<table class=\"ui-table\" data-anim=\"table\"><tr><th>来源</th><th>状态</th></tr><tr><td>展会</td><td>已报价</td></tr></table>",
    "needs": [
     "ui"
@@ -2135,8 +2141,8 @@
    "cap": "component-html",
    "src": "components.css",
    "params": {},
-   "use": "本屏的信息结构；只填文案与数字，样式在 components.css",
-   "avoid": "自己改样式、加图形、加图标",
+   "use": "一组柱子比高低、有量级对比时选它",
+   "avoid": "只有 2 根柱子（看不出对比）；没有真实数字时别用，必须标「场景演示」",
    "code": "<div class=\"ui-bars\" data-anim=\"bars\"><i style=\"height:38%\"></i><i style=\"height:62%\"></i><i class=\"on\" style=\"height:100%\"></i></div>",
    "needs": [
     "ui"
@@ -2159,8 +2165,8 @@
    "cap": "component-html",
    "src": "components.css",
    "params": {},
-   "use": "本屏的信息结构；只填文案与数字，样式在 components.css",
-   "avoid": "自己改样式、加图形、加图标",
+   "use": "讲走势、增长、波动这种「一条线」时选它",
+   "avoid": "只有两个点（那是 U05）；没有真实数据时标「场景演示」",
    "code": "<div class=\"ui-line\" data-anim=\"line\"><svg viewBox=\"0 0 900 240\" preserveAspectRatio=\"none\"><path d=\"M0,190 C120,180 260,130 500,80 S680,20 900,36\"/></svg></div>",
    "needs": [
     "ui"
@@ -2184,8 +2190,8 @@
    "cap": "component-html",
    "src": "components.css",
    "params": {},
-   "use": "本屏的信息结构；只填文案与数字，样式在 components.css",
-   "avoid": "自己改样式、加图形、加图标",
+   "use": "两档并列、要突出其中一档、讲方案与定价时选它",
+   "avoid": "超过两档（挤）；每档说明超过 2 行",
    "code": "<div class=\"ui-price\" data-anim=\"price\"><div class=\"p\">试用<b>¥0</b>14 天</div><div class=\"p hot\">标准<b>¥299</b>每月</div></div>",
    "needs": [
     "ui"
@@ -2208,8 +2214,8 @@
    "cap": "component-html",
    "src": "components.css",
    "params": {},
-   "use": "本屏的信息结构；只填文案与数字，样式在 components.css",
-   "avoid": "自己改样式、加图形、加图标",
+   "use": "单条即时提示、讲新消息、提醒、告警时选它",
+   "avoid": "一屏放两条（那是列表，换 U05）",
    "code": "<div class=\"ui-toast\" data-anim=\"toast\"><span class=\"dot\"></span>新消息</div>",
    "needs": [
     "ui"
@@ -2233,8 +2239,8 @@
    "cap": "component-html",
    "src": "components.css",
    "params": {},
-   "use": "本屏的信息结构；只填文案与数字，样式在 components.css",
-   "avoid": "自己改样式、加图形、加图标",
+   "use": "讲团队、用户规模、一群人时选它",
+   "avoid": "同屏再放第二个头像组；头像数超过 6",
    "code": "<div class=\"ui-avatars\" data-anim=\"avatars\"><i></i><i></i><i></i></div>",
    "needs": [
     "ui"
@@ -2257,8 +2263,8 @@
    "cap": "component-html",
    "src": "components.css",
    "params": {},
-   "use": "本屏的信息结构；只填文案与数字，样式在 components.css",
-   "avoid": "自己改样式、加图形、加图标",
+   "use": "几个节点串成一条线、讲阶段或里程碑时选它",
+   "avoid": "节点超过 5 个；节点之间有分支时换 U02",
    "code": "<div class=\"ui-timeline\" data-anim=\"timeline\"><div class=\"t\">起点</div><div class=\"t on\">终点</div></div>",
    "needs": [
     "ui"
@@ -2452,8 +2458,8 @@
    "src": "components.css",
    "params": {},
    "note": "视频封面 + 播放态；讲演示、课程、录屏",
-   "use": "本屏的信息结构；只填文案与数字，样式在 components.css",
-   "avoid": "自己改样式、加图形、加图标",
+   "use": "讲演示、课程、录屏、视频内容时选它",
+   "avoid": "同屏再放第二个播放器；没有视频内容时别用（成了假播放器）",
    "code": "<div class=\"ui-player\" data-anim=\"player\"><span class=\"play\"></span><span class=\"badge\">02:14</span></div>",
    "needs": [
     "ui"
@@ -2478,8 +2484,8 @@
    "src": "components.css",
    "params": {},
    "note": "文件名 + 体积/状态；讲交付物、合同、报告",
-   "use": "本屏的信息结构；只填文案与数字，样式在 components.css",
-   "avoid": "自己改样式、加图形、加图标",
+   "use": "讲交付物、合同、报告、附件时选它",
+   "avoid": "一屏超过两张（会退化成列表）；文件名超过 12 字",
    "code": "<div class=\"ui-file\" data-anim=\"file\"><span class=\"ic\"></span><div><b>报价单-2026.pdf</b><div class=\"meta\">2.4 MB · 已发出</div></div></div>",
    "needs": [
     "ui"
@@ -2502,8 +2508,8 @@
    "src": "components.css",
    "params": {},
    "note": "坐标点 + 区域说明；讲覆盖、门店、客户分布",
-   "use": "本屏的信息结构；只填文案与数字，样式在 components.css",
-   "avoid": "自己改样式、加图形、加图标",
+   "use": "讲覆盖、门店、客户分布这种「有位置」的内容时选它",
+   "avoid": "不是真地理关系时别用（会误导）；同屏再放第二张地图",
    "code": "<div class=\"ui-map\" data-anim=\"map\"><i class=\"pin\" style=\"left:32%;top:38%\"></i><i class=\"pin\" style=\"left:68%;top:56%\"></i><span class=\"cap\">华东区 · 12 个客户</span></div>",
    "needs": [
     "ui"
@@ -2527,8 +2533,8 @@
    "src": "components.css",
    "params": {},
    "note": "章节 + 时间码；讲结构、议程",
-   "use": "本屏的信息结构；只填文案与数字，样式在 components.css",
-   "avoid": "自己改样式、加图形、加图标",
+   "use": "讲结构、议程、这一节包含什么时选它",
+   "avoid": "超过 6 条；和 U66 目录树同屏",
    "code": "<div class=\"ui-toc\" data-anim=\"toc\"><div class=\"i\"><span>一、现状</span><span>00:12</span></div><div class=\"i\"><span>二、做法</span><span>01:40</span></div><div class=\"i\"><span>三、结果</span><span>03:05</span></div></div>",
    "needs": [
     "ui"
@@ -2551,8 +2557,8 @@
    "src": "components.css",
    "params": {},
    "note": "输入项 + 提交按钮；讲流程、留资、注册",
-   "use": "本屏的信息结构；只填文案与数字，样式在 components.css",
-   "avoid": "自己改样式、加图形、加图标",
+   "use": "讲流程、留资、注册、要用户填东西时选它",
+   "avoid": "同屏再放第二个表单；输入项超过 4 个",
    "code": "<div class=\"ui-form\" data-anim=\"form\"><div class=\"f\">公司名称</div><div class=\"f\">联系人</div><div class=\"f on\">邮箱 · 已校验</div><button class=\"btn\">提交</button></div>",
    "needs": [
     "ui"
@@ -2575,8 +2581,8 @@
    "src": "components.css",
    "params": {},
    "note": "一排等大的标签；讲分类、来源、关键词",
-   "use": "本屏的信息结构；只填文案与数字，样式在 components.css",
-   "avoid": "自己改样式、加图形、加图标",
+   "use": "讲分类、来源、关键词这种「一堆短词」时选它",
+   "avoid": "标签超过 8 个（溢出）；标签长度差太大（等大才好看）",
    "code": "<div class=\"ui-tags\" data-anim=\"tags\"><span class=\"g\">展会</span><span class=\"g\">转介绍</span><span class=\"g\">官网</span><span class=\"g\">老客户</span></div>",
    "needs": [
     "ui"
@@ -2602,8 +2608,8 @@
    },
    "note": "从中心打开新页；强调聚焦、揭开",
    "kind": "iris",
-   "use": "每一刀的页间交接；只由转场脚本节点调用",
-   "avoid": "当屏内动效用；同一刀叠两个转场",
+   "use": "要从中心打开新页、强调聚焦或揭开时选它",
+   "avoid": "当屏内动效用；相邻两刀都从中心开（连着两次会腻）",
    "code": "",
    "needs": [],
    "impl": {
@@ -2624,8 +2630,8 @@
    },
    "note": "斜切盖入；中性推进，最稳的默认",
    "kind": "wipe-diag",
-   "use": "每一刀的页间交接；只由转场脚本节点调用",
-   "avoid": "当屏内动效用；同一刀叠两个转场",
+   "use": "中性推进、拿不准用哪刀时选它；最稳的默认",
+   "avoid": "连着三刀都用它（会显得没设计）；当屏内动效用",
    "code": "",
    "needs": [],
    "impl": {
@@ -2646,8 +2652,8 @@
    },
    "note": "自上而下盖住；段落收束",
    "kind": "curtain",
-   "use": "每一刀的页间交接；只由转场脚本节点调用",
-   "avoid": "当屏内动效用；同一刀叠两个转场",
+   "use": "段落收束、这一段讲完了，用落幕压住",
+   "avoid": "后面接的是轻快段落（落幕会把节奏压死）；当屏内动效用",
    "code": "",
    "needs": [],
    "impl": {
@@ -2668,8 +2674,8 @@
    },
    "note": "多条横条依次铺开；有节奏的分段",
    "kind": "blinds",
-   "use": "每一刀的页间交接；只由转场脚本节点调用",
-   "avoid": "当屏内动效用；同一刀叠两个转场",
+   "use": "有节奏的分段、要一刀一刀铺开时选它",
+   "avoid": "相邻两刀都用百叶窗；当屏内动效用",
    "code": "",
    "needs": [],
    "impl": {
@@ -2690,8 +2696,8 @@
    },
    "note": "新页从远处推近；强调进入",
    "kind": "zoom-cover",
-   "use": "每一刀的页间交接；只由转场脚本节点调用",
-   "avoid": "当屏内动效用；同一刀叠两个转场",
+   "use": "新内容从远处推近、强调「进入」时选它",
+   "avoid": "和 PT12 / PT14 相邻（都是推，看不出区别）；当屏内动效用",
    "code": "",
    "needs": [],
    "impl": {
@@ -2712,8 +2718,8 @@
    },
    "note": "两页同时横移；并列、递进",
    "kind": "push-both",
-   "use": "每一刀的页间交接；只由转场脚本节点调用",
-   "avoid": "当屏内动效用；同一刀叠两个转场",
+   "use": "两屏内容是并列、递进，一起横移过去时选它",
+   "avoid": "两屏不是并列关系时（推过去像「接着讲」）；当屏内动效用",
    "code": "",
    "needs": [],
    "impl": {
@@ -2734,8 +2740,8 @@
    },
    "note": "立体翻页；章节切换",
    "kind": "flip3d",
-   "use": "每一刀的页间交接；只由转场脚本节点调用",
-   "avoid": "当屏内动效用；同一刀叠两个转场",
+   "use": "章节切换、要一次明确的「翻过去」时选它",
+   "avoid": "连续两刀翻页（会晕）；屏长不足 2s（翻页演不完）",
    "code": "",
    "needs": [],
    "impl": {
@@ -2756,8 +2762,8 @@
    },
    "note": "一闪即换；重音、硬转折",
    "kind": "flash-cut",
-   "use": "每一刀的页间交接；只由转场脚本节点调用",
-   "avoid": "当屏内动效用；同一刀叠两个转场",
+   "use": "重音、硬转折、要「一闪即换」时选它",
+   "avoid": "连着两刀白闪（太吵）；安静的段落；当屏内动效用",
    "code": "",
    "needs": [],
    "impl": {
@@ -2850,8 +2856,8 @@
    },
    "note": "右侧斜切甩进来，带轻微模糊；节奏快、适合话题切换",
    "kind": "whip",
-   "use": "快节奏的页间交接；只由转场脚本节点调用",
-   "avoid": "当屏内动效用；同一刀叠两个转场",
+   "use": "节奏要快、话题切换、从侧面甩进来时选它",
+   "avoid": "上一刀已经是甩（方向会撞）；正式庄重的段落；当屏内动效用",
    "code": "",
    "needs": [],
    "impl": {
@@ -2872,8 +2878,8 @@
    },
    "note": "中间压黑一下再亮起来；适合时间跳转、段落换场",
    "kind": "fade-through",
-   "use": "段落之间换场、时间跳跃；只由转场脚本节点调用",
-   "avoid": "连着两刀都用（会喘不上气）",
+   "use": "时间跳转、段落换场、要停一拍时选它",
+   "avoid": "连着两刀压黑（像卡带）；当屏内动效用",
    "code": "",
    "needs": [],
    "impl": {
@@ -2894,8 +2900,8 @@
    },
    "note": "横向压扁再撑开；强调‘打开一层’",
    "kind": "squeeze",
-   "use": "揭开新一层信息时用；只由转场脚本节点调用",
-   "avoid": "竖屏里压太狠（低于 0.35 会像抖动）",
+   "use": "要表现「打开一层」、展开新维度时选它",
+   "avoid": "内容不是「打开一层」时（会误导）；当屏内动效用",
    "code": "",
    "needs": [],
    "impl": {
@@ -3825,7 +3831,8 @@
    "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t) return;\n  var _k = _t.querySelectorAll('{{child}}');\n  if (!_k.length) { _k = [_t]; }\n  timeline.to(_k, {color: '{{to}}', borderColor: '{{to}}', duration: {{dur}}, ease: '{{ease}}'}, {{at}});\n})();",
    "needs": [
     "text"
-   ]
+   ],
+   "trigger": true
   },
   {
    "id": "K29",
@@ -4309,8 +4316,8 @@
    },
    "note": "新页从下往上推满；最通用的推页",
    "kind": "wipe-up",
-   "use": "叙述向前推进时用；只由转场脚本节点调用",
-   "avoid": "同一刀叠两个转场",
+   "use": "最通用的推页、下往上推满时选它",
+   "avoid": "和 PT05 / PT14 相邻（都是上下推）；当屏内动效用",
    "code": "",
    "needs": [],
    "impl": {
@@ -4331,8 +4338,8 @@
    },
    "note": "从一个角斜切揭开；有方向感",
    "kind": "corner-reveal",
-   "use": "换场景、换地点；只由转场脚本节点调用",
-   "avoid": "连着两刀同方向",
+   "use": "要从一个角斜切揭开、有方向感时选它",
+   "avoid": "同一片连用两刀（都是角）；当屏内动效用",
    "code": "",
    "needs": [],
    "impl": {
@@ -4353,8 +4360,8 @@
    },
    "note": "新页从上落下盖住；像切换视图",
    "kind": "slide-down",
-   "use": "层级切换、回到上一层；只由转场脚本节点调用",
-   "avoid": "和 PT05 推近盖住同屏",
+   "use": "像切换视图、新页从上落下盖住时选它",
+   "avoid": "和 PT12 相邻（都是上下）；当屏内动效用",
    "code": "",
    "needs": [],
    "impl": {
@@ -4375,8 +4382,8 @@
    },
    "note": "新页从模糊里对焦；适合结论、回顾",
    "kind": "blur-in",
-   "use": "段落收束、回看；只由转场脚本节点调用",
-   "avoid": "连续两刀（会晕）",
+   "use": "结论、回顾、新页从模糊里对焦时选它",
+   "avoid": "快节奏段落（虚化入焦慢）；当屏内动效用",
    "code": "",
    "needs": [],
    "impl": {

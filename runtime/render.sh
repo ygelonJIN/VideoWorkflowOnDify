@@ -159,21 +159,21 @@ check_or_continue "真实 DOM 排版" env HYPERFRAMES_CLI="$HF_CLI" HYPERFRAMES_
 STAGE="检查页面时间线（空页/闪屏/动作越界）"
 check_or_continue "页面时间线" env HYPERFRAMES_CLI="$HF_CLI" HYPERFRAMES_BROWSER_PATH="$CHROME_BIN" "$NODE_BIN" 脚本/check_html_timing.mjs index.html
 STAGE="检查动效编号"
-echo "检查动效编号与 kit 调用（只报告）..."
 if [ -f 脚本/check_presets.py ]; then
-  python3 脚本/check_presets.py --html index.html || true
+  check_or_continue "动效编号" python3 脚本/check_presets.py --html index.html
 else
   for _d in "$PROJECT_DIR/.." "$PROJECT_DIR/../.." "$PROJECT_DIR/../../.."; do
     if [ -f "$_d/runtime/tools/check_presets.py" ]; then
-      python3 "$_d/runtime/tools/check_presets.py" --html index.html || true
+      check_or_continue "动效编号" python3 "$_d/runtime/tools/check_presets.py" --html index.html
       break
     fi
   done
 fi
 
+# 动效差异（2026-11-22 起记进 诊断/检查结果.txt）：以前这里只 `|| true` 打在终端上，
+# 五支片的"文字入场只有两三种、照片都在推近"从来没出现在你翻的那份报告里。
 STAGE="检查动效差异"
-echo "检查动效差异（只报告）..."
-HYPERFRAMES_CLI="$HF_CLI" HYPERFRAMES_BROWSER_PATH="$CHROME_BIN" "$NODE_BIN" 脚本/check_motion_variation.mjs index.html || true
+check_or_continue "动效差异" env HYPERFRAMES_CLI="$HF_CLI" HYPERFRAMES_BROWSER_PATH="$CHROME_BIN" "$NODE_BIN" 脚本/check_motion_variation.mjs index.html
 
 STAGE="检查构图差异"
 check_or_continue "构图差异" env HYPERFRAMES_CLI="$HF_CLI" HYPERFRAMES_BROWSER_PATH="$CHROME_BIN" "$NODE_BIN" 脚本/check_composition_variation.mjs index.html

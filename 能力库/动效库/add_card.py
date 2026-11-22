@@ -238,6 +238,36 @@ def validate(card, existing, kinds, classes):
             components = [c for c in existing.values() if c.get("role") == "component"]
             if not any(all(a in contracts.provides_of(c) for a in anchors) for c in components):
                 bad.append("没有组件提供这张卡需要的锚点 %s：先补组件 provides，或改卡" % "/".join(anchors))
+    # ---- 状态卡的落点声明（2026-11-22）----
+    # 判据只有一条：这张卡会不会把目标的内容改掉/塞进新元素？
+    # 会改内容的，必须声明它只落文字（needs 里有 text）或声明一个锚点（落叶子元素），
+    # 否则运行时只能把它丢在组件根上——那正是 s05 把三格指标清成一行 16px 的原因。
+    if str(role).startswith("state_"):
+        code = str(card.get("code") or "")
+        writes_content = ("textContent" in code or "innerHTML" in code)
+        if writes_content:
+            needs = {str(n) for n in (card.get("needs") or [])}
+            if "text" not in needs and not contracts.anchors_of(card):
+                bad.append("这张卡会改写目标文字（textContent/innerHTML），必须声明 needs 里有 text "
+                           "（只能落文字节点）或一个锚点（落组件内的叶子元素）")
+        if "trigger" in card and not isinstance(card["trigger"], bool):
+            bad.append("trigger 只能是 true / false")
+        if card.get("trigger") is True:
+            # 触发卡（点击/勾选/拖动/切换/状态灯）必须能落在一个真实元素上，
+            # 否则它连"发生了什么事"都画不出来，只剩一条没有结果的动画。
+            if not contracts.anchors_of(card) and "text" not in {str(n) for n in (card.get("needs") or [])}:
+                bad.append("trigger=true 的卡必须有锚点或 needs=text：触发总得有个被点的东西")
+    # ---- 离场卡（2026-11-22）----
+    # exit=true 只给"结束时真的消失"的卡，R1 把它固定在切点前 0.5 秒。
+    if "exit" in card:
+        if not isinstance(card["exit"], bool):
+            bad.append("exit 只能是 true / false")
+        elif card["exit"]:
+            if role != "decoration":
+                bad.append("exit=true 只给 decoration（离场是元素级收束，不占内容槽位）")
+            if not re.search(r"opacity['\"]?\s*:\s*0(?![.\d])", str(card.get("code") or "")):
+                bad.append("exit=true 的卡必须真的把元素藏掉（代码里要有 opacity:0），"
+                           "否则它不是离场卡，只是另一张入场/装饰卡")
     if role == "bg":
         if not card.get("note"):
             bad.append("背景卡必须有 note（模型靠它选卡）")

@@ -33,7 +33,7 @@ MAX_DUR = 2.0
 
 SEL_MAP = {
     "T06": ".num", "DA01": ".num", "DA04": ".num", "DA02": ".bars b",
-    "DA03": ".row", "S04": ".row", "S05": ".ph",
+    "DA03": ".row", "S04": ".row",
     "S06": ".row", "S07": ".row", "S09": ".row",
     "S11": ".row", "S08": ".panel", "S10": ".bars",
     "UA01": ".panel", "UA02": ".row", "UA03": ".row em", "UA04": ".bars b",

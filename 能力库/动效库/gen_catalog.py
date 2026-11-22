@@ -51,14 +51,23 @@ FAMILY_ORDER = ["入场", "状态", "字形", "版面", "离场", "结构", "照
                 "材质", "镜头", "交互", "绘制", "UI", "背景", "页间转场", "组件"]
 
 MOTION_ROLES = ["entrance_text", "entrance_block", "state_text", "state_block",
-                "component_motion", "decoration"]
+                "component_motion", "decoration", "exit"]
 
-HARD_RULES = """## 四条硬规则（v2，2026-11-13）
+# 跨片用量台账（2026-11-22）：放在定义层外面、由 motion_ledger.py 扫成片重算。
+# 目的只有一个：把"最近几支用过哪些编号"喂给选择层，让模型在同等条件下换别的。
+# 这里不替模型换卡（那是 §3.3 禁止的），只把事实摆到它面前。
+LEDGER = HERE / "usage_ledger.json"
+RECENT_FILMS = 3
+
+HARD_RULES = """## 七条硬规则（v3，2026-11-22）
 
 1. **字由 HTML 承载**：canvas 里不放文字。
-2. **每屏一个主运动**，其余是次级；相邻两屏的主运动不能是同一张卡。切点前 0.3–0.5 秒要有收束（离场或自带回位），**不强制用 X 卡**。
+2. **每屏一个主运动**，其余是次级；相邻两屏的主运动不能是同一张卡。切点前 0.3–0.5 秒要有收束（用 `exit` 族的卡，或元素自带回位）。
 3. **动效由时间线驱动**，任意一帧可 seek 复现；禁 `requestAnimationFrame`、`performance.now`、`Math.random`、`yoyo`/`repeat` 无限循环（按 `t` 的周期函数不算循环）。
 4. **模型写数据不写实现**：只给编号 + 目标 `data-anim` 名 + 时序；坐标、目标框、路径一律由场景 HTML 给。
+5. **状态卡只能改它自己的那个元素**：`writes=content`（会改写目标文字）的卡只许落在文字节点或组件声明的锚点（叶子）上；落在组件根上会把组件拆掉。没有锚点的 `overlay` 卡（自己 append 元素）同理，不许落在组件根。
+6. **触发型状态卡必须配后续**（`catalog.state_meta[编号].trigger`）：点击/勾选/拖动/切换/状态灯只是"发生了一件事"，同一屏必须再给一条 `then` 说明结果；给不出就别用这张卡——孤零零一次点击不算动效，算错。
+7. **标注卡讲的是语义，不是装饰**：叉/划掉 = 否掉一个具体做法（陈述现象不算否定），括号/框 = 给一句旁注或归组（旁边没有那句旁注就别画），圈/荧光/下划线 = 强调一个关键词（不是整句），进度条/数值条 = 有真实数字（`state_meta.requires_number`）。选卡先读 `catalog.motion_cards` 的 `use`/`avoid`；**标注不许落标题**，全片 `deco` ≤ ⌈屏数÷3⌉ 且相邻两屏不都写。
 """
 
 HEADER = """# 动效能力卡（自动生成）
@@ -104,8 +113,153 @@ def media_entrances(cards):
     return sorted(c["id"] for c in cards if media_entrance_ok(c))
 
 
+def state_meta_of(cards):
+    """状态卡的能力声明（2026-11-22）。
+
+    writes  卡对目标做了什么：
+              content = 改写目标文字（textContent / innerHTML）
+              overlay = 往目标里 append 自己造的元素
+              style   = 只改目标自己的样式/变换
+    trigger 是不是"发生了一件事"的交互市值（点击/勾选/拖动/切换/状态灯）：
+            这类卡在 S2 规格里必须带 `then`（结果），R1 也会再验一次。
+    requires 目标要求：
+              text  = 必须是文字节点（title/lead/body/…）
+              item  = 必须是组件声明的锚点元素（看 card_needs）
+              block = 可以落在成块面板/组件根
+              空    = 没声明
+
+    判据只看卡自己的 code 和 needs，不看名字——加卡时不用再手写一遍。
+    """
+    out = {}
+    for c in sorted(cards, key=lambda x: x["id"]):
+        if c.get("status") != "ready" or not str(c.get("role") or "").startswith("state_"):
+            continue
+        code = str(c.get("code") or "")
+        if "textContent" in code or "innerHTML" in code:
+            writes = "content"
+        elif "createElement" in code or "appendChild" in code:
+            writes = "overlay"
+        else:
+            writes = "style"
+        needs = {str(n) for n in (c.get("needs") or [])}
+        if "text" in needs:
+            requires = "text"
+        elif contracts.anchors_of(c):
+            requires = "item"
+        elif "block" in needs:
+            requires = "block"
+        else:
+            requires = ""
+        entry = {"writes": writes, "trigger": bool(c.get("trigger")),
+                 "requires": requires}
+        # 比例条必须挂在真实数值上（S02/S18 的 avoid 就写着这一条）：本屏没有任何数字
+        # 就不许用，S2N / R1 各自判一次。
+        if c.get("requires_number"):
+            entry["requires_number"] = True
+        out[c["id"]] = entry
+    return out
+
+
+def card_desc(card, omit=()):
+    """每张可选卡的描述面：`use` / `avoid`（有 note 就带上）。
+
+    所有族共用这一份——背景、组件、转场、动效卡都从这里取。以前只有动效卡
+    走了统一函数，背景/组件/转场各自拼 name/note，加一族就会静默漏发；
+    漏发的结果模型只看到一串编号（"老是那几张"和"乱用"都从这儿长出来）。
+
+    `omit` 是整族一字不差、已经被提到 `family_rules` 的字段（见 family_rules_of），
+    卡级条目里不再重复。
+    """
+    out = {}
+    if "use" not in omit:
+        out["use"] = str(card.get("use") or "").strip()
+    if "avoid" not in omit:
+        out["avoid"] = str(card.get("avoid") or "").strip()
+    note = str(card.get("note") or "").strip()
+    if note:
+        out["note"] = note
+    return out
+
+
+def family_rules_of(cards):
+    """整族 `use`/`avoid` 一字不差 → 那是"族规则"，不是"卡描述"。
+
+    背景 21 张的 avoid 全是"和照片满屏同时用（会互相抢）"、组件 38 张的 avoid
+    全是"自己改样式、加图形、加图标"、转场 15 张的 use 全是"每一刀的页间交接"。
+    逐卡发 74 份一样的话，既占体积又不给选择层任何区分度；提到
+    `catalog.family_rules` 发一次、写明"对整族生效"才对。
+
+    判据只看数据，不用手维护：**能逐卡区分就逐卡发，区分不了就归族**。
+    以后给某张卡单独写了 use，它自动回到卡级。
+    """
+    rules = {}
+    roles = sorted({str(c.get("role") or "") for c in cards
+                    if c.get("status") == "ready" and c.get("role")})
+    for role in roles:
+        group = [c for c in cards if c.get("status") == "ready" and str(c.get("role") or "") == role]
+        if len(group) < 2:
+            continue
+        for field in ("use", "avoid"):
+            vals = [str(c.get(field) or "").strip() for c in group]
+            if all(vals) and len(set(vals)) == 1:
+                rules.setdefault(role, {})[field] = vals[0]
+    return rules
+
+
+def motion_cards_of(cards, rules=None):
+    """每张可选动效卡的语义（2026-11-22）。
+
+    以前 `catalog.motion.*` 只发编号：79 张装饰、21 张状态、47 张文字入场在模型眼里
+    都是一串 `K43`/`S18`/`T29`。结果有两头：一头是"老是那几张"（只有编号，没有理由
+    挑别的），另一头是"乱用"——`K50 打叉`（use=划掉一个错误做法）被画在"原始部落分肉"
+    上、`S18 数值映射条`（avoid=没有真实数值时会变装饰）被画在没有任何数字的屏上、
+    `K43 括号`（use=右侧挂一句旁注）被画在根本没有旁注的屏上。
+
+    这里把每张卡的 `name` / `use` / `avoid` 一并发出去；判据仍在 presets.json，
+    选择层只是终于能看到"这张卡是干什么的、什么时候不该用"。
+    """
+    out = {}
+    for c in sorted(cards, key=lambda x: x["id"]):
+        if c.get("status") != "ready":
+            continue
+        if c.get("role") in ("bg", "component", "page_transition", "shape"):
+            continue
+        omit = tuple((rules or {}).get(str(c.get("role") or ""), {}).keys())
+        out[c["id"]] = {
+            "name": str(c.get("name") or ""),
+            "family": str(c.get("family") or ""),
+            **card_desc(c, omit),
+        }
+    return out
+
+
+def recent_usage_of(limit=RECENT_FILMS, alive=None):
+    """最近几支成片各自用过哪些编号（片数口径，不是次数）。
+
+    只喂给选择层当参考，不参与任何"换卡"逻辑。
+    """
+    if not LEDGER.exists():
+        return {}
+    try:
+        data = json.loads(LEDGER.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+    films = data.get("films") if isinstance(data.get("films"), list) else []
+    recent = films[-limit:]
+    tally = collections.Counter()
+    for film in recent:
+        used = film.get("used") if isinstance(film.get("used"), dict) else {}
+        for cid in used:
+            # 删过的编号不发给模型：它查不到、只会污染"最近用过"的判断。
+            if alive is not None and str(cid) not in alive:
+                continue
+            tally[str(cid)] += 1
+    return dict(sorted(tally.items()))
+
+
 def catalog_of(cards):
     bg, comp, pt = {}, {}, {}
+    rules = family_rules_of(cards)
     motion = collections.OrderedDict((r, []) for r in MOTION_ROLES)
     for c in sorted(cards, key=lambda x: x["id"]):
         role = c.get("role") or ""
@@ -114,17 +268,24 @@ def catalog_of(cards):
             ink = c.get("ink")
             if isinstance(ink, dict):
                 ink = ink.get("primary", "")
-            bg[cid] = {"name": c.get("name", ""), "note": c.get("note", ""),
+            bg[cid] = {"name": c.get("name", ""),
                        "family": c.get("bg_family", ""), "base": c.get("base", ""),
-                       "ink_primary": ink or ""}
+                       "ink_primary": ink or "", **card_desc(c, rules.get(role, {}).keys())}
         elif role == "component":
             info = component_slots.build(c.get("code") or "", component_slots.REPEAT_HINTS.get(cid))
-            comp[cid] = component_slots.catalog_entry(c, info) if info else {"name": c.get("name", ""), "note": c.get("note", "")}
+            entry = component_slots.catalog_entry(c, info) if info else {"name": c.get("name", "")}
+            entry.update(card_desc(c, rules.get(role, {}).keys()))
+            comp[cid] = entry
         elif role == "page_transition":
-            pt[cid] = {"name": c.get("name", ""), "note": c.get("note", ""),
-                       "kind": c.get("kind", "")}
+            pt[cid] = {"name": c.get("name", ""),
+                       "kind": c.get("kind", ""), **card_desc(c, rules.get(role, {}).keys())}
         elif role in motion:
-            motion[role].append(cid)
+            # 离场卡单独一格：它只在屏尾收束时用，塞进 decoration 会被当成普通装饰
+            # 落在屏中，元素一消失就补不回来（2026-11-22）。
+            if role == "decoration" and c.get("exit"):
+                motion["exit"].append(cid)
+            else:
+                motion[role].append(cid)
 
     # 派生族：照片带入场的可选项（选择层里单独一格，见 media_entrance_ok 的注释）。
     motion["entrance_media"] = media_entrances(cards)
@@ -164,6 +325,23 @@ def catalog_of(cards):
         "motion_meta": motion_meta,
         "motion_by_component": contracts.component_motions(cards),
         "card_needs": card_needs,
+        # 状态卡的能力声明（writes / trigger / requires）：S2 据此知道哪张卡要 then、
+        # 哪张卡只能落在文字节点；R1 用同一份表把落错目标的卡丢掉并点名。
+        "state_meta": state_meta_of(cards),
+        # 每张元素卡自己声明的 needs（text / block / media / 锚点…）：S2N 用它在
+        # 展开前判断"这张卡能不能落在文字上"，deco 那格尤其需要（K 族 30 张只要文字）。
+        # 每张可选动效卡的名字 / 用途 / 禁忌：模型靠它选，不靠编号猜。
+        "motion_cards": motion_cards_of(cards, rules),
+        # 整族一字不差的 use/avoid（对整族生效的规则），卡级条目里不再重复。
+        # 现在通常是空的：这些族只是"多数相同"，不是"全部相同"（见 family_rules_of），
+        # 所以仍然逐卡发；哪天整族统一了，它会自动出现。
+        **({"family_rules": rules} if rules else {}),
+        "motion_needs": {c["id"]: [str(n) for n in (c.get("needs") or [])]
+                         for c in sorted(cards, key=lambda x: x["id"])
+                         if c.get("status") == "ready"
+                         and c.get("role") not in ("bg", "component", "page_transition", "shape")},
+        # 最近几支成片用过的编号（片数口径）：选择层"同等条件下换别的"的依据。
+        "recent_usage": recent_usage_of(alive={c["id"] for c in cards if c.get("status") == "ready"}),
     }
 
 
@@ -219,19 +397,22 @@ def render_cards_md(cards):
         out.append("### %s\n" % fam)
         if fam == "组件":
             out.append("组件只给编号，HTML 片段见 [`组件卡.md`](组件卡.md)。\n")
-            out.append("| 编号 | 名字 | 什么时候用 |")
-            out.append("|---|---|---|")
+            out.append("| 编号 | 名字 | 结构 | 什么时候选 | 什么时候别选 |")
+            out.append("|---|---|---|---|---|")
             for c in items:
-                out.append("| %s | %s | %s |" % (c["id"], c.get("name", ""), c.get("note", "")))
+                out.append("| %s | %s | %s | %s | %s |" % (
+                    c["id"], c.get("name", ""), c.get("note", ""),
+                    c.get("use", ""), c.get("avoid", "")))
             out.append("")
             continue
         if fam == "背景":
-            out.append("| 编号 | 名字 | 视觉族 | 适合什么内容 | 触发词 |")
-            out.append("|---|---|---|---|---|")
+            out.append("| 编号 | 名字 | 视觉族 | 什么时候选 | 什么时候别选 | 长什么样 | 触发词 |")
+            out.append("|---|---|---|---|---|---|---|")
             for c in items:
                 kw = "、".join(c.get("keywords") or [])
-                out.append("| %s | %s | %s | %s | %s |" % (
-                    c["id"], c.get("name", ""), c.get("bg_family", ""), c.get("note", ""), kw))
+                out.append("| %s | %s | %s | %s | %s | %s | %s |" % (
+                    c["id"], c.get("name", ""), c.get("bg_family", ""),
+                    c.get("use", ""), c.get("avoid", ""), c.get("note", ""), kw))
             out.append("")
             continue
         if fam == "页间转场":
@@ -268,10 +449,12 @@ def render_comp_md(cards):
            "> 变量只用 `--ui-*`；同一支片子只改颜色与圆角，不改结构。",
            "> 组件**逐条入场**，不要整块淡入。\n",
            "## 总表\n",
-           "| 编号 | 名字 | 什么时候用 |",
-           "|---|---|---|"]
+           "| 编号 | 名字 | 结构 | 什么时候选 | 什么时候别选 |",
+           "|---|---|---|---|---|"]
     for c in comps:
-        out.append("| %s | %s | %s |" % (c["id"], c.get("name", ""), c.get("note", "")))
+        out.append("| %s | %s | %s | %s | %s |" % (
+            c["id"], c.get("name", ""), c.get("note", ""),
+            c.get("use", ""), c.get("avoid", "")))
     out.append("")
     for c in comps:
         out.append("## %s %s\n" % (c["id"], c.get("name", "")))
