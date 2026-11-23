@@ -2750,7 +2750,7 @@ def install_cue_times(document: str, cues: list[dict], entries: list[dict], time
         #      揭示，从切点前 1.66s 开始，被下一屏盖掉时还剩 0.34s 没演完（s02）；
         #   3) 中段大段静止：s02/s04/s05 各有 2.3-2.9s 完全不动。
         # 现在：顺序由 role 槽位决定（R1 传 k/n），节奏由真实屏长算出的等距网格决定，
-        # 末位元素的收尾落在切点前 TAIL（默认 1.5s）；beat 只在
+        # 末位元素的收尾落在切点前 TAIL（默认 2.0s，2026-11-23 从 1.5s 调）；beat 只在
         # 网格槽 ±0.4 步的带宽里微调，保"跟口播"但不决定先后。
         'window.__ptDurOf = function(scene){\n'
         '  var el = document.querySelector(\'.scene[data-scene="\' + scene + \'"]\');\n'
@@ -2775,7 +2775,7 @@ def install_cue_times(document: str, cues: list[dict], entries: list[dict], time
         # 最长卡在前几屏时，静止被放大成 1.75s；最长卡正好在末位就只有 0.35s。
         # 现在改成：按每张卡的**收完时刻**等距铺开，末位收在 屏长 - TAIL，
         # 静止对每屏都是 TAIL；起点不足时依次退让，靠 hi/lo 夹住，保证不越界、不反序。
-        '  var TAIL = (window.__slotTail == null ? 1.5 : Number(window.__slotTail));\n'
+        '  var TAIL = (window.__slotTail == null ? 2.0 : Number(window.__slotTail));\n'
         '  var MIN = 0.22;\n'
         '  var GUTTER = 0.10;\n'
         '  var lead = (window.__ptDurOf ? window.__ptDurOf(scene) : 0) + 0.18;\n'

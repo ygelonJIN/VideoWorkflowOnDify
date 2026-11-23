@@ -225,11 +225,17 @@ def motion_cards_of(cards, rules=None):
         if c.get("role") in ("bg", "component", "page_transition", "shape"):
             continue
         omit = tuple((rules or {}).get(str(c.get("role") or ""), {}).keys())
-        out[c["id"]] = {
+        item = {
             "name": str(c.get("name") or ""),
             "family": str(c.get("family") or ""),
             **card_desc(c, omit),
         }
+        # 目标字数上限（2026-11-23）：字距/描边这类会改变行宽的卡，标题超过这个
+        # 字宽就会在动画中途折行。定义在卡上（`title_max_units`），选择层和展开层
+        # 都拿同一个数，不各写一套。
+        if c.get("title_max_units"):
+            item["title_max_units"] = int(c["title_max_units"])
+        out[c["id"]] = item
     return out
 
 

@@ -69,7 +69,21 @@ def build_blocks():
             if swap:
                 unsafe.append('        "%s": "%s",' % (c["id"], swap))
     unsafe += ["    }", ""]
-    return ("\n".join(tpl) + "\n" + "\n".join(default) + "\n" + "\n".join(unsafe),
+
+    # title_max_units：标题超过这个字宽，字距/描边卡会把一行撑出 840 栏、动画中途折行
+    # （2026-11-23 s01：8 字 @0.18em = 944px > 840，先两行、收到 -0.03em 后跳成一行）。
+    # 展开层拿到这张表：标题超限就丢弃这张卡并点名重跑 S2，不换卡。
+    limits = [
+        "    # 标题字数上限（字宽）：超过就丢卡点名，不换卡。",
+        "    # 由 sync_expander.py 从 presets.json 的 title_max_units 生成，不要手改。",
+        "    CARD_TITLE_MAX_UNITS = {",
+    ]
+    for c in bp.load()["presets"]:
+        if c.get("title_max_units"):
+            limits.append('        "%s": %d,' % (c["id"], int(c["title_max_units"])))
+    limits += ["    }", ""]
+    return ("\n".join(tpl) + "\n" + "\n".join(default) + "\n" + "\n".join(unsafe)
+            + "\n" + "\n".join(limits),
             [c["id"] for c in cards])
 
 

@@ -156,6 +156,12 @@ def validate(card, existing, kinds, classes):
                     bad.append("text_swap %s 不是 ready" % swap)
                 if other.get("text_safe") is False:
                     bad.append("text_swap %s 自己也不能落在文字上，换过去等于没换" % swap)
+    # title_max_units：这张卡最多能落在几个字宽的标题上（字距/描边会改变行宽）。
+    # 缺省表示没有这条限制；写了就必须是正整数，展开层按它判会不会撑出 840 栏。
+    if "title_max_units" in card:
+        units = card.get("title_max_units")
+        if isinstance(units, bool) or not isinstance(units, int) or units < 1:
+            bad.append("title_max_units 只能是正整数（标题最多几个字宽）")
     role = card["role"]
     # ---- 状态卡不许把根元素重新藏起来（2026-11-21）----
     # state_* 的职责是改变一个**已经可见**的元素。它一旦给根元素设了隐藏起始态，就成了

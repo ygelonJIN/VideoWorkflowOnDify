@@ -55,7 +55,7 @@ bash /Volumes/TUF ESD-T1A Media/视频工作流/runtime/tools/run_dify_output.sh
 | 照片槽的压暗 | 是 `.media` 的子元素 `.media-scrim`，**不是槽上的 `::after`**——空槽不许露板，装饰要跟内容同透明度 | `R2` 的 `media_html` + `layout_composer.build_scene_css` |
 | 状态卡 | `state_*` 卡不许给**根元素**设隐藏起始态（动子元素要声明 `child`）；一屏一个 role / 一个组件 `anim` 名只留一条 | `add_card.validate` + `S2N` 去重 |
 | 标题换行 | **`R2` 按标点切 2 段写死 `<br>`**，`solve_scale` 再按「最长那一行」反算字号（840/8=105→100 档） | `R2` 的 code + `layout_composer.solve_scale` |
-| 屏内动作时刻 | 顺序由 `role` 槽位定（title → 辅助 → body → media → deco（跟在它自己的目标后面）→ 组件 → state；`out` 不占槽位、固定切点前 0.5s）；时刻由 `__slot` 按真实屏长铺开：有余量时按**等间隔**排、末位收在切点前 **1.5s**（`window.__slotTail`）；挤不下时才退回按收尾时刻等距。`beat` 只在槽内微调。每屏收完到切点的静止统一 1.5s | `R1` 展开成 `at(slot(...))` + `sync_video` 的 `window.__slot` |
+| 屏内动作时刻 | 顺序由 `role` 槽位定（title → 辅助 → body → media → deco（跟在它自己的目标后面）→ 组件 → state；`out` 不占槽位、固定切点前 0.5s）；时刻由 `__slot` 按真实屏长铺开：有余量时按**等间隔**排、末位收在切点前 **2.0s**（`window.__slotTail`）；挤不下时才退回按收尾时刻等距。`beat` 只在槽内微调。每屏收完到切点的静止统一 2.0s | `R1` 展开成 `at(slot(...))` + `sync_video` 的 `window.__slot` |
 | 页间转场几刀 | **N 屏必出 N-1 条 `__pt`**：`R3` 按切点表逐刀生成，kind 从能力目录派生；模型只给偏好，漏的按本片转场族补齐并点名重跑 `S2` | `R3` 的 `build_transition_script` + `pt_catalog` |
 | 照片落版 | 全部 840 通栏横带，高度 `band` 600/420/300、`portrait` 520、`inset` 360、`thumb` 300、`texture` 620；**只有 `full` 满屏**，而 `full` 在 `S2N` 就归一成 `band`，所以生成端写不出满屏照片 | `R2` 的 `FIXED_H` / `slot` |
 | 场景脚本外壳 | `<script>` + `push(function(timeline, at){` + `});` **只由 `R2` 生成一次**；剥壳、丢卡、补入场都在 body 层，永远碰不到外壳 | `R2` 的 code |

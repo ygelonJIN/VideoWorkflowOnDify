@@ -2415,8 +2415,9 @@
     "dur": 1.7,
     "ease": "power2.inOut"
    },
-   "use": "大标题、一句话落版；比 T01 逐字更安静",
-   "avoid": "小字号（收不收看不出）；已经用 K04 收紧过的同一句",
+   "use": "6 字以内的标题、一句话落版；比 T01 逐字更安静",
+   "avoid": "标题超过 6 字（0.18em 会把一行撑出 840 栏，动画中途折成两行）；正文/长句（断行点会被字距推着走）；小字号（收不收看不出）；已经用 K04 收紧过的同一句",
+   "title_max_units": 6,
    "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t) return;\n  timeline.fromTo(_t, {'letterSpacing': '{{loose}}'},\n    {'letterSpacing': '{{tight}}', 'duration': {{dur}}, 'ease': '{{ease}}'}, {{at}});\n})();",
    "needs": [
     "text"
