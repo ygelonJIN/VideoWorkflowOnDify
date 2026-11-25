@@ -10,6 +10,10 @@ const STORE_KEY = "studio.produce";
 interface Props {
   result: RunResult | null;
   inputs: RunInputs;
+  /** 批量时这条自动生成的项目名；单条为空，沿用时间戳。 */
+  defaultName?: string;
+  /** 批量上下文：只在界面标一下这是第几条，出片流程本身不变。 */
+  batch?: { index: number; total: number; topic: string } | null;
   onRun: () => void;
   onArtifacts: () => void;
   onNotice: (text: string) => void;
@@ -24,6 +28,11 @@ interface StoredProject {
   runId: string;
   dir: string;
   name: string;
+}
+
+/** 每条运行各自记自己的项目：切到另一条时不会串到上一批的目录。 */
+function storeKeyFor(runId: string | undefined): string {
+  return runId ? `${STORE_KEY}:${runId}` : STORE_KEY;
 }
 
 function timestampName(): string {
@@ -149,8 +158,8 @@ function Step({
 }
 
 /** 出片：运行结果 → 准备项目 → 出图提示词 → 放图 → 渲染成片。 */
-export function Produce({ result, inputs, onRun, onArtifacts, onNotice }: Props) {
-  const [projectName, setProjectName] = useState(timestampName);
+export function Produce({ result, inputs, defaultName = "", batch = null, onRun, onArtifacts, onNotice }: Props) {
+  const [projectName, setProjectName] = useState(() => defaultName || timestampName());
   const [projectDir, setProjectDir] = useState("");
   const [prompts, setPrompts] = useState<PromptCard[]>([]);
   const [images, setImages] = useState<InboxFile[]>([]);
@@ -173,6 +182,8 @@ export function Produce({ result, inputs, onRun, onArtifacts, onNotice }: Props)
   dirRef.current = projectDir;
   const phaseRef = useRef<"prepare" | "render" | null>(null);
   phaseRef.current = phase;
+  /** 本次构建的 jobId：批量里同时有多条项目在构建，只收自己这条的事件。 */
+  const jobRef = useRef("");
   const nameRef = useRef(projectName);
   nameRef.current = projectName;
   const allowRef = useRef(allowMissing);
@@ -250,12 +261,31 @@ export function Produce({ result, inputs, onRun, onArtifacts, onNotice }: Props)
     setPrompts(cards);
   }, []);
 
-  /* 换了工作流运行就拿新的 runId：项目名重新取时间戳，旧的准备结果不复用。 */
+  /* 换了工作流运行就拿新的 runId：每条运行只认自己存的项目，互不串。 */
   const handledRun = useRef<string | null>(null);
   useEffect(() => {
     const runId = result?.runId ?? null;
-    if (!runId || handledRun.current === runId) return;
+    if (!runId) {
+      if (handledRun.current !== null) {
+        handledRun.current = null;
+        jobRef.current = "";
+        setPhase(null);
+        setProjectDir("");
+        setPrompts([]);
+        setImages([]);
+        setUrls({});
+        setImageDir("");
+        setRendered(false);
+        setStarted(null);
+        setProjectName(defaultName || timestampName());
+      }
+      return;
+    }
+    if (handledRun.current === runId) return;
     handledRun.current = runId;
+    // 换了条目：上一段的构建事件不再属于这个界面，直接停掉监听对应关系
+    jobRef.current = "";
+    setPhase(null);
     setError(null);
     setStatus("");
     setLogs("");
@@ -263,14 +293,14 @@ export function Produce({ result, inputs, onRun, onArtifacts, onNotice }: Props)
     setStarted(null);
     let stored: StoredProject | null = null;
     try {
-      stored = JSON.parse(localStorage.getItem(STORE_KEY) || "null") as StoredProject | null;
+      stored = JSON.parse(localStorage.getItem(storeKeyFor(runId)) || "null") as StoredProject | null;
     } catch {
       stored = null;
     }
     if (stored && stored.runId === runId && stored.dir) {
       const dir = stored.dir;
       setProjectDir(dir);
-      setProjectName(stored.name || timestampName());
+      setProjectName(stored.name || defaultName || timestampName());
       void Promise.all([loadPrompts(dir), refreshImages(dir)])
         .then(async () => {
           if (await hasFinalVideo(dir)) setRendered(true);
@@ -287,13 +317,17 @@ export function Produce({ result, inputs, onRun, onArtifacts, onNotice }: Props)
     setImages([]);
     setUrls({});
     setImageDir("");
-    setProjectName(timestampName());
-  }, [result?.runId, loadPrompts, refreshImages, hasFinalVideo]);
+    setProjectName(defaultName || timestampName());
+  }, [result?.runId, defaultName, loadPrompts, refreshImages, hasFinalVideo]);
 
   useEffect(() => {
     if (!result?.runId || !projectDir) return;
     const stored: StoredProject = { runId: result.runId, dir: projectDir, name: projectName };
-    localStorage.setItem(STORE_KEY, JSON.stringify(stored));
+    try {
+      localStorage.setItem(storeKeyFor(result.runId), JSON.stringify(stored));
+    } catch {
+      /* 存不下不影响本次出片 */
+    }
   }, [projectDir, projectName, result?.runId]);
 
   const firstRef = useRef(0);
@@ -306,10 +340,13 @@ export function Produce({ result, inputs, onRun, onArtifacts, onNotice }: Props)
 
   useEffect(() => {
     const off = api.onBuild((event: BuildEvent) => {
+      // 只收当前这条启动的构建：切到别的条目后，旧构建的日志和完成不再改写这个界面
+      if (!jobRef.current || (event.jobId && event.jobId !== jobRef.current)) return;
       if (event.kind === "data") {
         setLogs((previous) => (previous + (event.text ?? "")).slice(-80000));
         return;
       }
+      jobRef.current = "";
       setPhase(null);
       if (event.code === 0) {
         if (event.action === "prepare") {
@@ -344,8 +381,11 @@ export function Produce({ result, inputs, onRun, onArtifacts, onNotice }: Props)
     setLogs("");
     setError(null);
     setStatus(action === "prepare" ? "准备中…" : "渲染中…");
+    const jobId = `produce-${crypto.randomUUID()}`;
+    jobRef.current = jobId;
     try {
       const info = await api.build({
+        jobId,
         action,
         projectName: nameRef.current.trim() || timestampName(),
         outputs: current.outputs,
@@ -360,6 +400,7 @@ export function Produce({ result, inputs, onRun, onArtifacts, onNotice }: Props)
       });
       setStarted(info);
     } catch (cause) {
+      jobRef.current = "";
       setPhase(null);
       setStatus("");
       setError((cause as Error).message);
@@ -422,7 +463,16 @@ export function Produce({ result, inputs, onRun, onArtifacts, onNotice }: Props)
     <section className="produce card">
       <div className="produce-head">
         <span className="produce-title">出片</span>
-        <span className="produce-sub">跑完工作流后按 1 → 5 走，按钮都在对应步骤里</span>
+        {batch && (
+          <span className="pill run produce-batch">
+            批量 · 第 {batch.index + 1}/{batch.total} 条
+          </span>
+        )}
+        <span className="produce-sub">
+          {batch
+            ? batch.topic.split(/\r?\n/).map((line) => line.trim()).find(Boolean) || "当前这条"
+            : "跑完工作流后按 1 → 5 走，按钮都在对应步骤里"}
+        </span>
         <span className="spacer" />
         <button className="btn sm ghost" onClick={onArtifacts}>看产物</button>
       </div>
@@ -478,7 +528,7 @@ export function Produce({ result, inputs, onRun, onArtifacts, onNotice }: Props)
             </button>
           </div>
           <div className="hint-text">
-            只在本地建 <code>HTML视频项目/{projectName || "项目名"}/</code>，写入图片计划、<code>媒体/出图/*.txt</code> 和出图清单；不出图、不配音、不渲染。
+            只在本地建 <code>成品/{projectName || "项目名"}/</code>，写入图片计划、<code>媒体/出图/*.txt</code> 和出图清单；不出图、不配音、不渲染。
           </div>
           {prepared && (
             <div className="step-row">

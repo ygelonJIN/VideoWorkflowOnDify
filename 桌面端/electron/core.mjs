@@ -211,7 +211,8 @@ export async function runWorkflow({ path: workflowPath, inputs = {}, until, prec
       ...(until ? { until } : {}),
       ...(precomputed ? { precomputed } : {}),
       ...(controller ? { signal: controller.signal } : {}),
-      ...(onEvent ? { onEvent } : {}),
+      // 事件带上 clientId：界面同时跑多条链路时要按运行分流，否则节点状态会互相覆盖。
+      ...(onEvent ? { onEvent: (payload) => onEvent({ ...payload, clientId }) } : {}),
     });
     const { trace, ...rest } = result;
     return rest;
@@ -260,11 +261,15 @@ function imageIdsFromOutputs(outputs) {
 }
 
 /** 准备项目 / 渲染成片：把本次运行的 End 输出写成 build 脚本认识的输入，再流式跑 Python。 */
-export async function startBuild({ kind, action, projectName, outputs, tts = {}, allowMissing = false, replace = false, onData, onExit } = {}) {
+export async function startBuild({ kind, action, projectName, outputs, tts = {}, allowMissing = false, replace = false, jobId = "", onData, onExit } = {}) {
   kind = kind ?? action;
   if (kind !== "prepare" && kind !== "render") throw new Error(`未知的构建动作：${kind}`);
   const name = String(projectName ?? "").trim();
-  if (!/^[A-Za-z0-9._-]+$/.test(name)) throw new Error("项目名只能包含字母、数字、点、下划线、横线");
+  // 允许中文项目名（成品目录一直是中文的），只挡路径分隔符和控制字符：
+  // 名字会拼进 成品/<名>/ 和 成品/Dify输出/<名>-blackframe-input.json。
+  if (!name || name === "." || name === ".." || name.length > 120 || /[\/\\:*?"<>|\u0000-\u001f]/.test(name)) {
+    throw new Error('项目名不能为空，也不能包含路径分隔符或 / \\ : * ? " < > | 这些字符');
+  }
   const html = outputs?.html_document;
   const voiceover = outputs?.voiceover_script;
   // 「准备」只落图像计划与出图提示词包，不需要 HTML 和口播（2026-11-18）。
@@ -341,7 +346,7 @@ export async function startBuild({ kind, action, projectName, outputs, tts = {},
     env,
     stdio: ["ignore", "pipe", "pipe"],
   });
-  const emit = (stream, text) => onData?.({ runId, action: kind, stream, text });
+  const emit = (stream, text) => onData?.({ runId, jobId, action: kind, stream, text });
   child.stdout.setEncoding("utf8");
   child.stderr.setEncoding("utf8");
   child.stdout.on("data", (chunk) => emit("out", chunk));
@@ -350,14 +355,14 @@ export async function startBuild({ kind, action, projectName, outputs, tts = {},
   const done = (code, extra = {}) => {
     if (exited) return;
     exited = true;
-    onExit?.({ runId, action: kind, code, ms: Date.now() - started, projectDir, expectedIds, ...extra });
+    onExit?.({ runId, jobId, action: kind, code, ms: Date.now() - started, projectDir, expectedIds, ...extra });
   };
   child.on("error", (error) => {
     emit("err", String(error.message));
     done(-1, { error: String(error.message) });
   });
   child.on("close", (code) => done(code ?? -1));
-  return { runId, projectDir, inputPath, expectedIds, hasMimoKey: Boolean(mimoKey) };
+  return { runId, jobId, projectDir, inputPath, expectedIds, hasMimoKey: Boolean(mimoKey) };
 }
 
 /** 运行输入不再预填示例正文；只保留 TTS 这类配置默认值，request_id 每次自动生成。 */

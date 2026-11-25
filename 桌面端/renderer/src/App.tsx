@@ -6,10 +6,20 @@ import { InputPanel } from "./InputPanel.js";
 import { Select } from "./Select.js";
 import { Settings } from "./Settings.js";
 import { Produce } from "./Produce.js";
+import { RunSwitch } from "./RunSwitch.js";
 import { ReviewPanel } from "./ReviewPanel.js";
 import type { SelectOption } from "./Select.js";
 import { bridge } from "./bridge.js";
-import type { EnvInfo, RunInputs, RunResult, TraceEvent, WorkflowInfo } from "./types.js";
+import {
+  autoProjectName,
+  cleanRequirements,
+  hasProducibleOutput,
+  precomputedFrom,
+  primaryVariable,
+  startableCount,
+  uniqueProjectName,
+} from "../../src/batch/model.js";
+import type { EnvInfo, RunInputs, RunItem, RunResult, RunStatus, TraceEvent, WorkflowInfo } from "./types.js";
 
 const api = bridge();
 
@@ -36,6 +46,18 @@ function timeOf(iso: string): string {
 }
 
 const LAST_RUN_KEY = "studio.lastRun";
+const RESUME_KEY = "studio.resumeRun";
+const PENDING_REVIEW_KEY = "studio.pendingReview";
+const RUNS_KEY = "studio.batchRuns";
+const RUN_CAP_KEY = "studio.batchRunCap";
+
+function slimResult(result: RunResult): RunResult {
+  return {
+    ...result,
+    nodes: result.nodes.map((node) => ({ ...node, inputs: undefined, outputs: undefined })),
+    outputsByNode: undefined,
+  };
+}
 
 /** 重启应用后还能接着出片：只存 End 输出和节点状态，不存每个节点的大段输入输出。 */
 function readLastRun(): { path: string; at: number; result: RunResult } | null {
@@ -52,18 +74,20 @@ function readLastRun(): { path: string; at: number; result: RunResult } | null {
 
 function saveLastRun(path: string, result: RunResult): void {
   try {
-    const slim: RunResult = {
-      ...result,
-      nodes: result.nodes.map((node) => ({ ...node, inputs: undefined, outputs: undefined })),
-      outputsByNode: undefined,
-    };
-    localStorage.setItem(LAST_RUN_KEY, JSON.stringify({ path, at: Date.now(), result: slim }));
+    localStorage.setItem(LAST_RUN_KEY, JSON.stringify({ path, at: Date.now(), result: slimResult(result) }));
   } catch {
     /* 容量不够就放弃恢复，不影响本次运行 */
   }
 }
 
-const RESUME_KEY = "studio.resumeRun";
+function clearLastRun(): void {
+  try {
+    localStorage.removeItem(LAST_RUN_KEY);
+    localStorage.removeItem(RESUME_KEY);
+  } catch {
+    /* 忽略 */
+  }
+}
 
 /**
  * 中断/失败的运行也要留一份快照：重启应用后「从选中节点重跑」靠它复用前面节点的输出。
@@ -97,7 +121,6 @@ function clearResumeRun(): void {
   }
 }
 
-const PENDING_REVIEW_KEY = "studio.pendingReview";
 /** 待审阅的这次运行：停在 A07，结果只在内存里等于迟早会丢，所以单独存一份。 */
 interface PendingReview {
   path: string;
@@ -134,14 +157,61 @@ function clearPendingReview(): void {
   }
 }
 
+/**
+ * 重启后恢复整批的运行视图：只留能接着出片的东西（结果、输入、项目名），
+ * 逐节点事件和节点输出不落盘。停在审阅里的那条恢复成「已停止」，要接着跑就重跑。
+ */
+function readStoredRuns(): { path: string; activeId: string; runs: RunItem[] } | null {
+  try {
+    const raw = localStorage.getItem(RUNS_KEY);
+    if (!raw) return null;
+    const saved = JSON.parse(raw) as {
+      path?: string;
+      activeId?: string;
+      runs?: Array<{
+        id?: string;
+        topic?: string;
+        name?: string;
+        status?: string;
+        result?: RunResult;
+        inputs?: RunInputs;
+        error?: string;
+      }>;
+    };
+    if (!Array.isArray(saved.runs) || saved.runs.length < 2) return null;
+    const allowed: RunStatus[] = ["ready", "incomplete", "error", "stopped"];
+    const runs: RunItem[] = saved.runs.map((item) => {
+      const status = allowed.includes(item.status as RunStatus) ? (item.status as RunStatus) : "stopped";
+      return {
+        id: item.id || crypto.randomUUID(),
+        topic: item.topic ?? "",
+        name: item.name ?? "",
+        status,
+        events: [],
+        statuses: {},
+        ...(item.result ? { result: item.result } : {}),
+        ...(item.inputs ? { inputs: item.inputs } : {}),
+        ...(item.error ? { error: item.error } : {}),
+      };
+    });
+    return { path: saved.path ?? "", activeId: saved.activeId ?? "", runs };
+  } catch {
+    return null;
+  }
+}
+
+function readRunCap(): number {
+  const parsed = Number(localStorage.getItem(RUN_CAP_KEY));
+  if (!Number.isFinite(parsed) || parsed < 1) return 2;
+  return Math.min(4, Math.floor(parsed));
+}
+
 export function App() {
   const [workflows, setWorkflows] = useState<Array<{ name: string; path: string }>>([]);
   const [graph, setGraph] = useState<WorkflowInfo | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [statuses, setStatuses] = useState<Record<string, string>>({});
-  const [events, setEvents] = useState<TraceEvent[]>([]);
-  const [result, setResult] = useState<RunResult | null>(null);
-  const [running, setRunning] = useState(false);
+  const [runs, setRuns] = useState<RunItem[]>([]);
+  const [activeRunId, setActiveRunId] = useState("");
   const [env, setEnv] = useState<EnvInfo | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [inputs, setInputs] = useState<RunInputs>(EMPTY_INPUTS);
@@ -155,15 +225,53 @@ export function App() {
   const [inspectorOpen, setInspectorOpen] = useState(true);
   const [consoleOpen, setConsoleOpen] = useState(true);
   const [showSettings, setShowSettings] = useState(false);
-  const [runningNodeId, setRunningNodeId] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [runCap, setRunCap] = useState(readRunCap);
   const [reviewGate, setReviewGate] = useState(() => localStorage.getItem("studio.reviewGate") !== "0");
-  const [review, setReview] = useState<PendingReview | null>(null);
   const [reviewOpen, setReviewOpen] = useState(false);
   const [reviewNotes, setReviewNotes] = useState("");
-  const runClientId = useRef<string | null>(null);
+
+  const runsRef = useRef(runs);
+  runsRef.current = runs;
+  const inputsRef = useRef(inputs);
+  inputsRef.current = inputs;
+  const launching = useRef(new Set<string>());
+  const restoredPath = useRef<string | null>(null);
+
+  const activeRun = runs.find((run) => run.id === activeRunId) ?? runs[0] ?? null;
+  const activeIndex = activeRun ? runs.findIndex((run) => run.id === activeRun.id) : -1;
+  const result = activeRun?.result ?? null;
+  const statuses = activeRun?.statuses ?? {};
+  const events = activeRun?.events ?? [];
+  const runningNodeId = activeRun?.runningNodeId ?? null;
+  const busy = runs.some((run) => run.status === "running" || run.status === "queued");
+  const batch = runs.length > 1;
+  const runStateText: Record<RunStatus, string> = {
+    queued: "排队中",
+    running: "运行中",
+    review: "待审阅",
+    ready: "可出片",
+    incomplete: "无成片",
+    error: "失败",
+    stopped: "已停止",
+  };
+
   // 闸门停在 a07：口播一出来就审，不等到 A17 烧完分镜/动效/合规
   const canReview = Boolean(graph?.nodes.some((node) => node.id === "a07"));
+
+  /** 当前选中的这条如果停在 A07，审阅卡就是它的。 */
+  const review = useMemo<PendingReview | null>(() => {
+    if (!graph || !activeRun || activeRun.status !== "review" || !activeRun.result) return null;
+    return { path: graph.path, at: 0, result: activeRun.result, inputs: activeRun.inputs ?? {} };
+  }, [graph, activeRun]);
+
+  useEffect(() => {
+    localStorage.setItem(RUN_CAP_KEY, String(runCap));
+  }, [runCap]);
+
+  useEffect(() => {
+    localStorage.setItem("studio.reviewGate", reviewGate ? "1" : "0");
+  }, [reviewGate]);
 
   const open = useCallback(async (path: string) => {
     try {
@@ -179,21 +287,11 @@ export function App() {
         setCanUndo(false);
         setCanRedo(false);
       });
-      setStatuses({});
-      setEvents([]);
-      setResult(null);
+      setRuns([]);
+      setActiveRunId("");
+      setReviewOpen(false);
       setError(null);
-      // 换工作流时，待审阅的那份只属于它自己的流程：同一条路径就恢复成收起状态，顶栏能点开
-      const pending = readPendingReview();
-      if (pending && pending.path === path) {
-        setReview(pending);
-        setReviewOpen(false);
-        setReviewNotes("");
-        setNotice("有一份待审阅的文案已恢复：点顶栏「文案待审阅」继续看。");
-      } else {
-        setReview(null);
-        setReviewOpen(false);
-      }
+      restoredPath.current = null;
     } catch (loadError) {
       setError((loadError as Error).message);
     }
@@ -215,10 +313,6 @@ export function App() {
   }, [open]);
 
   useEffect(() => {
-    localStorage.setItem("studio.reviewGate", reviewGate ? "1" : "0");
-  }, [reviewGate]);
-
-  useEffect(() => {
     let alive = true;
     Promise.all([api.workflows(), api.env(), api.inputs()]).then(([list, envInfo, defaults]) => {
       if (!alive) return;
@@ -237,120 +331,370 @@ export function App() {
     };
   }, [open]);
 
-  const run = useCallback(async (overrides?: { inputs?: RunInputs; precomputed?: Record<string, Record<string, unknown>> }) => {
-    if (!graph || running) return;
-    const effectiveInputs = overrides?.inputs ?? inputs;
-    const gate = reviewGate && canReview && !overrides?.precomputed;
-    const clientId = crypto.randomUUID();
-    runClientId.current = clientId;
-    setRunning(true);
-    setStatuses({});
-    setEvents([]);
-    setResult(null);
-    setError(null);
-    setNotice(null);
-    setRunningNodeId(null);
-    // 运行台挂在画布页右栏：开始跑就切回画布并展开右栏，保证能看见逐节点日志
-    setView("canvas");
-    setInspectorOpen(true);
-    const unsubscribe = api.onEvent((event) => {
-      setEvents((previous) => [...previous, event]);
-      if (event.nodeId) {
-        setStatuses((previous) => ({
-          ...previous,
-          [event.nodeId as string]:
-            event.type === "node_start" ? "running" : event.type === "node_end" ? "success" : (event.status ?? "error"),
-        }));
-        if (event.type === "node_start") {
-          setRunningNodeId(event.nodeId);
-          setSelectedId(event.nodeId);
-        }
+  /** 恢复上次的视图：待审阅 → 整批 → 上次成功 → 上次中断，只认当前这条 YAML。 */
+  useEffect(() => {
+    if (!graph || restoredPath.current === graph.path) return;
+    restoredPath.current = graph.path;
+    const pending = readPendingReview();
+    if (pending && pending.path === graph.path) {
+      const id = crypto.randomUUID();
+      setRuns([{ id, topic: "", name: "", status: "review", events: [], statuses: {}, result: pending.result, inputs: pending.inputs }]);
+      setActiveRunId(id);
+      setReviewOpen(false);
+      setNotice("有一份待审阅的文案已恢复：点顶栏「文案待审阅」继续看。");
+      return;
+    }
+    const stored = readStoredRuns();
+    if (stored && stored.path === graph.path) {
+      setRuns(stored.runs);
+      setActiveRunId(stored.runs.some((run) => run.id === stored.activeId) ? stored.activeId : stored.runs[0]?.id ?? "");
+      setNotice(`已恢复上次批量运行（${stored.runs.length} 条）`);
+      return;
+    }
+    const saved = readLastRun();
+    if (saved && saved.path === graph.path) {
+      const id = crypto.randomUUID();
+      setRuns([{
+        id,
+        topic: "",
+        name: "",
+        status: hasProducibleOutput(saved.result.outputs) ? "ready" : "incomplete",
+        events: [],
+        statuses: {},
+        result: saved.result,
+      }]);
+      setActiveRunId(id);
+      const when = saved.at ? new Date(saved.at).toLocaleString() : "";
+      setNotice(`已恢复上次运行结果${when ? `（${when}）` : ""}，可直接去「出片」接着做`);
+      return;
+    }
+    const resume = readResumeRun();
+    if (resume && resume.path === graph.path) {
+      const id = crypto.randomUUID();
+      setRuns([{
+        id,
+        topic: "",
+        name: "",
+        status: "stopped",
+        events: [],
+        statuses: {},
+        result: resume.result,
+        inputs: resume.inputs,
+      }]);
+      setActiveRunId(id);
+      const when = resume.at ? new Date(resume.at).toLocaleString() : "";
+      setNotice(`已恢复上次中断的运行${when ? `（${when}）` : ""}：选中节点后可在右侧「从此节点重跑」`);
+    }
+  }, [graph?.path]);
+
+  /** 整批只落盘能接着出片的东西；单条仍走 lastRun / resumeRun。 */
+  useEffect(() => {
+    if (!graph) return;
+    // 空列表是「刚打开工作流、正在恢复」或数量恢复之后的状态：
+    // 清空动作由 clearRuns 自己删 key，这里不抢在恢复 effect 之前把它删掉。
+    if (runs.length === 0) return;
+    if (runs.length === 1) {
+      try {
+        localStorage.removeItem(RUNS_KEY);
+      } catch {
+        /* 忽略 */
       }
-      if (event.type === "run_end") setRunningNodeId(null);
+      return;
+    }
+    const timer = setTimeout(() => {
+      try {
+        const payload = {
+          path: graph.path,
+          at: Date.now(),
+          activeId: activeRun?.id ?? "",
+          runs: runs.map((run) => ({
+            id: run.id,
+            topic: run.topic,
+            name: run.name,
+            // 停在审阅里的那条恢复后没法续跑（节点输出没落盘）：按已停止恢复，想继续就重跑
+            status: run.status === "review" ? "stopped" : run.status,
+            ...(run.result ? { result: slimResult(run.result) } : {}),
+            ...(run.inputs ? { inputs: run.inputs } : {}),
+            ...(run.error ? { error: run.error } : {}),
+          })),
+        };
+        localStorage.setItem(RUNS_KEY, JSON.stringify(payload));
+      } catch {
+        /* 存不下就放弃整批恢复，不影响本次批量 */
+      }
+    }, 600);
+    return () => clearTimeout(timer);
+  }, [runs, activeRun?.id, graph?.path]);
+
+  /**
+   * 跑一条。批量只是把多条依次丢进这里，由队列闸门控制同时跑几条。
+   * overrides.inputs 用于审阅续跑 / 从节点重跑；overrides.precomputed 有值时跳过闸门。
+   */
+  const launchRun = useCallback(async (
+    runId: string,
+    overrides?: { inputs?: RunInputs; precomputed?: Record<string, Record<string, unknown>> },
+  ) => {
+    const item = runsRef.current.find((run) => run.id === runId);
+    if (!item || !graph || item.status === "running") return;
+    const clientId = crypto.randomUUID();
+    const nextInputs = overrides?.inputs ?? item.inputs ?? inputsRef.current;
+    const gate = reviewGate && canReview && !overrides?.precomputed;
+    setRuns((previous) =>
+      previous.map((run) =>
+        run.id === runId
+          ? {
+              ...run,
+              status: "running",
+              clientId,
+              nodeTitle: "启动中…",
+              runningNodeId: null,
+              events: [],
+              statuses: {},
+              error: undefined,
+              inputs: nextInputs,
+            }
+          : run,
+      ),
+    );
+    const off = api.onEvent((event: TraceEvent) => {
+      // 批量里同时跑着别的链路：事件带 clientId，只改发出它的那条
+      if (event.clientId && event.clientId !== clientId) return;
+      setRuns((previous) =>
+        previous.map((run) => {
+          if (run.id !== runId || run.clientId !== clientId) return run;
+          if (event.type === "run_end") {
+            return { ...run, events: [...run.events, event], runningNodeId: null, nodeTitle: "" };
+          }
+          if (!event.nodeId) return { ...run, events: [...run.events, event] };
+          const status =
+            event.type === "node_start" ? "running" : event.type === "node_end" ? "success" : (event.status ?? "error");
+          return {
+            ...run,
+            events: [...run.events, event],
+            statuses: { ...run.statuses, [event.nodeId]: status },
+            runningNodeId: event.type === "node_start" ? event.nodeId : run.runningNodeId,
+            nodeTitle: event.type === "node_start" ? (event.title ?? event.nodeId) : "",
+          };
+        }),
+      );
     });
     try {
       const runResult = await api.run({
         path: graph.path,
         clientId,
-        inputs: effectiveInputs,
+        inputs: nextInputs,
         ...(gate ? { until: "a07" } : {}),
         ...(overrides?.precomputed ? { precomputed: overrides.precomputed } : {}),
       });
+      setRuns((previous) =>
+        previous.map((run) => {
+          // 停止后马上重跑时，旧那次的收尾不能再覆盖新那次（clientId 已经换了）
+          if (run.id !== runId || run.clientId !== clientId) return run;
+          if (gate && runResult.status === "stopped" && runResult.outputsByNode?.["a07"]) {
+            return { ...run, status: "review", result: runResult, nodeTitle: "口播待审阅" };
+          }
+          if (runResult.status === "success") {
+            const producible = hasProducibleOutput(runResult.outputs);
+            return {
+              ...run,
+              status: producible ? "ready" : "incomplete",
+              result: runResult,
+              nodeTitle: "",
+              ...(producible ? {} : { error: "运行成功，但没有 html_document / voiceover_script：这条链没走到出片口径。" }),
+            };
+          }
+          return {
+            ...run,
+            status: runResult.status === "stopped" ? "stopped" : "error",
+            result: runResult,
+            nodeTitle: "",
+            error: runResult.error ?? (runResult.status === "stopped" ? "已停止" : undefined),
+          };
+        }),
+      );
+
+      const single = runsRef.current.length === 1;
       if (gate && runResult.status === "stopped" && runResult.outputsByNode?.["a07"]) {
-        const pending: PendingReview = { path: graph.path, at: Date.now(), result: runResult, inputs: effectiveInputs };
-        setReview(pending);
-        setReviewOpen(true);
-        setReviewNotes("");
-        savePendingReview(pending);
-        setNotice("口播已生成，先审阅：重跑文案 / 继续生成画面 / 放弃这次运行");
+        const pending: PendingReview = { path: graph.path, at: Date.now(), result: runResult, inputs: nextInputs };
+        // 整批的待审阅逐条留在 runs 里，不走单条的恢复快照：否则重启后会丢批次、只剩一条
+        if (single) savePendingReview(pending);
+        if (single) {
+          setReviewOpen(true);
+          setReviewNotes("");
+          setNotice("口播已生成，先审阅：重跑文案 / 继续生成画面 / 放弃这次运行");
+        } else {
+          setNotice("有口播待审阅：在上方切换条里点「待审阅」那条逐条审。");
+        }
         return;
       }
-      setResult(runResult);
-      // 只记成功的结果：重跑失败时别把上一次能出片的运行覆盖掉
-      if (runResult.status === "success") {
-        saveLastRun(graph.path, runResult);
-        clearResumeRun();
+      const producible = runResult.status === "success" && hasProducibleOutput(runResult.outputs);
+      if (single) {
+        if (runResult.status === "success") {
+          saveLastRun(graph.path, runResult);
+          clearResumeRun();
+          clearPendingReview();
+        } else {
+          // 失败/停止也留一份：重启后能「从选中节点重跑」，不必把前面几十分钟再烧一遍
+          saveResumeRun({ path: graph.path, at: Date.now(), result: runResult, inputs: nextInputs });
+        }
+        if (producible) {
+          setView("produce");
+          setNotice("运行完成，接着按「准备项目 → 复制提示词 → 放图 → 渲染成片」走");
+        }
+        if (runResult.status === "error" && runResult.error) setError(runResult.error);
+        if (runResult.status !== "success" && runResult.error) setNotice(runResult.error);
       } else {
-        // 失败/停止也留一份：重启后能「从选中节点重跑」，不必把前面几十分钟再烧一遍
-        saveResumeRun({ path: graph.path, at: Date.now(), result: runResult, inputs: effectiveInputs });
+        if (producible) setNotice("这一条跑完了：在上方切换条里逐条去出片。");
+        else if (runResult.status === "error") setNotice(runResult.error ?? "有一条运行失败，点切换条看它的日志。");
       }
-      const produced =
-        typeof runResult.outputs.html_document === "string" && typeof runResult.outputs.voiceover_script === "string";
-      if (runResult.status === "success" && produced) {
-        setView("produce");
-        setNotice("运行完成，接着按「准备项目 → 复制提示词 → 放图 → 渲染成片」走");
-      }
-      if (runResult.status === "error" && runResult.error) setError(runResult.error);
-      if (runResult.status !== "success" && runResult.error) setNotice(runResult.error);
-    } catch (runError) {
-      setError((runError as Error).message);
-    } finally {
-      unsubscribe();
-      runClientId.current = null;
-      setRunning(false);
-    }
-  }, [graph, running, inputs, reviewGate, canReview]);
-
-  const stop = useCallback(async () => {
-    const clientId = runClientId.current;
-    if (!clientId) return;
-    setNotice("正在停止…");
-    try {
-      await api.cancel(clientId);
     } catch (cause) {
-      setNotice(`停止失败：${(cause as Error).message}`);
+      setRuns((previous) =>
+        previous.map((run) =>
+          run.id === runId && run.clientId === clientId
+            ? { ...run, status: "error", error: (cause as Error).message, nodeTitle: "", runningNodeId: null }
+            : run,
+        ),
+      );
+      if (runsRef.current.length === 1) setError((cause as Error).message);
+      else setNotice((cause as Error).message);
+    } finally {
+      off();
     }
+  }, [graph, reviewGate, canReview]);
+
+  // 运行闸门：排队的行按上限放行
+  useEffect(() => {
+    const active = runs.filter((run) => run.status === "running").length;
+    const queued = runs.filter((run) => run.status === "queued" && !launching.current.has(run.id));
+    const count = startableCount(queued.length, active, runCap);
+    if (count <= 0) return;
+    for (const run of queued.slice(0, count)) {
+      launching.current.add(run.id);
+      void launchRun(run.id).finally(() => launching.current.delete(run.id));
+    }
+  }, [runs, runCap, launchRun]);
+
+  /** 单条运行：清掉上一批的切换条，只留这一条。 */
+  const startSingle = useCallback(() => {
+    if (!graph) return;
+    if (runsRef.current.some((run) => run.status === "review")) {
+      if (!window.confirm("还有一份待审阅的文案没处理，重新运行会把它丢掉。继续？")) return;
+    }
+    const replacingBatch = runsRef.current.length > 1;
+    setShowInput(false);
+    clearPendingReview();
+    clearLastRun();
+    const target = primaryVariable(graph.startVariables);
+    const topic = target ? (inputsRef.current[target] ?? "") : "";
+    const id = crypto.randomUUID();
+    setRuns([{
+      id,
+      topic,
+      name: "",
+      status: "queued",
+      events: [],
+      statuses: {},
+      inputs: { ...inputsRef.current },
+    }]);
+    setActiveRunId(id);
+    setReviewOpen(false);
+    setReviewNotes("");
+    setView("canvas");
+    setInspectorOpen(true);
+    setError(null);
+    setNotice(replacingBatch ? "已切到单条运行；上一批的切换条收起了，项目和成片还在「产物」里。" : null);
+  }, [graph]);
+
+  /** 批量：只换主需求，其余输入全批共用；项目名按主题 + 时间戳自动避开已有目录。 */
+  const startBatch = useCallback(async (topics: string[], cap: number) => {
+    if (!graph) return;
+    if (runsRef.current.some((run) => run.status === "review")) {
+      if (!window.confirm("还有待审阅的文案没处理，重新运行会把它丢掉。继续？")) return;
+    }
+    const clean = cleanRequirements(topics);
+    if (clean.length === 0) {
+      setNotice("先写至少一条原始需求。");
+      return;
+    }
+    setShowInput(false);
+    clearPendingReview();
+    clearLastRun();
+    const projects = await api.projects().catch(() => []);
+    const taken = new Set(projects.map((project) => project.name));
+    const target = primaryVariable(graph.startVariables);
+    const now = new Date();
+    const items: RunItem[] = clean.map((topic, index) => {
+      const name = uniqueProjectName(autoProjectName(topic, index, now), taken);
+      taken.add(name);
+      const nextInputs: RunInputs = { ...inputsRef.current, ...(target ? { [target]: topic } : {}) };
+      if ("request_id" in nextInputs || graph.startVariables.some((variable) => variable.variable === "request_id")) {
+        nextInputs.request_id = name;
+      }
+      return {
+        id: crypto.randomUUID(),
+        topic,
+        name,
+        status: "queued",
+        events: [],
+        statuses: {},
+        inputs: nextInputs,
+      };
+    });
+    setRunCap(cap);
+    setRuns(items);
+    setActiveRunId(items[0]?.id ?? "");
+    setReviewOpen(false);
+    setReviewNotes("");
+    setView("canvas");
+    setInspectorOpen(true);
+    setError(null);
+    setNotice(`批量已开始：${items.length} 条，同时跑 ${Math.min(cap, items.length)} 条`);
+  }, [graph]);
+
+  const stopAll = useCallback(async () => {
+    const live = runsRef.current.filter((run) => run.status === "running" && run.clientId);
+    if (live.length === 0 && !runsRef.current.some((run) => run.status === "queued")) return;
+    setNotice("正在停止…");
+    setRuns((previous) =>
+      previous.map((run) =>
+        run.status === "running" || run.status === "queued"
+          ? { ...run, status: "stopped", nodeTitle: "", runningNodeId: null }
+          : run,
+      ),
+    );
+    await Promise.all(live.map((run) => api.cancel(run.clientId as string).catch(() => undefined)));
+  }, []);
+
+  const selectRun = useCallback((id: string) => {
+    const run = runsRef.current.find((item) => item.id === id);
+    setActiveRunId(id);
+    setReviewNotes("");
+    setReviewOpen(run?.status === "review");
+    if (run?.status === "review") setNotice(null);
   }, []);
 
   const continueFromReview = useCallback(() => {
-    if (!review) return;
-    const precomputed: Record<string, Record<string, unknown>> = {};
-    for (const node of review.result.nodes) {
-      if ((node.type === "llm" || node.type === "code") && node.status === "success" && node.outputs) {
-        precomputed[node.nodeId] = node.outputs;
-      }
-    }
-    const next = review;
+    if (!review || !activeRun) return;
+    const precomputed = precomputedFrom(review.result);
     clearPendingReview();
-    setReview(null);
     setReviewOpen(false);
-    void run({ inputs: next.inputs, precomputed });
-  }, [review, run]);
+    void launchRun(activeRun.id, { inputs: review.inputs, precomputed });
+  }, [review, activeRun, launchRun]);
 
   const rerunFromReview = useCallback((notes: string) => {
-    if (!review) return;
+    if (!review || !activeRun) return;
     const base = review.inputs;
     const next: RunInputs = { ...base };
     const note = notes.trim();
     if (note) {
       next.creative_preferences = [base.creative_preferences, "修改意见：" + note].filter(Boolean).join("\n");
     }
-    setInputs(next);
+    // 单条时把修改意见写回共用输入，下次运行也带着；批量只影响这一条
+    if (!batch) setInputs(next);
     clearPendingReview();
-    setReview(null);
     setReviewOpen(false);
-    void run({ inputs: next });
-  }, [review, run]);
+    void launchRun(activeRun.id, { inputs: next });
+  }, [review, activeRun, batch, launchRun]);
 
   /** 只把卡片收起来：这次 A 段结果留着，顶栏有入口点回来。 */
   const collapseReview = useCallback(() => {
@@ -361,34 +705,29 @@ export function App() {
   /** 真的放弃这次运行：丢掉 A 段结果和本地备份。 */
   const discardReview = useCallback(() => {
     clearPendingReview();
-    setReview(null);
+    setRuns((previous) =>
+      previous.map((run) =>
+        run.id === activeRun?.id ? { ...run, status: "stopped", result: undefined, nodeTitle: "" } : run,
+      ),
+    );
     setReviewOpen(false);
-    setResult(null);
     setNotice("已放弃这次运行，未生成画面；改完输入可以重新运行。");
+  }, [activeRun?.id]);
+
+  const clearRuns = useCallback(() => {
+    setRuns([]);
+    setActiveRunId("");
+    setReviewOpen(false);
+    try {
+      localStorage.removeItem(RUNS_KEY);
+    } catch {
+      /* 忽略 */
+    }
+    setNotice("已收起这一批的切换条；已经生成的项目和成片还在「产物」里。");
   }, []);
 
-  useEffect(() => {
-    if (!graph || result || running || review) return;
-    const saved = readLastRun();
-    if (saved && saved.path === graph.path) {
-      setResult(saved.result);
-      const when = saved.at ? new Date(saved.at).toLocaleString() : "";
-      setNotice(`已恢复上次运行结果${when ? `（${when}）` : ""}，可直接去「出片」接着做`);
-      return;
-    }
-    // 上次是失败/中途停止：恢复它，让「从此节点重跑」有东西可以复用
-    const resume = readResumeRun();
-    if (resume && resume.path === graph.path) {
-      setResult(resume.result);
-      const when = resume.at ? new Date(resume.at).toLocaleString() : "";
-      setNotice(`已恢复上次中断的运行${when ? `（${when}）` : ""}：选中节点后可在右侧「从此节点重跑」`);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [graph?.path, result, running, review]);
-
-  /** 重新读 YAML。force=true 是顶栏「重载」按钮：不看 sha1，直接把磁盘上的版本拿回来。 */
   const reloadGraph = useCallback(async (force: boolean) => {
-    if (!graph || running) return;
+    if (!graph || busy) return;
     try {
       if (!force) {
         const { rev } = await api.rev(graph.path);
@@ -402,7 +741,7 @@ export function App() {
       // 非强制那次是后台同步：文件暂时读不到就不打断当前操作，下一次编辑/运行会给出具体错误
       if (force) setError((cause as Error).message);
     }
-  }, [graph, running]);
+  }, [graph, busy]);
 
   // 别的脚本改了 YAML 时，窗口重新获得焦点就比对 sha1 并同步一次
   const syncExternal = useCallback(async () => {
@@ -420,9 +759,7 @@ export function App() {
   const selected = useMemo(() => graph?.nodes.find((node) => node.id === selectedId) ?? null, [graph, selectedId]);
 
   /** 有可出片结果时顶栏「出片」亮一个点。数量在步骤条里，这里只回答「有没有东西可做」。 */
-  const produced = Boolean(
-    result && typeof result.outputs.html_document === "string" && typeof result.outputs.voiceover_script === "string",
-  );
+  const produced = runs.some((run) => run.result && hasProducibleOutput(run.result.outputs));
 
   useEffect(() => {
     const prevent = (event: DragEvent) => event.preventDefault();
@@ -444,7 +781,7 @@ export function App() {
    * - 上次运行没跑过该节点时，前面能复用的照样复用。
    */
   const runFromNode = useCallback((nodeId: string) => {
-    if (!graph || running) return;
+    if (!graph || busy || !activeRun) return;
     const target = graph.nodes.find((node) => node.id === nodeId) ?? null;
     if (!result) {
       setNotice("还没有可复用的运行结果：先完整跑一次，之后才能从中途重跑。");
@@ -466,8 +803,11 @@ export function App() {
     }
     const reused = Object.keys(precomputed).length;
     // 一个都复用时等于整跑，闸门照旧生效，所以不传空的 precomputed
-    void run({ inputs, ...(reused > 0 ? { precomputed } : {}) });
-  }, [graph, running, result, inputs, run]);
+    void launchRun(activeRun.id, {
+      inputs: activeRun.inputs ?? inputs,
+      ...(reused > 0 ? { precomputed } : {}),
+    });
+  }, [graph, busy, activeRun, result, inputs, launchRun]);
 
   function applyUpdate(result: { graph: WorkflowInfo; canUndo?: boolean; canRedo?: boolean }) {
     setGraph(result.graph);
@@ -597,8 +937,10 @@ export function App() {
     }
   }
 
+  const showRunsBar = runs.length > 1 && view !== "artifacts";
+
   return (
-    <div className="app">
+    <div className={`app ${showRunsBar ? "has-runs" : ""}`}>
       <header className="topbar card">
         <div className="brand">
           <span className="name">视频工作流</span>
@@ -621,7 +963,7 @@ export function App() {
         <button
           className="btn sm ghost"
           onClick={() => void reloadGraph(true)}
-          disabled={!graph || running}
+          disabled={!graph || busy}
           title="重新读取磁盘上的 YAML（外部改过就用这个，不必切窗口触发同步）"
         >
           重载
@@ -664,7 +1006,7 @@ export function App() {
           {env ? ` · ${env.model}` : ""}
           {env?.hasKey ? " · key 已配置" : " · 无 key"}
         </span>
-        {/* 撤销/重做/输入/运行/设置是一组：换行时整组一起换，不拆散 */}
+        {/* 撤销/重做/运行/设置是一组：换行时整组一起换，不拆散 */}
         <div className="topbar-actions">
           <button
             className="btn sm ghost"
@@ -683,11 +1025,19 @@ export function App() {
             重做
           </button>
           <span className="vline" />
-          <button className="btn sm" onClick={() => setShowInput(true)}>输入</button>
-          {running ? (
-            <button className="btn sm danger" onClick={() => void stop()}>停止</button>
+          {busy ? (
+            <button className="btn sm danger stop" onClick={() => void stopAll()} title="停止这一批里所有在跑和排队的条目">
+              停止
+            </button>
           ) : (
-            <button className="btn sm primary" onClick={() => setShowInput(true)} disabled={!graph}>运行</button>
+            <button
+              className="btn primary run"
+              onClick={() => setShowInput(true)}
+              disabled={!graph}
+              title="打开运行输入：单条，或一次批量跑同一工作流的多条需求"
+            >
+              运行
+            </button>
           )}
           <button className="btn sm ghost" onClick={() => setShowSettings(true)}>设置</button>
           {review && !reviewOpen && (
@@ -704,6 +1054,10 @@ export function App() {
           )}
         </div>
       </header>
+
+      {showRunsBar && (
+        <RunSwitch runs={runs} activeId={activeRun?.id ?? ""} busy={busy} onSelect={selectRun} onClear={clearRuns} />
+      )}
 
       <div className={`work ${view === "canvas" && inspectorOpen && graph ? "" : "solo"}`}>
         <div className="main">
@@ -753,7 +1107,9 @@ export function App() {
           <div className="produce-layer" hidden={view !== "produce"}>
             <Produce
               result={result}
-              inputs={inputs}
+              inputs={activeRun?.inputs ?? inputs}
+              defaultName={activeRun?.name ?? ""}
+              batch={batch && activeRun ? { index: activeIndex, total: runs.length, topic: activeRun.topic } : null}
               onRun={() => setShowInput(true)}
               onArtifacts={() => setView("artifacts")}
               onNotice={setNotice}
@@ -787,11 +1143,14 @@ export function App() {
             <footer className={`bottom card ${consoleOpen ? "" : "collapsed"}`}>
               <div className="console-head">
                 <span className="console-title">运行台</span>
+                {batch && activeRun && (
+                  <span className="console-run">第 {activeIndex + 1}/{runs.length} 条</span>
+                )}
                 <span className="right">
                   <span className="elapsed">
-                    {result
-                      ? `${result.status === "stopped" ? (result.error ? "已停止" : "已完成") : result.status} · ${(result.ms / 1000).toFixed(2)}s`
-                      : running ? "运行中" : "就绪"}
+                    {activeRun
+                      ? `${runStateText[activeRun.status]}${result ? ` · ${(result.ms / 1000).toFixed(2)}s` : ""}`
+                      : "就绪"}
                   </span>
                 </span>
                 <button className="btn sm ghost toggle" onClick={() => setConsoleOpen((value) => !value)}>
@@ -808,6 +1167,7 @@ export function App() {
                     </div>
                   )}
                   {error && <div className="err">{error}</div>}
+                  {activeRun?.error && activeRun.status !== "review" && <div className="err">{activeRun.error}</div>}
                   {[...events].reverse().filter((event) => event.type !== "node_start").slice(0, 300).map((event) => (
                     <div key={event.seq}>
                       <span className="t">{timeOf(event.at)}</span>
@@ -819,7 +1179,9 @@ export function App() {
                       {event.error && <span className="err">{event.error}</span>}
                     </div>
                   ))}
-                  {events.length === 0 && !result && <div className="dim">点右上「运行」开始；会真实调用模型（先在顶栏「设置」里配 Key）。</div>}
+                  {events.length === 0 && !result && activeRun?.status !== "running" && (
+                    <div className="dim">点右上「运行」开始；可以在里面选单条或批量。会真实调用模型（先在顶栏「设置」里配 Key）。</div>
+                  )}
                   {events.length === 0 && result && <div className="dim">逐节点事件没有保留（应用重启过）；End 输出已恢复，可直接去「出片」。</div>}
                   {result && Object.keys(result.outputs).length > 0 && (
                     <div className="dim">产物：{Object.keys(result.outputs).join("、")}</div>
@@ -835,21 +1197,16 @@ export function App() {
         <InputPanel
           inputs={inputs}
           variables={graph?.startVariables ?? []}
-          running={running}
+          running={busy}
           onChange={(patch) => setInputs((previous) => ({ ...previous, ...patch }))}
           hasKey={Boolean(env?.hasKey)}
           reviewGate={reviewGate}
           canReview={canReview}
           onReviewGateChange={setReviewGate}
-          onRun={() => {
-            setShowInput(false);
-            if (review) {
-              // 新跑一轮会顶掉那份待审阅的文案：先问一句，别像点遮罩那样悄悄丢掉
-              if (!window.confirm("还有一份待审阅的文案没处理，重新运行会把它丢掉。继续？")) return;
-              discardReview();
-            }
-            void run();
-          }}
+          onRun={startSingle}
+          onRunBatch={(topics, cap) => void startBatch(topics, cap)}
+          runCap={runCap}
+          onRunCapChange={setRunCap}
           onClose={() => setShowInput(false)}
         />
       )}
@@ -857,7 +1214,7 @@ export function App() {
       {review && reviewOpen && (
         <ReviewPanel
           result={review.result}
-          busy={running}
+          busy={activeRun?.status === "running" || activeRun?.status === "queued"}
           notes={reviewNotes}
           onNotesChange={setReviewNotes}
           onContinue={continueFromReview}

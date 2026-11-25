@@ -38,6 +38,8 @@ export interface WorkflowInfo {
 
 export interface TraceEvent {
   seq: number;
+  /** 哪一条运行发出的；界面同时跑多条时按它分流。 */
+  clientId?: string;
   at: string;
   type: "run_start" | "node_start" | "node_end" | "node_error" | "run_end";
   nodeId?: string;
@@ -67,6 +69,28 @@ export interface RunResult {
   outputs: Record<string, unknown>;
   outputsByNode?: Record<string, Record<string, unknown>>;
   warnings: string[];
+  error?: string;
+}
+
+export type RunStatus = "queued" | "running" | "review" | "ready" | "incomplete" | "error" | "stopped";
+
+/** 界面里的一条运行：单条就是一条，批量就是一批。画布、运行台、出片都读当前选中的这条。 */
+export interface RunItem {
+  id: string;
+  /** 这条的原始需求；单条运行可以是空串。 */
+  topic: string;
+  /** 批量时自动生成的项目名；单条留空，出片页自己取时间戳。 */
+  name: string;
+  status: RunStatus;
+  /** 本次运行的 clientId：事件按它分流，停止也按它。 */
+  clientId?: string;
+  nodeTitle?: string;
+  runningNodeId?: string | null;
+  events: TraceEvent[];
+  statuses: Record<string, string>;
+  result?: RunResult;
+  /** 这次运行用的输入快照；审阅续跑、从节点重跑都按它来。 */
+  inputs?: RunInputs;
   error?: string;
 }
 
@@ -133,6 +157,8 @@ declare global {
 
 export interface BuildStarted {
   runId: string;
+  /** 调用方自己带的构建 id：多个构建并行时用它把事件对上号。 */
+  jobId?: string;
   projectDir: string;
   inputPath: string;
   expectedIds: string[];
@@ -141,6 +167,7 @@ export interface BuildStarted {
 
 export interface BuildRequest {
   action: "prepare" | "render";
+  jobId?: string;
   projectName: string;
   outputs: Record<string, unknown>;
   tts?: { provider?: string; baseUrl?: string; model?: string; voice?: string };
@@ -151,6 +178,7 @@ export interface BuildRequest {
 export interface BuildEvent {
   kind: "data" | "done";
   runId: string;
+  jobId?: string;
   action: "prepare" | "render";
   stream?: "out" | "err";
   text?: string;

@@ -1396,3 +1396,221 @@ button, input, select, textarea { font: inherit; color: inherit; }
   /* 宽窗口：分段控件严格居中，两侧内容宽度不等也不偏 */
   .topbar .seg { position: absolute; left: 50%; transform: translateX(-50%); }
 }
+
+/* ---------- 批量：运行抽屉里的逐条输入 ---------- */
+
+/* 单条和批量共用同一宽度：切模式时抽屉不跳宽 */
+.drawer.run-drawer { width: min(560px, calc(100vw - 32px)); }
+
+.run-mode { display: inline-flex; margin-bottom: var(--sp-4); }
+.run-mode button { padding: 0 var(--sp-6); }
+
+.batch-editor {
+  margin-bottom: var(--sp-4);
+  padding: var(--sp-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-raised);
+}
+.batch-editor-head {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  margin-bottom: var(--sp-2);
+  color: var(--fg-muted);
+  font-size: var(--text-12);
+}
+.batch-editor-label { white-space: nowrap; }
+.batch-editor-count { color: var(--fg-faint); font-family: var(--font-mono); font-size: var(--text-11); }
+.batch-cap {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  color: var(--fg-muted);
+  font-size: var(--text-12);
+  white-space: nowrap;
+}
+.batch-cap .sel-btn {
+  height: 28px;
+  padding: 0 var(--sp-2);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-12);
+}
+
+.batch-rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  max-height: 46vh;
+  overflow: auto;
+  padding-right: 2px;
+}
+.batch-item {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-2);
+  padding: var(--sp-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-panel);
+  transition: border-color var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease);
+}
+.batch-item:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-ring);
+}
+.batch-item-no {
+  flex-shrink: 0;
+  width: 20px;
+  padding-top: 4px;
+  text-align: center;
+  color: var(--fg-faint);
+  font-family: var(--font-mono);
+  font-size: var(--text-11);
+}
+.batch-item textarea {
+  flex: 1;
+  min-width: 0;
+  min-height: 54px;
+  max-height: 200px;
+  padding: 2px var(--sp-2);
+  border: 0;
+  background: transparent;
+  color: var(--fg);
+  font-size: var(--text-13);
+  line-height: var(--lh-normal);
+  resize: vertical;
+}
+.batch-item textarea:focus { outline: none; }
+.batch-item textarea::placeholder { color: var(--fg-faint); }
+.batch-item-actions { display: flex; flex-direction: column; gap: 2px; }
+.batch-item-actions .btn {
+  height: 24px;
+  padding: 0 var(--sp-2);
+  font-size: var(--text-11);
+}
+.batch-editor-foot {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  flex-wrap: wrap;
+  margin-top: var(--sp-2);
+}
+.batch-editor-foot .hint-text { margin: 0; }
+
+/* ---------- 批量：画布上方的运行切换条 ---------- */
+
+.app.has-runs { grid-template-rows: auto auto minmax(0, 1fr); }
+.app.has-runs .work { grid-row: 3; }
+
+.runs-bar {
+  grid-column: 1;
+  grid-row: 2;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  min-height: 46px;
+  padding: var(--sp-1) var(--sp-3) var(--sp-1) var(--sp-5);
+  overflow: hidden;
+}
+.runs-label { color: var(--fg-muted); font-size: var(--text-12); font-weight: var(--fw-medium); white-space: nowrap; }
+.runs-count {
+  flex-shrink: 0;
+  color: var(--fg-faint);
+  font-family: var(--font-mono);
+  font-size: var(--text-11);
+}
+.runs-list {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.runs-list::-webkit-scrollbar { display: none; }
+
+.run-chip {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  height: 30px;
+  max-width: 300px;
+  padding: 0 var(--sp-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  background: var(--bg-raised);
+  color: var(--fg-muted);
+  font-size: var(--text-12);
+  cursor: pointer;
+  overflow: hidden;
+  transition: background var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease),
+              box-shadow var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
+}
+.run-chip:hover { background: var(--bg-hover); color: var(--fg); }
+.run-chip.on {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--fg);
+  box-shadow: inset 0 0 0 1px var(--accent-ring);
+}
+.run-chip-no { color: var(--fg-faint); font-family: var(--font-mono); font-size: var(--text-11); }
+.run-chip.on .run-chip-no { color: var(--accent); }
+.run-chip-topic {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 150px;
+}
+.run-chip-state {
+  color: var(--fg-faint);
+  font-size: var(--text-11);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 150px;
+}
+.run-chip.running { border-color: var(--run-soft); }
+.run-chip.running .run-chip-state { color: var(--run); }
+.run-chip.review { border-color: var(--warn-soft); }
+.run-chip.review .run-chip-state { color: var(--warn); }
+.run-chip.ready { border-color: var(--ok-soft); }
+.run-chip.ready .run-chip-state { color: var(--ok); }
+.run-chip.error { border-color: var(--err-soft); }
+.run-chip.error .run-chip-state { color: var(--err); }
+.run-chip.stopped .run-chip-state { color: var(--fg-faint); }
+
+/* 运行是顶栏唯一的主按钮：比其它次级按钮高一级，围绕它留出呼吸 */
+.topbar-actions .btn.run {
+  height: 34px;
+  padding: 0 var(--sp-6);
+  font-weight: var(--fw-semibold);
+}
+.topbar-actions .btn.stop {
+  height: 34px;
+  padding: 0 var(--sp-6);
+  border-color: var(--err-soft);
+  background: var(--err-soft);
+  color: var(--err);
+}
+.topbar-actions .btn.stop:hover { border-color: var(--err); background: var(--err-soft); }
+
+.console-run {
+  flex-shrink: 0;
+  padding: 0 var(--sp-2);
+  border-radius: var(--radius-full);
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-family: var(--font-mono);
+  font-size: var(--text-11);
+  line-height: 20px;
+}
+
+.produce-batch { flex-shrink: 0; }
+.produce-head .produce-sub { min-width: 0; max-width: 56%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+@media (max-width: 1100px) {
+  .run-chip-topic { max-width: 92px; }
+  .runs-label { display: none; }
+}

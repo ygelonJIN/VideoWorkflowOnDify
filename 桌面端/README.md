@@ -10,6 +10,7 @@
 | 引擎 | 读 `../Dify工作流/*.yml`，按变量池执行 start / llm / code / if-else / template-transform / end，输出 trace；容器节点 iteration（含 `is_parallel`）/ loop / assigner / *-start 都支持 |
 | 画布 | 按 DSL 坐标画节点与连线；加节点（Code / LLM / if-else / 模板 / HTTP / End，自动连边）、删节点（连带删边）、连线模式、点连线删除；拖动松手才落盘 |
 | 编辑 | 检视器直接改提示词/代码，**只写回原 YAML**（注释、缩进、块标量、文件末尾换行逐字保留）；多消息节点按条编辑；**镜像同步已退役**（2026-11-16），不再往 `能力库/` 写副本 |
+| 批量 | 顶栏「运行」→ 抽屉里选「批量」：逐条填原始需求（可加/删），其余输入全批共用；按「同时跑」上限排队跑同一个工作流，每条自动生成不撞车的项目名；跑完画布上方出现切换条（序号 / 状态 / 当前节点），点哪条，画布节点状态、运行台、出片页都切到那条；单条运行不出现切换条。整批状态落 localStorage，重启可恢复 |
 | 运行 | 运行台在画布右栏、详情下方（可收起），实时显示节点状态与输出值（超 4000 字符截断并注明）；可手动停止（节点间立即停，模型请求/子进程会中断，已完成结果保留）；**从选中节点重跑**（右侧详情「从此节点重跑」）：把该节点之前已成功的 LLM/代码节点输出直接喂回，不重新请求，容器节点可当起点、容器内部节点不行 |
 | 输入 | 按 start 节点声明的变量动态生成输入抽屉，字段类型/选项/必填/最大长度都读 YAML；留空沿用 fixture |
 | 产物 | 列出 `成品/` 下的项目与文件；文本/JSON/字幕就地预览，HTML 走内嵌 iframe，图/视频/音频内嵌播放（`wfs-file://` 带 Range），任何文件可交系统应用打开 |
@@ -26,7 +27,7 @@
 ```text
 桌面端/
 ├── electron/            # 主进程、preload、本地引擎桥（IPC 与 HTTP 壳共用 core.mjs）
-├── renderer/            # React 界面（画布 / 详情 / 运行台 / 出片 / 产物），构建产物在 dist/
+├── renderer/            # React 界面（画布 / 详情 / 运行台 / 出片 / 产物，批量为运行抽屉里的模式），构建产物在 dist/
 ├── src/engine/          # DSL、变量池、模板、LLM、Code、调度器、trace
 ├── src/cli.ts           # 命令行入口
 ├── test/                # node:test 用例
@@ -57,6 +58,12 @@ node dist/src/cli.js ../Dify工作流/04_黑帧口播_分组生成.yml \
 
 ```bash
 WFS_PROBE=1 bash scripts/run-app.sh --no-sandbox
+```
+
+批量回归（隐藏窗口 + 本地 mock 模型，只验接线：运行抽屉切批量、两条同时跑、事件按 clientId 分流、切换条与出片页跟着切换）：
+
+```bash
+WFS_BATCH_PROBE=1 bash scripts/run-app.sh --no-sandbox
 ```
 
 测试：

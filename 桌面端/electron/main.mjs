@@ -4,6 +4,7 @@ import { createHash } from "node:crypto";
 import { createServer } from "node:http";
 import { pathToFileURL } from "node:url";
 import path from "node:path";
+import os from "node:os";
 import { fileURLToPath } from "node:url";
 import * as core from "./core.mjs";
 
@@ -80,8 +81,9 @@ ipcMain.handle("wf:project-image-save", (_event, payload) => core.saveProjectIma
 function createWindow() {
   const smoke = process.argv.includes("--smoke");
   const probe = process.env.WFS_PROBE === "1";
+  const batchProbe = process.env.WFS_BATCH_PROBE === "1";
   const win = new BrowserWindow({
-    show: !(smoke || probe),
+    show: !(smoke || probe || batchProbe),
     width: 1480,
     height: 940,
     minWidth: 860,
@@ -165,6 +167,9 @@ function createWindow() {
         await sleep(150);
         const collapsed = await run(`({ inspector: !!document.querySelector(".inspector"), canvasWidth: ${rect(".canvas-wrap")}.w, dockOff: !document.querySelector(".canvas-dock .insp-toggle").classList.contains("on") })`);
 
+        // 运行台挂在右栏：详情收起时它一起让出，量它的高度前先把右栏展开回来
+        await run('document.querySelector(".canvas-dock .insp-toggle").click()');
+        await sleep(200);
         const bottomBefore = (await run(rect("#root .bottom"))).h;
         await run(clickText("收起"));
         await sleep(150);
@@ -274,6 +279,16 @@ function createWindow() {
         process.env.WF_MODEL = "probe-model";
         process.env.WF_PROTOCOL = "responses";
         const viewBeforeRun = await run(`document.querySelector(".stage")?.style.transform || ""`);
+        // 主需求是必填：探针先填一个，运行按钮才会真的可点
+        await run(`(() => {
+          const t = document.querySelector(".drawer textarea");
+          if (!t) return false;
+          const set = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value").set;
+          set.call(t, "探针需求：验证运行台与停止按钮");
+          t.dispatchEvent(new Event("input", { bubbles: true }));
+          return true;
+        })()`);
+        await sleep(200);
         const clickedStart = await run(clickText("用这些输入运行"));
         let settle = "";
         let sawRunning = false;
@@ -324,6 +339,9 @@ function createWindow() {
           stopWhileIdle: [...document.querySelectorAll("button")].some((button) => button.textContent.trim() === "停止"),
           runVisible: [...document.querySelectorAll("button")].some((button) => button.textContent.trim() === "运行")
         })`);
+        // 没跑起来时抽屉还开着：关掉它，后面设置/运行抽屉的断言才不会串
+        await run(clickText("关闭"));
+        await sleep(120);
 
         // 控制台：新消息在最上面
         const firstLogLine = await run(`document.querySelector(".log > div")?.textContent?.trim() || ""`);
@@ -470,8 +488,8 @@ function createWindow() {
           };
         })()`);
 
-        // 输入抽屉按 start 变量动态生成：04 应出现 10 个变量 + 2 个运行控制
-        await run(clickText("输入"));
+        // 运行抽屉按 start 变量动态生成：04 应出现 4 个长文本 + 6 个短字段，外加单条/批量模式
+        await run(clickText("运行"));
         await sleep(250);
         const inputDrawer = await run(`({
           fields: document.querySelectorAll(".drawer .field").length,
@@ -612,6 +630,161 @@ function createWindow() {
       }
     });
   }
+  if (batchProbe) {
+    // 只验批量接线：运行抽屉里的「批量」、逐条需求、共用输入、队列闸门、并行运行与切换条。
+    // 不起真模型：本地 mock 端点冒充 responses 接口，跑完只看切换条上的状态变化。
+    let reloaded = false;
+    win.webContents.on("did-finish-load", async () => {
+      const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+      const run = (code) => win.webContents.executeJavaScript(code);
+      try {
+        if (!reloaded) {
+          // 探针用独立 userData，这里再清一次，避免上一轮探针留下的批量行影响断言
+          await run('localStorage.removeItem("studio.batchRuns");localStorage.removeItem("studio.batchItems");localStorage.removeItem("studio.runMode");localStorage.removeItem("studio.lastRun");localStorage.removeItem("studio.resumeRun");location.reload(); true');
+          reloaded = true;
+          return;
+        }
+        for (let attempt = 0; attempt < 40; attempt += 1) {
+          if ((await run("document.querySelectorAll('.node').length")) > 0) break;
+          await sleep(200);
+        }
+
+        const a01 = await readFile(path.join(desktopDir, "fixtures", "stub", "a01.txt"), "utf8");
+        const server = createServer((request, response) => {
+          request.on("data", () => {});
+          request.on("end", () => {
+            // 延迟 300ms：两条运行要能同时在跑，探针才抓得到「并行」这件事
+            setTimeout(() => {
+              response.writeHead(200, { "content-type": "application/json" });
+              response.end(JSON.stringify({ output_text: a01, usage: { input_tokens: 1, output_tokens: 1, total_tokens: 2 } }));
+            }, 300);
+          });
+        });
+        await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+        const port = server.address().port;
+        process.env.WF_BASE_URL = `http://127.0.0.1:${port}/v1`;
+        process.env.WF_MODEL = "probe-model";
+        process.env.WF_PROTOCOL = "responses";
+
+        const clickText = (text) =>
+          `[...document.querySelectorAll("button")].find((b) => b.textContent.trim() === ${JSON.stringify(text)})?.click()`;
+        const setItem = (index, value) =>
+          `(() => { const t = document.querySelectorAll(".batch-item textarea")[${index}]; if (!t) return false; const set = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value").set; set.call(t, ${JSON.stringify(value)}); t.dispatchEvent(new Event("input", { bubbles: true })); return true; })()`;
+
+        await run(clickText("运行"));
+        await sleep(400);
+        await run('[...document.querySelectorAll(".run-mode button")].find((b) => b.textContent.trim() === "批量")?.click()');
+        await sleep(300);
+        const shape = await run(`({
+          drawer: Boolean(document.querySelector(".drawer.run-drawer")),
+          items: document.querySelectorAll(".batch-item textarea").length,
+          modeOn: [...document.querySelectorAll(".run-mode button")].find((b) => b.textContent.trim() === "批量")?.getAttribute("aria-selected"),
+          runLabel: [...document.querySelectorAll(".drawer button")].find((b) => b.textContent.trim().startsWith("开始批量运行"))?.textContent.trim() || "",
+          runDisabled: [...document.querySelectorAll(".drawer button")].find((b) => b.textContent.trim().startsWith("先写一条原始需求"))?.disabled ?? null,
+          drawerWidth: Math.round(document.querySelector(".drawer").getBoundingClientRect().width),
+          drawerOverflow: document.querySelector(".drawer").scrollWidth > document.querySelector(".drawer").clientWidth,
+          modeWidth: Math.round(document.querySelector(".run-mode").getBoundingClientRect().width)
+        })`);
+
+        const typed = await (async () => {
+          await run(setItem(0, "批量探针第一行"));
+          await run(setItem(1, "批量探针第二行"));
+          await sleep(250);
+          return run('[...document.querySelectorAll(".batch-item textarea")].slice(0, 2).map((t) => t.value)');
+        })();
+
+        // 关掉口播审阅闸门：探针要一次跑完整条链路，不停在 a07
+        await run('(() => { const box = document.querySelector(".drawer .check input"); if (box?.checked) box.click(); })()');
+        await sleep(200);
+        await run('[...document.querySelectorAll(".drawer button")].find((b) => b.textContent.trim().startsWith("开始批量运行"))?.click()');
+
+        let maxRunning = 0;
+        let states = [];
+        for (let attempt = 0; attempt < 80; attempt += 1) {
+          await sleep(250);
+          const live = await run(`[...document.querySelectorAll(".run-chip")].map((chip) => ({
+            state: chip.querySelector(".run-chip-state")?.innerText.trim() || "",
+            running: chip.classList.contains("running"),
+            on: chip.classList.contains("on")
+          }))`);
+          maxRunning = Math.max(maxRunning, live.filter((chip) => chip.running).length);
+          states = live;
+          if (live.length >= 2 && live.every((chip) => !["运行中", "排队中"].includes(chip.state.replace(/^运行中 · .*/, "运行中")))) break;
+        }
+
+        await run('document.querySelectorAll(".run-chip")[1]?.click()');
+        await sleep(250);
+        const switched = await run(`({
+          active: [...document.querySelectorAll(".run-chip")].findIndex((chip) => chip.classList.contains("on")),
+          consoleRun: document.querySelector(".console-run")?.innerText.trim() || ""
+        })`);
+
+        await run(clickText("出片"));
+        await sleep(300);
+        const produce = await run(`({
+          batchBadge: document.querySelector(".produce-batch")?.innerText.trim() || "",
+          head: document.querySelector(".produce-sub")?.innerText.trim() || ""
+        })`);
+
+        const layout = await run(`(() => {
+          const box = (selector) => { const el = document.querySelector(selector); if (!el) return null; const r = el.getBoundingClientRect(); return { top: Math.round(r.top), bottom: Math.round(r.bottom), h: Math.round(r.height), w: Math.round(r.width) }; };
+          const runButton = [...document.querySelectorAll(".topbar-actions button")].find((b) => b.textContent.trim() === "运行");
+          const style = runButton ? getComputedStyle(runButton) : null;
+          return {
+            viewport: [innerWidth, innerHeight],
+            topbar: box(".topbar"),
+            bar: box(".runs-bar"),
+            work: box(".work"),
+            overflowX: document.documentElement.scrollWidth > innerWidth,
+            runButton: runButton ? { h: Math.round(runButton.getBoundingClientRect().height), color: style.color, bg: style.backgroundColor } : null,
+            chips: [...document.querySelectorAll(".run-chip")].map((chip) => Math.round(chip.getBoundingClientRect().right))
+          };
+        })()`);
+
+        // 整批落盘：重启后靠这份恢复切换条（落盘有 600ms 防抖）
+        await sleep(900);
+        const stored = await run('(() => { try { const saved = JSON.parse(localStorage.getItem("studio.batchRuns") || "null"); return saved?.runs?.length || 0; } catch { return -1; } })()');
+
+        // 清空后回到单条：不出现切换条，抽屉也不显示批量编辑器
+        await run(clickText("画布"));
+        await sleep(200);
+        await run('[...document.querySelectorAll(".runs-bar button")].find((b) => b.textContent.trim() === "清空")?.click()');
+        await sleep(300);
+        await run(clickText("运行"));
+        await sleep(300);
+        await run('[...document.querySelectorAll(".run-mode button")].find((b) => b.textContent.trim() === "单条")?.click()');
+        await sleep(200);
+        const singleShape = await run(`({
+          batchEditor: Boolean(document.querySelector(".batch-editor")),
+          bars: document.querySelectorAll(".runs-bar").length,
+          drawerWidth: Math.round(document.querySelector(".drawer").getBoundingClientRect().width)
+        })`);
+        await run(`(() => {
+          const t = document.querySelector(".drawer textarea");
+          if (!t) return false;
+          const set = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value").set;
+          set.call(t, "单条探针需求");
+          t.dispatchEvent(new Event("input", { bubbles: true }));
+          return true;
+        })()`);
+        await sleep(200);
+        await run('[...document.querySelectorAll(".drawer button")].find((b) => b.textContent.trim() === "用这些输入运行")?.click()');
+        await sleep(1500);
+        const single = await run(`({
+          bars: document.querySelectorAll(".runs-bar").length,
+          chips: document.querySelectorAll(".run-chip").length,
+          console: document.querySelector(".elapsed")?.innerText.trim() || ""
+        })`);
+
+        console.log("BATCH_PROBE", JSON.stringify({ shape, typed, maxRunning, states, switched, produce, stored, layout, singleShape, single }, null, 2));
+        server.close();
+        app.exit(0);
+      } catch (error) {
+        console.error("BATCH_PROBE FAILED", error);
+        app.exit(1);
+      }
+    });
+  }
   if (smoke) {
     win.webContents.on("console-message", (_event, level, message) => console.log(`[renderer:${level}] ${message}`));
     win.webContents.on("did-finish-load", async () => {
@@ -645,6 +818,11 @@ const MIME = {
   ".svg": "image/svg+xml", ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
   ".webp": "image/webp", ".mp4": "video/mp4", ".mp3": "audio/mpeg", ".srt": "text/plain; charset=utf-8",
 };
+
+// 批量探针用独立 userData：探针产生的批量行不写进用户真实的 localStorage
+if (process.env.WFS_BATCH_PROBE === "1") {
+  app.setPath("userData", path.join(os.tmpdir(), `wfs-batch-probe-${process.pid}`));
+}
 
 app.whenReady().then(() => {
   protocol.handle("wfs-file", async (request) => {
