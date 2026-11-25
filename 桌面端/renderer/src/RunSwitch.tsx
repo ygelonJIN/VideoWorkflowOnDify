@@ -20,6 +20,8 @@ const STATUS_TEXT: Record<RunStatus, string> = {
 
 function stateText(run: RunItem): string {
   if (run.status === "running" && run.nodeTitle) return `运行中 · ${run.nodeTitle}`;
+  /* 已经渲出成片的这条不该再提示「可出片」：它这一轮已经走完了 */
+  if (run.produced) return "已出片";
   return STATUS_TEXT[run.status];
 }
 

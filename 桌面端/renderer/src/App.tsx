@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
 import { Canvas } from "./Canvas.js";
 import { Inspector } from "./Inspector.js";
 import { Artifacts } from "./Artifacts.js";
@@ -8,14 +9,15 @@ import { Settings } from "./Settings.js";
 import { Produce } from "./Produce.js";
 import { RunSwitch } from "./RunSwitch.js";
 import { ReviewPanel } from "./ReviewPanel.js";
+import { readSize, startDrag } from "./drag.js";
 import type { SelectOption } from "./Select.js";
 import { bridge } from "./bridge.js";
 import {
-  autoProjectName,
   cleanRequirements,
   hasProducibleOutput,
   precomputedFrom,
   primaryVariable,
+  projectStamp,
   startableCount,
   uniqueProjectName,
 } from "../../src/batch/model.js";
@@ -175,6 +177,7 @@ function readStoredRuns(): { path: string; activeId: string; runs: RunItem[] } |
         status?: string;
         result?: RunResult;
         inputs?: RunInputs;
+        produced?: { dir: string; at: number };
         error?: string;
       }>;
     };
@@ -191,6 +194,7 @@ function readStoredRuns(): { path: string; activeId: string; runs: RunItem[] } |
         statuses: {},
         ...(item.result ? { result: item.result } : {}),
         ...(item.inputs ? { inputs: item.inputs } : {}),
+        ...(item.produced ? { produced: item.produced } : {}),
         ...(item.error ? { error: item.error } : {}),
       };
     });
@@ -224,6 +228,14 @@ export function App() {
   const [view, setView] = useState<View>("canvas");
   const [inspectorOpen, setInspectorOpen] = useState(true);
   const [consoleOpen, setConsoleOpen] = useState(true);
+  /* 右栏两个尺寸都能拖、都记住：运行台高度（--bottom-h）和详情栏宽度（--side-w） */
+  const [consoleH, setConsoleH] = useState(() => readSize("studio.consoleH", 320, 160));
+  const [sideW, setSideW] = useState<number | null>(() => {
+    const saved = Number(localStorage.getItem("studio.sideW"));
+    return Number.isFinite(saved) && saved >= 300 ? saved : null;
+  });
+  const sideRef = useRef<HTMLDivElement>(null);
+  const workRef = useRef<HTMLDivElement>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [runCap, setRunCap] = useState(readRunCap);
@@ -268,6 +280,28 @@ export function App() {
   useEffect(() => {
     localStorage.setItem(RUN_CAP_KEY, String(runCap));
   }, [runCap]);
+
+  useEffect(() => {
+    localStorage.setItem("studio.consoleH", String(Math.round(consoleH)));
+  }, [consoleH]);
+
+  useEffect(() => {
+    if (sideW !== null) localStorage.setItem("studio.sideW", String(Math.round(sideW)));
+  }, [sideW]);
+
+  /** 拖运行台高度：往下拖变矮，往上拖变高，最低 160、给详情留 200。 */
+  const dragConsole = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (!consoleOpen) return;
+    const height = sideRef.current?.clientHeight ?? 800;
+    startDrag(event, { axis: "y", from: consoleH, min: 160, max: height - 200, onMove: setConsoleH });
+  };
+
+  /** 拖详情栏宽度：往左拖变宽，画布至少留 460。 */
+  const dragSide = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const width = workRef.current?.clientWidth ?? 1200;
+    const from = sideW ?? sideRef.current?.clientWidth ?? 404;
+    startDrag(event, { axis: "x", from, min: 300, max: width - 460, onMove: setSideW });
+  };
 
   useEffect(() => {
     localStorage.setItem("studio.reviewGate", reviewGate ? "1" : "0");
@@ -415,6 +449,7 @@ export function App() {
             status: run.status === "review" ? "stopped" : run.status,
             ...(run.result ? { result: slimResult(run.result) } : {}),
             ...(run.inputs ? { inputs: run.inputs } : {}),
+            ...(run.produced ? { produced: run.produced } : {}),
             ...(run.error ? { error: run.error } : {}),
           })),
         };
@@ -450,6 +485,7 @@ export function App() {
               runningNodeId: null,
               events: [],
               statuses: {},
+              produced: undefined,
               error: undefined,
               inputs: nextInputs,
             }
@@ -605,7 +641,7 @@ export function App() {
     setNotice(replacingBatch ? "已切到单条运行；上一批的切换条收起了，项目和成片还在「产物」里。" : null);
   }, [graph]);
 
-  /** 批量：只换主需求，其余输入全批共用；项目名按主题 + 时间戳自动避开已有目录。 */
+  /** 批量：只换主需求，其余输入全批共用；项目名是时间戳，重名加（1）（2）避开已有目录。 */
   const startBatch = useCallback(async (topics: string[], cap: number) => {
     if (!graph) return;
     if (runsRef.current.some((run) => run.status === "review")) {
@@ -624,7 +660,7 @@ export function App() {
     const target = primaryVariable(graph.startVariables);
     const now = new Date();
     const items: RunItem[] = clean.map((topic, index) => {
-      const name = uniqueProjectName(autoProjectName(topic, index, now), taken);
+      const name = uniqueProjectName(projectStamp(now), taken);
       taken.add(name);
       const nextInputs: RunInputs = { ...inputsRef.current, ...(target ? { [target]: topic } : {}) };
       if ("request_id" in nextInputs || graph.startVariables.some((variable) => variable.variable === "request_id")) {
@@ -758,8 +794,10 @@ export function App() {
 
   const selected = useMemo(() => graph?.nodes.find((node) => node.id === selectedId) ?? null, [graph, selectedId]);
 
-  /** 有可出片结果时顶栏「出片」亮一个点。数量在步骤条里，这里只回答「有没有东西可做」。 */
-  const produced = runs.some((run) => run.result && hasProducibleOutput(run.result.outputs));
+  /** 有「还没落成片」的结果时顶栏「出片」亮一个点；已经出完的不再亮。 */
+  const producible = runs.some((run) => run.result && hasProducibleOutput(run.result.outputs) && !run.produced);
+  /** 跑完还没落成片的叫「可出片」；已经渲染过的这条叫「已出片」，不再提示去出片。 */
+  const runLabel = (run: RunItem | null): string => (run?.produced ? "已出片" : run ? runStateText[run.status] : "就绪");
 
   useEffect(() => {
     const prevent = (event: DragEvent) => event.preventDefault();
@@ -987,7 +1025,7 @@ export function App() {
             onClick={() => setView("produce")}
             title="运行完成后：准备项目 → 出图提示词 → 放图 → 渲染成片"
           >
-            出片{produced && view !== "produce" && <span className="dot" />}
+            出片{producible && view !== "produce" && <span className="dot" />}
           </button>
           <button
             role="tab"
@@ -1059,7 +1097,11 @@ export function App() {
         <RunSwitch runs={runs} activeId={activeRun?.id ?? ""} busy={busy} onSelect={selectRun} onClear={clearRuns} />
       )}
 
-      <div className={`work ${view === "canvas" && inspectorOpen && graph ? "" : "solo"}`}>
+      <div
+        className={`work ${view === "canvas" && inspectorOpen && graph ? "" : "solo"}`}
+        ref={workRef}
+        style={sideW === null ? undefined : ({ "--side-w": `${Math.round(sideW)}px` } as CSSProperties)}
+      >
         <div className="main">
           {view === "artifacts" ? (
             <Artifacts result={result} />
@@ -1107,18 +1149,29 @@ export function App() {
           <div className="produce-layer" hidden={view !== "produce"}>
             <Produce
               result={result}
+              runId={activeRun?.id ?? ""}
               inputs={activeRun?.inputs ?? inputs}
               defaultName={activeRun?.name ?? ""}
               batch={batch && activeRun ? { index: activeIndex, total: runs.length, topic: activeRun.topic } : null}
               onRun={() => setShowInput(true)}
               onArtifacts={() => setView("artifacts")}
               onNotice={setNotice}
+              onProduced={(forRunId, dir) =>
+                setRuns((previous) =>
+                  previous.map((run) => (run.id === forRunId ? { ...run, produced: { dir, at: Date.now() } } : run)),
+                )
+              }
             />
           </div>
         </div>
 
         {view === "canvas" && inspectorOpen && graph ? (
-          <div className="side">
+          <div
+            className={`side ${consoleOpen ? "" : "console-collapsed"}`}
+            ref={sideRef}
+            style={{ "--bottom-h": `${Math.round(consoleH)}px` } as CSSProperties}
+          >
+            <div className="split-v" onPointerDown={dragSide} title="拖动调整详情栏宽度" />
             <Inspector
               graph={graph}
               node={selected}
@@ -1140,6 +1193,7 @@ export function App() {
               onRerun={runFromNode}
               onProduce={() => setView("produce")}
             />
+            <div className="split-h" onPointerDown={dragConsole} title={consoleOpen ? "拖动调整运行台高度" : ""} />
             <footer className={`bottom card ${consoleOpen ? "" : "collapsed"}`}>
               <div className="console-head">
                 <span className="console-title">运行台</span>
@@ -1149,7 +1203,7 @@ export function App() {
                 <span className="right">
                   <span className="elapsed">
                     {activeRun
-                      ? `${runStateText[activeRun.status]}${result ? ` · ${(result.ms / 1000).toFixed(2)}s` : ""}`
+                      ? `${runLabel(activeRun)}${result ? ` · ${(result.ms / 1000).toFixed(2)}s` : ""}`
                       : "就绪"}
                   </span>
                 </span>

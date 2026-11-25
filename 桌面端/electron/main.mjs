@@ -1,4 +1,5 @@
-import { app, BrowserWindow, clipboard, dialog, ipcMain, protocol, shell } from "electron";
+import { app, BrowserWindow, clipboard, dialog, ipcMain, protocol, screen, shell } from "electron";
+import { readFileSync, writeFileSync } from "node:fs";
 import { readFile, readdir, rmdir, stat, unlink, writeFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import { createServer } from "node:http";
@@ -78,16 +79,60 @@ ipcMain.handle("wf:build", (event, payload) =>
 ipcMain.handle("wf:project-images", (_event, payload) => core.listProjectImages(payload));
 ipcMain.handle("wf:project-image-save", (_event, payload) => core.saveProjectImage(payload));
 
+/* 上次关窗时的大小。只记宽高、不记坐标：坐标记下来容易把窗口开到屏幕外。 */
+function readWindowSize() {
+  try {
+    const saved = JSON.parse(readFileSync(path.join(app.getPath("userData"), "window.json"), "utf8"));
+    if (Number.isFinite(saved?.width) && Number.isFinite(saved?.height)) return saved;
+  } catch {
+    /* 第一次启动没有这个文件，走屏幕尺寸 */
+  }
+  return null;
+}
+
+function saveWindowSize(win) {
+  try {
+    const bounds = win.getBounds();
+    writeFileSync(
+      path.join(app.getPath("userData"), "window.json"),
+      JSON.stringify({ width: bounds.width, height: bounds.height }),
+      "utf8",
+    );
+  } catch {
+    /* 写不进去不影响使用，下次还是按屏幕算 */
+  }
+}
+
+/**
+ * 默认尺寸按屏幕工作区算，不再写死 1480×940。
+ * 写死 940 在 14 寸（工作区 1512×885）上比可用高度还高，底边直接压到程序坞下面；
+ * 外接屏上又只占一半。两个方向都不对，所以按工作区算，留一点边。
+ */
+function defaultWindowSize(work) {
+  const saved = readWindowSize();
+  const maxW = Math.max(900, work.width - 40);
+  const maxH = Math.max(760, work.height - 16);
+  return {
+    width: Math.round(Math.min(saved?.width ?? 1480, maxW)),
+    height: Math.round(Math.min(saved?.height ?? 1180, maxH)),
+  };
+}
+
 function createWindow() {
   const smoke = process.argv.includes("--smoke");
   const probe = process.env.WFS_PROBE === "1";
   const batchProbe = process.env.WFS_BATCH_PROBE === "1";
+  const headless = smoke || probe || batchProbe;
+  const work = screen.getPrimaryDisplay().workAreaSize;
+  /* 探针要量布局，尺寸必须固定，不读也不写上次的窗口大小 */
+  const size = headless ? { width: 1480, height: 940 } : defaultWindowSize(work);
+  console.log(`[wfs] 屏幕工作区 ${work.width}×${work.height} · 窗口 ${size.width}×${size.height}`);
   const win = new BrowserWindow({
-    show: !(smoke || probe || batchProbe),
-    width: 1480,
-    height: 940,
+    show: !headless,
+    width: size.width,
+    height: size.height,
     minWidth: 860,
-    minHeight: 680,
+    minHeight: 760,
     backgroundColor: "#eef1f5",
     titleBarStyle: "hiddenInset",
     trafficLightPosition: { x: 20, y: 20 },
@@ -99,6 +144,7 @@ function createWindow() {
     },
   });
   win.loadFile(path.join(desktopDir, "renderer", "index.html"));
+  if (!headless) win.on("close", () => saveWindowSize(win));
   win.webContents.on("did-fail-load", (_event, code, description, url) => {
     console.error(`[wfs] 页面加载失败 ${code} ${description} ${url}`);
   });

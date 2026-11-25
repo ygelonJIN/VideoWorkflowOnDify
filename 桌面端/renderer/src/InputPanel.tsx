@@ -21,6 +21,14 @@ interface Props {
 
 type Mode = "single" | "batch";
 
+/**
+ * 默认口径只有这一份。数字都能对上：4.3 字/秒 × 4–8 秒 = 17–34 字/屏，
+ * 3–8 屏 = 12–64 秒、约 50–275 字。
+ */
+const DEFAULT_RULE =
+  "默认 3–8 屏、每屏 4–8 秒；中文约 4.3 字/秒，也就是一屏 17–34 字、全片 12–64 秒（约 50–275 字）。" +
+  "要改就写进补充说明：屏数、单屏秒数、总字数，以及视角、文体、不能说的话。";
+
 const MODE_KEY = "studio.runMode";
 const ITEMS_KEY = "studio.batchItems";
 
@@ -41,23 +49,28 @@ function readItems(): string[] {
 function InputField({
   variable,
   value,
+  hint,
   onChange,
 }: {
   variable: StartVariable;
   value: string;
+  /** 字段下面的一行说明；同一条口径只在这里出现一次。 */
+  hint?: string;
   onChange: (value: string) => void;
 }) {
   const label = `${variable.label || variable.variable}${variable.required ? "（必填）" : ""}`;
   if (variable.type === "paragraph") {
+    const isBrief = variable.variable === "campaign_brief";
     return (
       <label className="field">
         <span>{label}</span>
         <textarea
-          rows={variable.variable === "campaign_brief" ? 8 : 3}
+          rows={isBrief ? 8 : 3}
           value={value}
           onChange={(event) => onChange(event.target.value)}
-          placeholder={variable.variable === "campaign_brief" ? "粘聊天记录、文章、清单或一句话都行" : ""}
+          placeholder={isBrief ? "粘聊天记录、文章、清单或一句话都行" : ""}
         />
+        {hint && <span className="field-hint">{hint}</span>}
       </label>
     );
   }
@@ -118,6 +131,8 @@ export function InputPanel({
   const shortFields = variables.filter((variable) => variable.type !== "paragraph");
   const batchShortFields = shortFields.filter((variable) => variable.variable !== primary);
   const shared = variables.filter((variable) => variable.variable !== primary);
+  /* 单条模式下口径这行挂在「补充说明」下面；批量模式挂在列表上方，两处只出现一次 */
+  const noteField = variables.find((variable) => variable.type === "paragraph" && variable.variable !== primary) ?? null;
 
   const singleMissing = variables.filter((variable) => variable.required && !(inputs[variable.variable] ?? "").trim());
   const sharedMissing = shared.filter((variable) => variable.required && !(inputs[variable.variable] ?? "").trim());
@@ -184,6 +199,7 @@ export function InputPanel({
                 key={variable.variable}
                 variable={variable}
                 value={inputs[variable.variable] ?? ""}
+                hint={variable.variable === noteField?.variable ? DEFAULT_RULE : undefined}
                 onChange={(value) => onChange({ [variable.variable]: value })}
               />
             ))}
@@ -204,7 +220,7 @@ export function InputPanel({
         <>
           <section className="batch-editor">
             <div className="batch-editor-head">
-              <span className="batch-editor-label">原始需求 · {primaryLabel}</span>
+              <span className="batch-editor-label" title={`每条填的是「${primaryLabel}」`}>原始需求</span>
               <span className="batch-editor-count">{filled.length} 条</span>
               <span className="spacer" />
               <span className="batch-cap">
@@ -218,17 +234,16 @@ export function InputPanel({
                 条
               </span>
             </div>
+            <div className="hint-text batch-rule">{DEFAULT_RULE}</div>
             <div className="batch-rows">
               {items.map((value, index) => (
                 <div className="batch-item" key={index}>
                   <span className="batch-item-no">{index + 1}</span>
                   <textarea
-                    rows={3}
+                    rows={4}
                     value={value}
                     placeholder={
-                      index === 0
-                        ? "第 1 条：粘一段原始需求"
-                        : `第 ${index + 1} 条：这条只替换「${primaryLabel}」`
+                      index === 0 ? "第 1 条：粘一段原始需求" : `第 ${index + 1} 条：再写一条需求`
                     }
                     onChange={(event) => updateItem(index, event.target.value)}
                   />
@@ -242,7 +257,7 @@ export function InputPanel({
             </div>
             <div className="batch-editor-foot">
               <button className="btn sm ghost" onClick={addItem}>添加一条</button>
-              <span className="hint-text">每条只替换「{primaryLabel}」，下面这些输入所有条目共用。</span>
+              <span className="hint-text">每条是独立的一次运行，下面这些输入所有条目共用。</span>
             </div>
           </section>
 

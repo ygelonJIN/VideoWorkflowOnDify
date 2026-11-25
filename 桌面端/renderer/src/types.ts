@@ -91,6 +91,8 @@ export interface RunItem {
   result?: RunResult;
   /** 这次运行用的输入快照；审阅续跑、从节点重跑都按它来。 */
   inputs?: RunInputs;
+  /** 这条已经渲染过成片：界面上不再是「可出片」，而是「已出片」。 */
+  produced?: { dir: string; at: number };
   error?: string;
 }
 

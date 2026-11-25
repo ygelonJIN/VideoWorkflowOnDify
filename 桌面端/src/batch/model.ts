@@ -3,8 +3,6 @@
  * 放在 src/ 下是为了能被 node:test 直接覆盖（渲染层不进 dist 的类型检查）。
  */
 
-const INVALID_NAME = /[/\\:*?"<>|\u0000-\u001f]/g;
-
 export interface VariableLike {
   variable: string;
   type?: string;
@@ -21,33 +19,21 @@ export function primaryVariable(variables: VariableLike[]): string | null {
   return text?.variable ?? null;
 }
 
-/** 主题 → 项目名主干：取第一行、去掉路径字符和空白，限长，避免文件名过长。 */
-export function cleanTopicName(topic: string): string {
-  const first =
-    String(topic ?? "")
-      .split(/\r?\n/)
-      .map((line) => line.trim())
-      .find(Boolean) ?? "";
-  return first.replace(INVALID_NAME, "").replace(/\s+/g, "").slice(0, 16);
-}
-
-/** 和成品目录现有命名一致：`名字20261125-1056`；没有主题就给序号兜底。 */
-export function autoProjectName(topic: string, index: number, when: Date = new Date()): string {
+/** 默认项目名就是时间戳 `20261125-1056`：不拿主题当前缀，成品目录只按时间排。 */
+export function projectStamp(when: Date = new Date()): string {
   const pad = (value: number) => String(value).padStart(2, "0");
-  const stamp = `${when.getFullYear()}${pad(when.getMonth() + 1)}${pad(when.getDate())}-${pad(when.getHours())}${pad(when.getMinutes())}`;
-  const base = cleanTopicName(topic) || `批量${pad(index + 1)}`;
-  return `${base}${stamp}`;
+  return `${when.getFullYear()}${pad(when.getMonth() + 1)}${pad(when.getDate())}-${pad(when.getHours())}${pad(when.getMinutes())}`;
 }
 
-/** 同一批里重名（同名主题、同一分钟）就加 -2/-3；四个 04 同时跑不会撞同一个成品目录。 */
+/** 同一分钟重名就加（1）（2）：四个 04 同时跑也不会撞同一个成品目录。 */
 export function uniqueProjectName(base: string, taken: Iterable<string>): string {
   const used = new Set(taken);
   if (!used.has(base)) return base;
-  for (let index = 2; index < 1000; index += 1) {
-    const candidate = `${base}-${index}`;
+  for (let index = 1; index < 1000; index += 1) {
+    const candidate = `${base}（${index}）`;
     if (!used.has(candidate)) return candidate;
   }
-  return `${base}-${Date.now()}`;
+  return `${base}（${Date.now()}）`;
 }
 
 /** 并发闸门：还能再起几个。active 是正在跑的，limit 是上限（1–4）。 */

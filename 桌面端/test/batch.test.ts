@@ -1,12 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  autoProjectName,
   cleanRequirements,
-  cleanTopicName,
   hasProducibleOutput,
   precomputedFrom,
   primaryVariable,
+  projectStamp,
   startableCount,
   uniqueProjectName,
 } from "../src/batch/model.js";
@@ -25,22 +24,19 @@ test("主输入变量优先 campaign_brief", () => {
   assert.equal(primaryVariable([{ variable: "tts_provider", type: "select", required: false }]), null);
 });
 
-test("主题清理取第一行、去空白和路径字符", () => {
-  assert.equal(cleanTopicName("  允许自己\n第二行"), "允许自己");
-  assert.equal(cleanTopicName("a/b:c*d"), "abcd");
-  assert.equal(cleanTopicName("   "), "");
-});
-
-test("项目名带时间戳，没有主题用序号兜底", () => {
+test("默认项目名就是时间戳，不带主题前缀", () => {
   const when = new Date(2026, 10, 25, 10, 56);
-  assert.equal(autoProjectName("允许自己", 0, when), "允许自己20261125-1056");
-  assert.equal(autoProjectName("", 3, when), "批量0420261125-1056");
+  assert.equal(projectStamp(when), "20261125-1056");
+  assert.equal(projectStamp(new Date(2026, 0, 3, 9, 5)), "20260103-0905");
 });
 
-test("重名加后缀，不会跳到无限循环", () => {
-  assert.equal(uniqueProjectName("a", []), "a");
-  assert.equal(uniqueProjectName("a", ["a"]), "a-2");
-  assert.equal(uniqueProjectName("a", ["a", "a-2"]), "a-3");
+test("重名加（1）（2），不会跳到无限循环", () => {
+  assert.equal(uniqueProjectName("20261125-1056", []), "20261125-1056");
+  assert.equal(uniqueProjectName("20261125-1056", ["20261125-1056"]), "20261125-1056（1）");
+  assert.equal(
+    uniqueProjectName("20261125-1056", ["20261125-1056", "20261125-1056（1）"]),
+    "20261125-1056（2）",
+  );
 });
 
 test("并发闸门不超过上限", () => {

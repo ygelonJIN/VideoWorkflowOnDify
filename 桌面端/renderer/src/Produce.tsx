@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
+import { projectStamp, uniqueProjectName } from "../../src/batch/model.js";
 import { parseImagePlanValue } from "../../src/engine/imagePlan.js";
 import { CopyButton } from "./CopyButton.js";
+import { readSize, startDrag } from "./drag.js";
 import { bridge } from "./bridge.js";
 import type { BuildEvent, BuildStarted, FileEntry, InboxFile, RunInputs, RunResult } from "./types.js";
 
@@ -9,6 +12,8 @@ const STORE_KEY = "studio.produce";
 
 interface Props {
   result: RunResult | null;
+  /** 当前这条运行的 id：渲染完成时按它回写「已出片」。 */
+  runId: string;
   inputs: RunInputs;
   /** 批量时这条自动生成的项目名；单条为空，沿用时间戳。 */
   defaultName?: string;
@@ -17,6 +22,7 @@ interface Props {
   onRun: () => void;
   onArtifacts: () => void;
   onNotice: (text: string) => void;
+  onProduced: (runId: string, dir: string) => void;
 }
 
 interface PromptCard {
@@ -33,12 +39,6 @@ interface StoredProject {
 /** 每条运行各自记自己的项目：切到另一条时不会串到上一批的目录。 */
 function storeKeyFor(runId: string | undefined): string {
   return runId ? `${STORE_KEY}:${runId}` : STORE_KEY;
-}
-
-function timestampName(): string {
-  const now = new Date();
-  const pad = (value: number) => String(value).padStart(2, "0");
-  return `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}`;
 }
 
 function stem(name: string): string {
@@ -157,9 +157,57 @@ function Step({
   );
 }
 
+/**
+ * 日志框：框里不出滚动条，只露末尾几行。
+ * 以前是 260px 的内滚区，滚轮落在上面就只滚日志，永远滚不到下一个步骤框；
+ * 现在超出的从顶部裁掉，要看全按「展开全部」，由出片页自己滚。
+ */
+function LogBox({ text, placeholder }: { text: string; placeholder: string }) {
+  const [height, setHeight] = useState(() => readSize("studio.logH", 220, 80));
+  const [expanded, setExpanded] = useState(false);
+  const clip = useRef<HTMLDivElement>(null);
+  const body = text || placeholder;
+  /* 日志会一行行追加，行数只在内容变化时算一次 */
+  const lines = useMemo(() => (body.match(/\n/g)?.length ?? 0) + 1, [body]);
+
+  useEffect(() => {
+    localStorage.setItem("studio.logH", String(Math.round(height)));
+  }, [height]);
+
+  /* 跟着末尾走：框里没有滚动条，但 scrollTop 还能设 */
+  useEffect(() => {
+    const element = clip.current;
+    if (element) element.scrollTop = element.scrollHeight;
+  }, [body, height, expanded]);
+
+  const resize = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (expanded) return;
+    startDrag(event, { axis: "y", from: height, min: 80, max: 560, onMove: setHeight });
+  };
+
+  return (
+    <div className={`logbox ${expanded ? "expanded" : ""}`} style={{ "--log-h": `${Math.round(height)}px` } as CSSProperties}>
+      <div className="logbox-clip" ref={clip}>
+        <pre className="make-log">{body}</pre>
+      </div>
+      <div className="logbox-bar" onPointerDown={resize}>
+        <span>{lines} 行{expanded ? "" : " · 只显示末尾"}</span>
+        <span className="spacer" />
+        <button
+          className="btn sm ghost"
+          onPointerDown={(event) => event.stopPropagation()}
+          onClick={() => setExpanded((value) => !value)}
+        >
+          {expanded ? "收起到末尾" : "展开全部"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 /** 出片：运行结果 → 准备项目 → 出图提示词 → 放图 → 渲染成片。 */
-export function Produce({ result, inputs, defaultName = "", batch = null, onRun, onArtifacts, onNotice }: Props) {
-  const [projectName, setProjectName] = useState(() => defaultName || timestampName());
+export function Produce({ result, runId, inputs, defaultName = "", batch = null, onRun, onArtifacts, onNotice, onProduced }: Props) {
+  const [projectName, setProjectName] = useState(() => defaultName || projectStamp());
   const [projectDir, setProjectDir] = useState("");
   const [prompts, setPrompts] = useState<PromptCard[]>([]);
   const [images, setImages] = useState<InboxFile[]>([]);
@@ -177,7 +225,6 @@ export function Produce({ result, inputs, defaultName = "", batch = null, onRun,
   const [mimo, setMimo] = useState<{ hasKey: boolean; hint: string } | null>(null);
   const [openStep, setOpenStep] = useState(1);
   const picker = useRef<HTMLInputElement>(null);
-  const logRef = useRef<HTMLPreElement>(null);
   const dirRef = useRef("");
   dirRef.current = projectDir;
   const phaseRef = useRef<"prepare" | "render" | null>(null);
@@ -190,6 +237,12 @@ export function Produce({ result, inputs, defaultName = "", batch = null, onRun,
   allowRef.current = allowMissing;
   const resultRef = useRef(result);
   resultRef.current = result;
+  /* 构建按 jobId 收事件：完成时回写的必须是「起这个构建的那条」，不是当前正在看的那条 */
+  const runIdRef = useRef(runId);
+  runIdRef.current = runId;
+  const buildRunRef = useRef(runId);
+  const onProducedRef = useRef(onProduced);
+  onProducedRef.current = onProduced;
 
   const outputs = result?.outputs ?? {};
   const runDone = Boolean(result && typeof outputs.html_document === "string" && typeof outputs.voiceover_script === "string");
@@ -219,10 +272,6 @@ export function Produce({ result, inputs, defaultName = "", batch = null, onRun,
   useEffect(() => {
     api.mimoStatus().then(setMimo).catch(() => setMimo({ hasKey: false, hint: "读取 MIMO_API_KEY 失败" }));
   }, []);
-
-  useEffect(() => {
-    if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight;
-  }, [logs]);
 
   const refreshImages = useCallback(async (dir: string) => {
     const data = await api.projectImages({ projectPath: dir });
@@ -277,7 +326,7 @@ export function Produce({ result, inputs, defaultName = "", batch = null, onRun,
         setImageDir("");
         setRendered(false);
         setStarted(null);
-        setProjectName(defaultName || timestampName());
+        setProjectName(defaultName || projectStamp());
       }
       return;
     }
@@ -300,7 +349,7 @@ export function Produce({ result, inputs, defaultName = "", batch = null, onRun,
     if (stored && stored.runId === runId && stored.dir) {
       const dir = stored.dir;
       setProjectDir(dir);
-      setProjectName(stored.name || defaultName || timestampName());
+      setProjectName(stored.name || defaultName || projectStamp());
       void Promise.all([loadPrompts(dir), refreshImages(dir)])
         .then(async () => {
           if (await hasFinalVideo(dir)) setRendered(true);
@@ -317,7 +366,7 @@ export function Produce({ result, inputs, defaultName = "", batch = null, onRun,
     setImages([]);
     setUrls({});
     setImageDir("");
-    setProjectName(defaultName || timestampName());
+    setProjectName(defaultName || projectStamp());
   }, [result?.runId, defaultName, loadPrompts, refreshImages, hasFinalVideo]);
 
   useEffect(() => {
@@ -364,6 +413,7 @@ export function Produce({ result, inputs, defaultName = "", batch = null, onRun,
           setRendered(true);
           setStatus("渲染完成");
           onNotice("渲染完成，去「产物」看成片");
+          if (event.projectDir) onProducedRef.current(buildRunRef.current, event.projectDir);
         }
         return;
       }
@@ -383,11 +433,23 @@ export function Produce({ result, inputs, defaultName = "", batch = null, onRun,
     setStatus(action === "prepare" ? "准备中…" : "渲染中…");
     const jobId = `produce-${crypto.randomUUID()}`;
     jobRef.current = jobId;
+    buildRunRef.current = runIdRef.current;
     try {
+      /* 默认名就是时间戳；这一分钟里已经有同名目录就加（1）（2），不覆盖别人的成品 */
+      const requested = nameRef.current.trim() || projectStamp();
+      let projectName = requested;
+      if (action === "prepare" && !dirRef.current) {
+        const projects = await api.projects().catch(() => []);
+        projectName = uniqueProjectName(requested, projects.map((project) => project.name));
+        if (projectName !== requested) {
+          setProjectName(projectName);
+          onNotice(`已有同名项目，改用 ${projectName}`);
+        }
+      }
       const info = await api.build({
         jobId,
         action,
-        projectName: nameRef.current.trim() || timestampName(),
+        projectName,
         outputs: current.outputs,
         allowMissing: action === "render" ? allowRef.current : false,
         replace,
@@ -521,7 +583,7 @@ export function Produce({ result, inputs, defaultName = "", batch = null, onRun,
               <span>项目名</span>
               <input value={projectName} onChange={(event) => setProjectName(event.target.value)} disabled={phase !== null} />
             </label>
-            <button className="btn sm ghost" onClick={() => setProjectName(timestampName())} disabled={phase !== null}>用时间戳</button>
+            <button className="btn sm ghost" onClick={() => setProjectName(projectStamp())} disabled={phase !== null}>用时间戳</button>
             <span className="spacer" />
             <button className="btn primary" onClick={() => void start("prepare")} disabled={!runDone || phase !== null}>
               {phase === "prepare" ? "准备中…" : "准备项目"}
@@ -539,7 +601,7 @@ export function Produce({ result, inputs, defaultName = "", batch = null, onRun,
           {started && started.projectDir === projectDir && started.expectedIds.length > 0 && (
             <div className="hint-text">期望图片 {started.expectedIds.length} 张：{started.expectedIds.join("、")}</div>
           )}
-          {phase === "prepare" && <pre className="make-log" ref={logRef}>{logs || "准备中…"}</pre>}
+          {phase === "prepare" && <LogBox text={logs} placeholder="准备中…" />}
           {status && !rendered && <div className="hint-text">{status}</div>}
           {error && phase === null && <div className="err-text">{error}</div>}
         </Step>
@@ -715,9 +777,7 @@ export function Produce({ result, inputs, defaultName = "", batch = null, onRun,
               )}
               {status && <div className="hint-text">{status}</div>}
               {error && <div className="err-text">{error}</div>}
-              {(logs || phase === "render") && (
-                <pre className="make-log" ref={logRef}>{logs || "渲染中…"}</pre>
-              )}
+              {(logs || phase === "render") && <LogBox text={logs} placeholder="渲染中…" />}
             </>
           )}
         </Step>

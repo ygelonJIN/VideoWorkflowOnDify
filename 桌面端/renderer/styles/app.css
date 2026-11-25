@@ -147,7 +147,8 @@ button, input, select, textarea { font: inherit; color: inherit; }
   grid-column: 1;
   grid-row: 2;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) clamp(340px, 30vw, var(--insp-w));
+  /* 拖过的宽度是死值：窗口缩小后也要给画布留 460，别把主区挤没 */
+  grid-template-columns: minmax(0, 1fr) min(var(--side-w), calc(100% - 460px));
   gap: var(--sp-4);
   min-height: 0;
 }
@@ -256,16 +257,70 @@ button, input, select, textarea { font: inherit; color: inherit; }
   min-height: 0;
 }
 
-/* 右栏：详情在上、运行台在下 */
+/* 右栏：详情在上、运行台在下。两块之间是可拖的分割条（不再靠 gap 拉开） */
 .side {
+  position: relative;
   display: flex;
   flex-direction: column;
-  gap: var(--sp-4);
+  gap: 0;
   min-width: 0;
   min-height: 0;
 }
 .side .inspector { flex: 1 1 auto; }
 .side .bottom { flex: 0 0 auto; }
+
+/* 上下拖运行台高度：12px 的带子，和原来的 gap 一样宽，看起来还是留白 */
+.split-h {
+  flex: 0 0 var(--sp-4);
+  position: relative;
+  cursor: row-resize;
+  touch-action: none;
+}
+.split-h::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 44px;
+  height: 3px;
+  transform: translate(-50%, -50%);
+  border-radius: var(--radius-full);
+  background: var(--border-strong);
+  opacity: 0;
+  transition: opacity var(--dur-fast) var(--ease);
+}
+.split-h:hover::after,
+.split-h.dragging::after { opacity: 1; }
+/* 运行台收起时这条只剩间距的作用，不给拖拽暗示 */
+.side.console-collapsed .split-h { cursor: default; }
+.side.console-collapsed .split-h::after { display: none; }
+
+/* 左右拖详情栏宽度：正好压在两栏之间的 12px 间隙上 */
+.split-v {
+  position: absolute;
+  left: calc(-1 * var(--sp-4));
+  top: 0;
+  bottom: 0;
+  width: var(--sp-4);
+  z-index: calc(var(--z-hud) + 2);
+  cursor: col-resize;
+  touch-action: none;
+}
+.split-v::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 3px;
+  height: 44px;
+  transform: translate(-50%, -50%);
+  border-radius: var(--radius-full);
+  background: var(--border-strong);
+  opacity: 0;
+  transition: opacity var(--dur-fast) var(--ease);
+}
+.split-v:hover::after,
+.split-v.dragging::after { opacity: 1; }
 
 /* ---------- 画布 ---------- */
 
@@ -586,6 +641,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .inspector {
   padding: var(--sp-6);
   overflow: auto;
+  scrollbar-gutter: stable;
   min-height: 0;
 }
 .insp-head {
@@ -643,8 +699,6 @@ button, input, select, textarea { font: inherit; color: inherit; }
   font-family: var(--font-mono);
   font-size: var(--text-12);
   line-height: 1.7;
-  max-height: 240px;
-  overflow: auto;
   white-space: pre-wrap;
   word-break: break-word;
 }
@@ -762,6 +816,8 @@ button, input, select, textarea { font: inherit; color: inherit; }
   padding: var(--sp-5);
   max-height: calc(100vh - 110px);
   overflow: auto;
+  /* 浮层自己滚到底，不要带着后面的页面一起动 */
+  overscroll-behavior: contain;
 }
 .drawer-head { display: flex; align-items: center; gap: var(--sp-3); margin-bottom: var(--sp-4); }
 .drawer-head strong { font-size: var(--text-16); font-weight: var(--fw-semibold); }
@@ -783,6 +839,13 @@ button, input, select, textarea { font: inherit; color: inherit; }
   font-family: var(--font-ui);
 }
 .field textarea { resize: vertical; min-height: 120px; line-height: var(--lh-normal); }
+/* 字段下面那行口径：比标签浅一级，别和标签抢注意力 */
+.field > .field-hint {
+  margin: var(--sp-2) 0 0;
+  color: var(--fg-faint);
+  font-size: var(--text-12);
+  line-height: 1.65;
+}
 .field-row { display: grid; grid-template-columns: 1.2fr 1fr 1fr; gap: var(--sp-3); }
 .wide { width: 100%; margin-top: var(--sp-2); }
 
@@ -805,8 +868,6 @@ button, input, select, textarea { font: inherit; color: inherit; }
   font-family: var(--font-mono);
   font-size: var(--text-12);
   line-height: 1.7;
-  max-height: 260px;
-  overflow: auto;
   white-space: pre-wrap;
   word-break: break-word;
 }
@@ -886,6 +947,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
   box-shadow: var(--shadow-3);
   max-height: 280px;
   overflow: auto;
+  overscroll-behavior: contain;
 }
 .search-results li {
   display: flex;
@@ -945,6 +1007,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
   min-width: 100%;
   max-height: 320px;
   overflow: auto;
+  overscroll-behavior: contain;
   margin: 0;
   padding: var(--sp-2);
   list-style: none;
@@ -1073,43 +1136,57 @@ button, input, select, textarea { font: inherit; color: inherit; }
 
 /* ---------- 制作（准备项目 / 渲染） ---------- */
 
-.make {
-  height: 100%;
-  padding: var(--sp-3) var(--sp-5);
-  display: flex;
-  flex-direction: column;
-  gap: var(--sp-2);
-  overflow: hidden;
-}
-.make-head { display: flex; align-items: center; gap: var(--sp-3); flex-wrap: wrap; }
-.make-head .spacer { flex: 1; }
+/* 准备/渲染这两个步骤现在直接排在步骤框里，由出片页统一滚；
+   原来那套固定高度的 .make 面板已经不在了，别再按它写样式。 */
 .field.inline { display: flex; align-items: center; gap: var(--sp-2); margin: 0; }
 .field.inline > span { margin: 0; white-space: nowrap; }
 .field.inline input { width: 160px; padding: var(--sp-1) var(--sp-3); }
-.make-options {
-  display: flex;
-  align-items: center;
-  gap: var(--sp-4);
-  flex-wrap: wrap;
-  color: var(--fg-muted);
-  font-size: var(--text-12);
-}
-.make-options label { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
-.make-log {
-  flex: 1;
-  min-height: 0;
-  margin: 0;
-  padding: var(--sp-3) var(--sp-4);
+/* 日志框：只露末尾几行，框里不出现滚动条。
+   以前是 260px 高的内滚区，滚轮落在上面就只滚日志，永远滚不到下一个步骤框。
+   现在靠 flex-end 把内容钉在底部、超出的从顶部裁掉，要全看按「展开全部」由页面滚。 */
+.logbox {
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   background: var(--bg-code);
+  overflow: hidden;
+}
+/* max-height 而不是死高度：短日志就按内容高，长日志由 JS 把 scrollTop 顶到底。
+   overflow:hidden 的元素仍能程序化滚动，但不出滚动条、也不接滚轮——滚轮直接落到出片页。 */
+.logbox-clip {
+  max-height: var(--log-h, 220px);
+  overflow: hidden;
+}
+.logbox.expanded .logbox-clip { max-height: none; }
+.logbox .make-log {
+  flex: none;
+  margin: 0;
+  padding: var(--sp-3) var(--sp-4);
+  border: 0;
+  border-radius: 0;
+  background: transparent;
   color: var(--fg-muted);
   font-family: var(--font-mono);
   font-size: var(--text-11);
   line-height: 1.7;
   white-space: pre-wrap;
-  overflow: auto;
+  word-break: break-word;
+  overflow: visible;
 }
+.logbox-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: 2px var(--sp-3) 2px var(--sp-4);
+  border-top: 1px solid var(--border);
+  color: var(--fg-faint);
+  font-size: var(--text-11);
+  cursor: row-resize;
+  touch-action: none;
+  user-select: none;
+}
+.logbox.expanded .logbox-bar { cursor: default; }
+.logbox-bar .spacer { flex: 1; }
+.logbox-bar .btn { height: 24px; cursor: pointer; }
 
 /* ---------- 图片拖放区 ---------- */
 
@@ -1140,6 +1217,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
   flex: 1;
   min-height: 0;
   overflow: auto;
+  scrollbar-gutter: stable;
   padding: var(--sp-5) var(--sp-6);
   display: flex;
   flex-direction: column;
@@ -1192,7 +1270,6 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .step-row { display: flex; align-items: center; gap: var(--sp-3); flex-wrap: wrap; }
 .step-row .spacer { flex: 1; }
 .step-row .field.inline { margin: 0; }
-.step-body .make-log { flex: none; max-height: 260px; }
 
 .check { display: inline-flex; align-items: center; gap: 6px; color: var(--fg-muted); font-size: var(--text-12); cursor: pointer; }
 
@@ -1311,6 +1388,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
   width: min(760px, 100%);
   max-height: 90vh;
   overflow: auto;
+  overscroll-behavior: contain;
   padding: var(--sp-6) var(--sp-6) var(--sp-5);
   display: flex;
   flex-direction: column;
@@ -1331,8 +1409,6 @@ button, input, select, textarea { font: inherit; color: inherit; }
 }
 .review-script {
   margin: 0;
-  max-height: 280px;
-  overflow: auto;
   padding: var(--sp-4);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
@@ -1412,6 +1488,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
   border-radius: var(--radius-md);
   background: var(--bg-raised);
 }
+.batch-rule { margin: 0 0 var(--sp-2); }
 .batch-editor-head {
   display: flex;
   align-items: center;
@@ -1441,8 +1518,6 @@ button, input, select, textarea { font: inherit; color: inherit; }
   display: flex;
   flex-direction: column;
   gap: var(--sp-2);
-  max-height: 46vh;
-  overflow: auto;
   padding-right: 2px;
 }
 .batch-item {
@@ -1471,8 +1546,9 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .batch-item textarea {
   flex: 1;
   min-width: 0;
-  min-height: 54px;
-  max-height: 200px;
+  /* 默认一条需求大约 4 行：以前 54px 只够一句，批量填长需求得反复拖 */
+  min-height: 96px;
+  max-height: 340px;
   padding: 2px var(--sp-2);
   border: 0;
   background: transparent;

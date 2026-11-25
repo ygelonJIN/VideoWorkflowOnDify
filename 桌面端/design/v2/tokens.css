@@ -35,10 +35,11 @@
   /* 层级 */
   --z-canvas: 0; --z-hud: 10; --z-pop: 100;
 
-  /* 骨架尺寸 */
+  /* 骨架尺寸。--bottom-h / --side-w 只是初值：拖过分割条后由界面写行内变量覆盖 */
   --insp-w: 404px;
   --top-h: 66px;
-  --bottom-h: 224px;
+  --bottom-h: 320px;
+  --side-w: clamp(340px, 30vw, var(--insp-w));
 
   /* 颜色：冷灰蓝工作区，钢蓝强调，克制的轻投影 */
   --bg: #eef1f5;
