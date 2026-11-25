@@ -48,6 +48,9 @@ ROWS = {"id": "U05", "anim": "rows", "texts": ["猎人", "多份", "不劳动者
 CARDS = {"id": "U55", "anim": "cards",
          "texts": ["付出可量化", "获得有对应", "差别被承认", "货币被肯定"],
          "motion": {"preset": "UA37"}}
+CARD1 = {"id": "U01", "anim": "card",
+         "texts": ["标题", "说明"],
+         "motion": {"preset": "UA01"}}
 
 
 class Probe:
@@ -121,20 +124,20 @@ class Probe:
                       [("preset: S24", False), ("preset: UA22", True)])
         # 2) 触发卡没有 then：只有动作没有结果
         self.via_spec("触发卡缺 then → 丢弃",
-                      {"components": [ROWS], "state": {"preset": "S04", "target": "rows", "word": "猎人"}},
-                      [("preset: S04", False)])
+                      {"components": [CARDS], "state": {"preset": "S06", "target": "cards", "word": "猎人"}},
+                      [("preset: S06", False)])
         # 3) 触发卡 + then：两条都留，且落在同一目标
         self.via_spec("触发卡带 then → 保留两条",
-                      {"components": [ROWS],
-                       "state": {"preset": "S04", "target": "rows", "word": "猎人",
-                                 "then": {"preset": "S07", "target": "rows", "word": "猎人"}}},
-                      [("preset: S04", True), ("preset: S07", True)])
+                      {"components": [CARDS],
+                       "state": {"preset": "S06", "target": "cards", "word": "猎人",
+                                 "then": {"preset": "S07", "target": "cards", "word": "猎人"}}},
+                      [("preset: S06", True), ("preset: S07", True)])
         # 4) then 落在别的目标上：结果不是这个动作的结果
         self.via_spec("then 换个目标 → 丢弃",
-                      {"components": [ROWS, CARDS],
-                       "state": {"preset": "S04", "target": "rows", "word": "猎人",
-                                 "then": {"preset": "S07", "target": "cards", "word": "猎人"}}},
-                      [("preset: S04", False)])
+                      {"components": [CARDS, CARD1],
+                       "state": {"preset": "S06", "target": "cards", "word": "猎人",
+                                 "then": {"preset": "S07", "target": "card", "word": "猎人"}}},
+                      [("preset: S06", False)])
         # 5) deco：标注不许落在标题上（标题已经最大，再标就是糊住它）
         self.via_spec("deco 落标题 → 丢弃",
                       {"components": [], "deco": {"preset": "K45", "target": "title"}},
@@ -172,8 +175,8 @@ class Probe:
                     [{"preset": "S24", "target": "comp-1", "role": "state"}],
                     [("preset: S24", False)])
         self.via_r1("R1 直喂：触发卡没有结果 → 丢弃",
-                    [{"preset": "S04", "target": "rows", "role": "state"}],
-                    [("preset: S04", False)], components=[ROWS])
+                    [{"preset": "S06", "target": "cards", "role": "state"}],
+                    [("preset: S06", False)], components=[CARDS])
         self.via_r1("R1 直喂：deco 只落文字的卡落在组件上 → 丢弃",
                     [{"preset": "K45", "target": "comp-1", "role": "deco"}],
                     [("preset: K45", False)])

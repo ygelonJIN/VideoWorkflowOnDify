@@ -29,6 +29,8 @@ REPO = HERE.parent.parent
 OUT = HERE / "usage_ledger.json"
 PROJECTS = REPO / "成品"
 PRESET_RE = re.compile(r"/\* preset: ([A-Z]+\d+) \*/")
+# 首屏背景：第一块 scene-bg。recent_openers 用它算“最近三支的首页用了哪张”。
+FIRST_BG_RE = re.compile(r'class="scene-bg"\s+data-bg="(B\d+)"')
 
 
 def scan() -> dict:
@@ -38,6 +40,7 @@ def scan() -> dict:
         if project in ("Dify输出", "HTML预览", "试验", "失败项目", "项目备份"):
             continue
         text = html.read_text(encoding="utf-8", errors="replace")
+        first_bg = FIRST_BG_RE.search(text)
         used: dict[str, int] = {}
         for cid in PRESET_RE.findall(text):
             used[cid] = used.get(cid, 0) + 1
@@ -45,6 +48,7 @@ def scan() -> dict:
             "id": project,
             "mtime": int(html.stat().st_mtime),
             "scenes": text.count("<section"),
+            "first_bg": first_bg.group(1) if first_bg else None,
             "invocations": sum(used.values()),
             "used": dict(sorted(used.items())),
         })
@@ -54,7 +58,7 @@ def scan() -> dict:
     return {
         "version": 1,
         "note": "由 能力库/动效库/motion_ledger.py 从成片 index.html 重算，不要手改。"
-                "gen_catalog.py 取最后三支的 used 作为 catalog.recent_usage。",
+                "只作报告；gen_catalog.py 每次生成时直接 scan() 现算 recent_usage / recent_openers。",
         "films": films,
     }
 

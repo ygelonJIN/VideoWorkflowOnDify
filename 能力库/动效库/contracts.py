@@ -21,6 +21,9 @@ ANCHORS = {
     "card", "row", "cell", "bar", "tag", "node", "path", "head",
     "line", "dot", "icon", "badge", "avatar", "pin", "field",
     "bubble", "screen", "num", "flow", "svg",
+    # 2026-11-23：勾选类状态卡（S04）要落在真正可勾选的控件上，而不是“任意一行”。
+    # check 目前没有组件提供，S04 先停用；点击/拖动/切换等其他触发卡另案审计。
+    "check",
 }
 
 # 只作为环境声明的粗能力词，不是锚点。

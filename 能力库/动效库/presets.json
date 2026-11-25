@@ -880,7 +880,7 @@
    "name": "勾选",
    "family": "状态",
    "layer": "element",
-   "status": "ready",
+   "status": "needs-work",
    "cap": "inject+spring",
    "src": "自建:state-check",
    "params": {
@@ -892,9 +892,10 @@
    "code": "(function () {\n  var _t = document.querySelector('{{sel}}');\n  if (!_t) return;\n  if (getComputedStyle(_t).position === 'static') { _t.style.position = 'relative'; }\n  var _c = document.createElement('i');\n  _c.style.cssText = 'position:absolute;left:0;top:50%;width:{{size}}px;height:{{size}}px;margin-top:-11px;border:2px solid {{color}};border-radius:50%;transform:scale(0);';\n  var _k = document.createElement('i');\n  _k.style.cssText = 'position:absolute;left:0;top:50%;width:{{size}}px;height:{{size}}px;margin-top:-11px;border-radius:50%;background:{{color}};transform:scale(0);';\n  _t.appendChild(_c); _t.appendChild(_k);\n  timeline.to(_c, {'scale':1, 'duration':.3, 'ease':'back.out'}, {{at}});\n  timeline.to(_k, {'scale':.55, 'duration':.3, 'ease':'power2.out'}, {{at}} + .12);\n})();",
    "role": "state_text",
    "needs": [
-    "row"
+    "check"
    ],
-   "trigger": true
+   "trigger": true,
+   "note": "没有组件提供可勾选锚点（check）；先停用，补 checklist 组件后再启用（2026-11-23）"
   },
   {
    "id": "S06",

@@ -129,6 +129,23 @@ def main() -> int:
         _listed |= set(_ids or [])
     for _sec in ("background", "component", "page_transition"):
         _listed |= set((_cat.get(_sec) or {}))
+    # 非 ready 卡不进目录：needs-work 的卡连编号都不该出现（2026-11-23 S04）。
+    for _c in cards:
+        if _c.get("status") != "ready" and _c.get("id") in _listed:
+            problems.append("%s 不是 ready，但在目录里：模型会选了再被丢" % _c.get("id"))
+    # 首屏候选：最近 3 支的同一张 + 上一支同 family 必须被排除（2026-11-23 定）。
+    _openers = _cat.get("recent_openers") or []
+    _first = _cat.get("first_screen_background") or {}
+    _all_bg = _cat.get("background") or {}
+    if _openers and _first and len(_first) < len(_all_bg):
+        _last_family = str(_openers[-1].get("family") or "")
+        for _o in _openers:
+            if _o.get("bg") in _first:
+                problems.append("首屏候选没有排除最近 3 支的 %s（%s）" % (_o.get("bg"), _o.get("film")))
+        if _last_family:
+            for _cid, _entry in _first.items():
+                if _entry.get("family") == _last_family:
+                    problems.append("首屏候选没有排除上一支的 %s 族：%s" % (_last_family, _cid))
     for _cid in sorted(_listed):
         _item = _desc.get(_cid) or {}
         _text = " ".join(str(_item.get(_k) or "") for _k in ("note", "use", "avoid")).strip()
@@ -223,7 +240,7 @@ def main() -> int:
             print("  -", line)
         return 1
     print("四层一致：%d 张卡，可选 %d 张（%d 条提醒）。" % (
-        len(cards), sum(1 for c in cards if c.get("role") and c["role"] != "shape"), len(warnings)))
+        len(cards), sum(1 for c in cards if c.get("role") and c["role"] != "shape" and c.get("status") == "ready"), len(warnings)))
     return 0
 
 

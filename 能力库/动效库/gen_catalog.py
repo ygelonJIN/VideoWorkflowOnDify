@@ -36,6 +36,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 import yaml_nodes  # noqa: E402
 import component_slots  # noqa: E402
 import contracts  # noqa: E402
+import motion_ledger  # noqa: E402
 
 HERE = pathlib.Path(__file__).resolve().parent
 REPO = HERE.parent.parent
@@ -56,7 +57,7 @@ MOTION_ROLES = ["entrance_text", "entrance_block", "state_text", "state_block",
 # 跨片用量台账（2026-11-22）：放在定义层外面、由 motion_ledger.py 扫成片重算。
 # 目的只有一个：把"最近几支用过哪些编号"喂给选择层，让模型在同等条件下换别的。
 # 这里不替模型换卡（那是 §3.3 禁止的），只把事实摆到它面前。
-LEDGER = HERE / "usage_ledger.json"
+# 2026-11-23：不再读 usage_ledger.json（会过期），每次生成时直接 scan() 现算。
 RECENT_FILMS = 3
 
 HARD_RULES = """## 七条硬规则（v3，2026-11-22）
@@ -110,7 +111,8 @@ def media_entrance_ok(card):
 
 
 def media_entrances(cards):
-    return sorted(c["id"] for c in cards if media_entrance_ok(c))
+    return sorted(c["id"] for c in cards
+                  if c.get("status") == "ready" and media_entrance_ok(c))
 
 
 def state_meta_of(cards):
@@ -239,18 +241,25 @@ def motion_cards_of(cards, rules=None):
     return out
 
 
-def recent_usage_of(limit=RECENT_FILMS, alive=None):
+def _films():
+    """每次生成时现扫成片；不再读 usage_ledger.json（2026-11-23）。"""
+    try:
+        data = motion_ledger.scan()
+    except Exception:
+        return []
+    films = data.get("films") if isinstance(data, dict) else None
+    return films if isinstance(films, list) else []
+
+
+def recent_usage_of(limit=RECENT_FILMS, alive=None, films=None):
     """最近几支成片各自用过哪些编号（片数口径，不是次数）。
 
     只喂给选择层当参考，不参与任何"换卡"逻辑。
+    2026-11-23：改成每次生成时现扫 `成品/*/index.html`，不再读可能过期的
+    `usage_ledger.json`。台账文件只作报告。
     """
-    if not LEDGER.exists():
-        return {}
-    try:
-        data = json.loads(LEDGER.read_text(encoding="utf-8"))
-    except Exception:
-        return {}
-    films = data.get("films") if isinstance(data.get("films"), list) else []
+    if films is None:
+        films = _films()
     recent = films[-limit:]
     tally = collections.Counter()
     for film in recent:
@@ -263,11 +272,48 @@ def recent_usage_of(limit=RECENT_FILMS, alive=None):
     return dict(sorted(tally.items()))
 
 
+def recent_openers_of(films, bg, limit=RECENT_FILMS):
+    """最近几支成片的首页背景（编号 + 视觉族），给首屏候选清单用。"""
+    out = []
+    for film in (films or [])[-limit:]:
+        bgid = str(film.get("first_bg") or "").strip().upper()
+        entry = bg.get(bgid)
+        if not entry:
+            continue
+        out.append({"film": str(film.get("id") or ""),
+                    "bg": bgid,
+                    "family": str(entry.get("family") or "")})
+    return out
+
+
+def first_screen_background_of(bg, openers):
+    """首屏候选：最近 3 支的同一张 + 上一支同 family 直接不进清单。
+
+    2026-11-23 定：不是靠提示词求模型换，而是首屏根本拿不到这几张。
+    """
+    if not openers:
+        return dict(bg)
+    exclude_ids = {str(o.get("bg") or "") for o in openers}
+    last_family = str(openers[-1].get("family") or "")
+    out = {cid: entry for cid, entry in bg.items()
+           if cid not in exclude_ids
+           and (not last_family or str(entry.get("family") or "") != last_family)}
+    if out:
+        return out
+    # 极端情况（所有族都被占）：至少保证不撞最近 3 支的同一张。
+    out = {cid: entry for cid, entry in bg.items() if cid not in exclude_ids}
+    return out or dict(bg)
+
+
 def catalog_of(cards):
     bg, comp, pt = {}, {}, {}
     rules = family_rules_of(cards)
     motion = collections.OrderedDict((r, []) for r in MOTION_ROLES)
+    films = _films()
     for c in sorted(cards, key=lambda x: x["id"]):
+        # 目录只发 ready：needs-work 的卡连编号都不出现，模型不会选了再被丢。
+        if c.get("status") != "ready":
+            continue
         role = c.get("role") or ""
         cid = c["id"]
         if role == "bg":
@@ -322,8 +368,13 @@ def catalog_of(cards):
         anchors = contracts.anchors_of(c)
         if anchors and c.get("status") == "ready":
             card_needs[c["id"]] = anchors
+    openers = recent_openers_of(films, bg)
     return {
         "background": bg,
+        # 首屏单独一份候选：最近 3 支的同一张 + 上一支同 family 已经排除。
+        # 模型第一屏只能从这格选，拿不到被排除的编号（2026-11-23）。
+        "first_screen_background": first_screen_background_of(bg, openers),
+        "recent_openers": openers,
         "component": comp,
         "motion": {k: v for k, v in motion.items()},
         "page_transition": pt,
@@ -347,7 +398,8 @@ def catalog_of(cards):
                          if c.get("status") == "ready"
                          and c.get("role") not in ("bg", "component", "page_transition", "shape")},
         # 最近几支成片用过的编号（片数口径）：选择层"同等条件下换别的"的依据。
-        "recent_usage": recent_usage_of(alive={c["id"] for c in cards if c.get("status") == "ready"}),
+        "recent_usage": recent_usage_of(alive={c["id"] for c in cards if c.get("status") == "ready"},
+                                        films=films),
     }
 
 
@@ -360,6 +412,7 @@ def _fmt_params(params):
 def render_cards_md(cards):
     out = [HEADER, HARD_RULES]
     by_family = collections.defaultdict(list)
+    disabled = []
     shapes = 0
     for c in cards:
         if not c.get("role"):
@@ -368,6 +421,11 @@ def render_cards_md(cards):
         # 模型选不到，就不会再出现"整屏坐标系的图被塞进 840 文字栏"。
         if c["role"] == "shape":
             shapes += 1
+            continue
+        # 非 ready 卡不进可选总表和各族明细；单独列在“未启用”，
+        # 否则文档会写着"能选"、目录里却没有它（2026-11-23 S04）。
+        if c.get("status") != "ready":
+            disabled.append(c)
             continue
         by_family[c.get("family", "未分类")].append(c)
 
@@ -382,6 +440,8 @@ def render_cards_md(cards):
     out.append("|---|---:|---|")
     by_role = collections.defaultdict(list)
     for c in cards:
+        if c.get("status") != "ready":
+            continue
         r = c.get("role")
         if r in role_label:
             by_role[r].append(c["id"])
@@ -396,6 +456,15 @@ def render_cards_md(cards):
     out.append("")
     out.append("`entrance_media` 是从 `entrance_block` 里派生的一格：只收\"只动根节点、不依赖子结构和元素自带属性\"的卡，"
                "照片槽只能从这里选（`S2N` 与 `R1` 都会验，见 `经验文档/能力层架构.md`）。\n")
+    if disabled:
+        out.append("## 未启用（不进选择层）\n")
+        out.append("| 编号 | 名字 | role | 原因 |")
+        out.append("|---|---|---|---|")
+        for c in sorted(disabled, key=lambda x: x["id"]):
+            out.append("| %s | %s | `%s` | %s |" % (
+                c["id"], c.get("name", ""), c.get("role", ""),
+                c.get("note") or c.get("avoid") or "status=%s" % c.get("status")))
+        out.append("")
 
     out.append("## 各族明细\n")
     for fam in order:

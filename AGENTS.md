@@ -40,13 +40,14 @@ bash /Volumes/TUF ESD-T1A Media/视频工作流/runtime/tools/run_dify_output.sh
 | 去重 | 只有 `script_hash` 一个指纹在跑 | `S1N` 的 Code 节点 |
 | 界面元素 | 只能取编号组件（`U*`）；模型只给编号+槽位文字，不写 HTML | `S2` 规格 + `R2` 槽位渲染 + `component_slots.py` |
 | 组件动效配对 | 组件卡 `provides`、动效 `needs`；`motion_by_component` 由 `gen_catalog` 算，`S2N`/`R1` 再验 | `contracts.py` + `gen_catalog.py` |
-| 状态卡落点 | 卡 `needs` 里的锚点（如 S36 的 `num`、S04 的 `row`）必须由目标组件 `provides`；`R1` 把 `sel` 绑到锚点元素，缺锚点就丢卡 | `gen_catalog` 的 `card_needs` + `S2N`/`R1` |
+| 状态卡落点 | 卡 `needs` 里的锚点（如 S36 的 `num`）必须由目标组件 `provides`；`R1` 把 `sel` 绑到锚点元素，缺锚点就丢卡。S04 勾选 2026-11-23 起 `needs=check`、`needs-work`（没有组件提供 check，先停用） | `gen_catalog` 的 `card_needs` + `S2N`/`R1` |
 | 状态卡能改什么 | `writes=content`（会 `textContent`/`innerHTML`）的卡**只能落文字节点或组件声明的锚点**；没声明锚点的 `overlay` 卡也不许落组件根。落错就丢弃并重跑 `S2` | `gen_catalog` 的 `state_meta` + `S2N`/`R1` |
 | 假交互 | `trigger=true` 的卡（点击/勾选/拖动/切换/状态灯）必须在同屏配一条 `then`（同一目标），没有 then 整条丢弃：只在说「发生了一件事」而没有结果，不算动效 | `state_meta.trigger` + `S2N`/`R1` |
 | 装饰与离场槽 | 每屏 `deco` 0–1（`motion.decoration`，落本屏已有元素）、`out` 0–1（`motion.exit`，固定在切点前 0.5 秒，不许动标题）；`out` 不占内容槽位 | `S2` 规格 + `R1` 的 rank/out 分支 |
 | 标注语义 | `deco` 是手绘标注不是装饰：叉/划掉=否掉一个具体做法，括号/框=补一句旁注或归组，圈/荧光/下划线=强调一个关键词，进度条/数值条=有真实数字（`state_meta.requires_number`）。**标注不许落标题**，全片 ≤ ⌈屏数÷3⌉ 且相邻两屏不都写 | `catalog.motion_cards` 的 `use`/`avoid` + `S2N`/`R1` |
 | 选卡看语义 | `catalog.motion` 只给编号；**每张可选卡都带卡级描述**——动效卡在 `motion_cards`（name/use/avoid），背景/组件/转场在各自条目（note/use/avoid）。`use` 只写「什么时候选」、`avoid` 只写「什么时候别选」，实现说明不进卡。加卡、加族漏发会被门禁点名 | `gen_catalog` 的 `card_desc` + `check_catalog_sync` 的覆盖断言 |
 | 全片用量 | 同一编号 ≤2 次；组件 ≥4 种、同一组件 ≤2 次；最近三支用过的编号写进 `catalog.recent_usage` 喂给模型 | `gen_catalog` + `motion_ledger.py` + `S2` 提示词 + `S2N` 点名 |
+| 首屏背景 | 第一屏只能从 `catalog.first_screen_background` 选；最近 3 支同编号 + 上一支同 family 已排除 | `gen_catalog` 现算 + `S2` 提示词 |
 | 组件槽位 | 组数由 `texts` 给到的**完整组**决定；不补空串、不满组整组丢 | `S2N` 的 `fit_component_texts` |
 | 组件落哪一层 | 组件默认进 840 文字栏；卡上写 `span: "full"` 的进 1080 通栏层 `.scene-ui`，版面给它留一条横带（`data-ui-full`） | `gen_catalog` 的 `COMPONENT_TPL.span` + `R2` + `layout_composer` 的 `ui_band` |
 | 组件根唯一 | 模板有多个顶层节点的片段由 `R2` 包一层 `.ui-comp-row` 再挂 `data-anim`；`R1` 的"显示这一层"打在根上 | `R2` 的 `top_level_count` + `R1` 的 `layer_sel` + `components.css` 的 `.ui-comp-row` |
@@ -60,7 +61,7 @@ bash /Volumes/TUF ESD-T1A Media/视频工作流/runtime/tools/run_dify_output.sh
 | 照片落版 | 全部 840 通栏横带，高度 `band` 600/420/300、`portrait` 520、`inset` 360、`thumb` 300、`texture` 620；**只有 `full` 满屏**，而 `full` 在 `S2N` 就归一成 `band`，所以生成端写不出满屏照片 | `R2` 的 `FIXED_H` / `slot` |
 | 场景脚本外壳 | `<script>` + `push(function(timeline, at){` + `});` **只由 `R2` 生成一次**；剥壳、丢卡、补入场都在 body 层，永远碰不到外壳 | `R2` 的 code |
 | 卡片字号 | `.ui-card h3` = 本屏主字号 × 0.5、`p` = × 0.3（`--ui-card-title` / `--ui-card-body`）；`--ui-scale` 只给其它组件用 | `layout_composer` + `components.css` |
-| 组件栅格宽度 | `ui-cell` 按格内最长文字反算 `--ui-scale` 上限（下限 1.55）；U54 指标三连标签/值分两行 | `layout_composer.ui_grid_scale_cap` + `components.css` |
+| 组件栅格宽度 | 栅格列等分且永不越栏（`minmax(0,1fr)`）；`ui-cell` 按最长文字反算 `--ui-scale`（下限 1.55）；`ui-card` 标题按列宽反算 `--ui-card-title`（下限 34px）；U54 标签/值分两行 | `layout_composer.ui_grid_scale_cap` / `ui_card_title_cap` + `components.css` |
 
 ## 目录与职责（唯一一份目录表）
 
@@ -82,7 +83,7 @@ bash /Volumes/TUF ESD-T1A Media/视频工作流/runtime/tools/run_dify_output.sh
 | `成品/Dify输出/` | Dify 原始 TXT / JSON / HTML 和 HeyGen 响应 |
 | `成品/HTML预览/` | 只有 `html_document` 的输出（浏览器预览，不渲染 MP4） |
 | `成品/项目状态.md` | 在跑、待重跑、已归档的项目清单（只列正式项目） |
-| `能力库/动效库/usage_ledger.json` | 生成物：每支成片用过哪些编号，`motion_ledger.py` 扫 `成品/*/index.html` 重算；`gen_catalog` 取最近三支当 `catalog.recent_usage` |
+| `能力库/动效库/usage_ledger.json` | 生成物：每支成片用过哪些编号、首页背景；`motion_ledger.py` 扫 `成品/*/index.html` 重算。只作报告，`gen_catalog` 每次生成时现算 `recent_usage` / `recent_openers` |
 | `桌面端/` | 本地跑 Dify DSL 的 Electron 应用（独立 npm 工程，`node_modules` 不进仓库）；YAML 仍是唯一真源 |
 
 ## 铁律

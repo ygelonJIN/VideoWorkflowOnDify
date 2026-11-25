@@ -333,8 +333,8 @@ def ui_grid_scale_cap(width: int, grid: dict | None) -> float | None:
     """栅格组件按格子字数反算 --ui-scale 上限。
 
     .ui-cell 基准 24px、左右 padding 各 22px、列间距 16px；cols 来自 .ui-grid c2/c3。
-    floor 1.55：24px 基准只剩 37px，竖屏再小就不好读——装不下说明文案本身太长，
-    交给排版检查点名，不在这里继续缩。
+    floor 1.55：24px 基准只剩 37px，竖屏再小就不好读。到地板还装不下就折行
+    （栅格列已是 minmax(0,1fr)，不会再顶出栏宽）。
     """
     if not isinstance(grid, dict):
         return None
@@ -355,6 +355,42 @@ def ui_grid_scale_cap(width: int, grid: dict | None) -> float | None:
         return 1.55
     cap = budget / float(cols * max_chars * 24)
     return max(1.55, min(2.0, cap))
+
+
+# .ui-card 的水平占位：左右 padding 30px×2 + 边框 1px×2（border-box）。
+# 和 components.css 的 .ui-card 改动绑在一起，改 padding 必须同步这个数。
+UI_CARD_PAD_X = 62
+UI_GRID_GAP = 16
+
+
+def ui_card_title_cap(width: int, grid: dict | None) -> int | None:
+    """卡片栅格按列宽反算 --ui-card-title 上限（2026-11-25）。
+
+    384f：两张 .ui-card 的标题各按 55px 撑到 502/447，第二张右边界顶到 1085。
+    结构上限已在 components.css（列 minmax(0,1fr)，折行不越界），这里负责**尽量不折行**：
+    标题字号 = (列宽−卡片水平占位) ÷ 最长标题字数，和本屏主字号×0.5 取小，下限 34px
+    （再小就看不清，宁可折行）。单张卡占满整行（:only-child）时按整栏算。
+    """
+    if not isinstance(grid, dict):
+        return None
+    cards = grid.get("cards") or []
+    cols = int(grid.get("cols") or 0)
+    if cols < 2 or not cards:
+        return None
+    try:
+        max_chars = max(int(card.get("title") or 0) for card in cards)
+    except Exception:
+        return None
+    if max_chars <= 0:
+        return None
+    if len(cards) == 1:
+        col = float(width)
+    else:
+        col = (width - (cols - 1) * UI_GRID_GAP) / float(cols)
+    content = col - UI_CARD_PAD_X
+    if content <= 0:
+        return 34
+    return max(34, int(content / max_chars))
 
 
 def build_scene_css(scene_id: str, zone: str, align: str, scale: str, tone: str, chars: int = 0, media: dict | None = None, line_chars: int = 0, bg_family: str = "", avoid: dict | None = None, roles: dict | None = None, ui_grid: dict | None = None, ui_full: bool = False) -> str:
@@ -716,12 +752,19 @@ def build_scene_css(scene_id: str, zone: str, align: str, scale: str, tone: str,
     # 这里按本屏主字号发两个变量，.ui-card 的 h3 / p 读它们；没有标题的屏退回旧公式。
     parts.append('[data-scene="%s"] .scene-copy{--ui-card-title:%dpx;--ui-card-body:%dpx;}\n'
                  % (sid, int(round(_primary_size * 0.5)), int(round(_primary_size * 0.3))))
-    # 组件宽度不写死，由 CSS 按内容推导（2026-11-20 定）：
-    # .ui-steps / .ui-grid 用 `repeat(n, minmax(max-content, 1fr))` —— 每列不窄于
-    # 它自己的内容，多余空间再均分。于是容器自适应时自然收敛到"n × 最宽那格 + 间距"，
-    # 而不动的 1fr 会把它压成"内容总和 ÷ n"的平均宽，最宽那格分到比自己的字还窄
-    # （s04「积累经验」172.8px 只拿到 129.6px，折两行）。
-    # 宽度既然由内容推出来，这里就不写 width，窄栏只改方向和卡片。
+    # 卡片栅格标题：按列宽反算上限（2026-11-25）。
+    # 结构上列已经等分（components.css 的 minmax(0,1fr)），越界写不出来；
+    # 这里只算"一行放得下"的字号，比本屏主字号×0.5 更小才下发，下限 34px。
+    # 384f 的 8 字标题：列宽 412 → (412−62)/8 = 43px，一行放下。
+    _card_layer_width = CANVAS_W if ui_band is not None else width
+    _card_cap = ui_card_title_cap(_card_layer_width, ui_grid)
+    _card_title = int(round(_primary_size * 0.5))
+    if _card_cap is not None and _card_cap < _card_title:
+        parts.append('[data-scene="%s"] .ui-grid{--ui-card-title:%dpx;}\n' % (sid, _card_cap))
+    # 组件宽度不写死（2026-11-20 定）：.ui-steps 用 `minmax(max-content, 1fr)`，
+    # 每列不窄于自己的内容，余量再均分；容器自适应时收敛到"n × 最宽那格 + 间距"。
+    # .ui-grid 自 2026-11-25 起改成等分 + 0 下限（见 components.css），不写 width，
+    # 窄栏只改方向和卡片。
     if width < 560:
         parts.append('[data-scene="%s"] .scene-copy .ui-grid{grid-template-columns:1fr;}\n' % sid)
         parts.append('[data-scene="%s"] .scene-copy .ui-steps{grid-auto-flow:row;gap:18px;}\n' % sid)

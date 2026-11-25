@@ -89,12 +89,18 @@
 .ui-step span{display:block;margin-top:6px;font-size:calc(22px * var(--ui-scale,1));color:var(--ui-muted);}
 
 /* U03 网格面板
- * 列宽同样由内容推：`minmax(max-content, 1fr)` = 不窄于这一格自己的内容，余量均分。
- * 容器自适应时收敛到「列数 × 最宽那一格 + 间距」，和步骤条同一条规则；
- * 纯 1fr 会把最宽那格压成平均宽、逼它折行。 */
-.ui-grid{display:grid;gap:var(--ui-gap);}
-.ui-grid.c2{grid-template-columns:repeat(2,minmax(max-content,1fr));}
-.ui-grid.c3{grid-template-columns:repeat(3,minmax(max-content,1fr));}
+ * 2026-11-25 改：列用 `minmax(0, 1fr)`——等分、下限 0，栅格宽度**永远不超过栏**。
+ * 原来和步骤条一样用 `minmax(max-content, 1fr)`，轨道下限是"这一格的内容宽"，
+ * 容器 840 也压不回来：384f 两张 .ui-card 各撑到 502/447，第二张右边界顶到 1085。
+ * 现在文案再长也只能在格内折行，越界在结构上写不出来。
+ * 列等分只在**容器被栏宽夹住**时发生：.ui-comp 是 fit-content，内容窄时列仍取最宽
+ * 那一格、不会拉满整栏。卡片标题另由 layout_composer.ui_card_title_cap() 按列宽
+ * 反算 --ui-card-title，尽量一行放下（下限 34px，到地板才折行）。 */
+.ui-grid{display:grid;gap:var(--ui-gap);min-width:0;}
+.ui-grid.c2{grid-template-columns:repeat(2,minmax(0,1fr));}
+.ui-grid.c3{grid-template-columns:repeat(3,minmax(0,1fr));}
+/* 轨道给了 0 下限，子项自己也得能收：默认 min-width:auto 会把内容宽重新顶回来。 */
+.ui-grid > *{min-width:0;}
 /* 卡片进栅格就跟着格走（2026-11-20 定）：.ui-card 本身是 width:fit-content
    （卡片跟内容走，不拉成整栏空板），但一张卡被放进栅格里时，格子已经按内容
    定好了宽，卡片再按内容撑就会在格子里留一块对不齐的空档。所以栅格里的卡片取格宽。 */

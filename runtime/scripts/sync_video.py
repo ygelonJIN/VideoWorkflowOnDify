@@ -2176,6 +2176,22 @@ def normalize_scene_layers(document: str) -> str:
     return document
 
 
+def _div_inner(html_text: str, start: int) -> str:
+    """返回 start（某个 `<div ...>` 之后）起、与它配对的 `</div>` 之前的内部 HTML。
+
+    生成的页面里 div 一定配平，这里只数深度，不做容错兜底。
+    """
+    depth = 1
+    for match in re.finditer(r'<div\b[^>]*>|</div\s*>', html_text[start:], re.I):
+        if match.group(0).startswith('</'):
+            depth -= 1
+            if depth == 0:
+                return html_text[start:start + match.start()]
+        else:
+            depth += 1
+    return html_text[start:]
+
+
 def inject_layout_composer(document: str) -> str:
     """按每屏的 composition 枚举本地生成文字样式。
 
@@ -2347,22 +2363,42 @@ def inject_layout_composer(document: str) -> str:
         else:
             _chars = 0
             _line_chars = 0
-        # 栅格组件的宽度契约（2026-11-21）：量这一屏 .ui-grid c2/c3 里最多字的格子，
-        # 交给 layout_composer 反算 --ui-scale 上限。U54 的 <b>标签</b>值 在 CSS 里已分两行，
-        # 这里按"标签和值里更长的那一边"算，不把两段拼起来当一行。
+        # 栅格组件的宽度契约（2026-11-21 / 2026-11-25）：量这一屏 .ui-grid c2/c3 的
+        # 每一个子项。U54 的 <b>标签</b>值 在 CSS 里已分两行，按"标签和值里更长的那边"算；
+        # .ui-card 的 h3 / p 也要量——384f 两张卡按 max-content 撑到 1085，就是因为
+        # 这里只认 .ui-cell，卡片栅格根本没进宽度契约。
         _ui_grid = None
         if _sec:
-            _grid = re.search(r'ui-grid\s+c([23])', _sec.group(1))
-            _cells = re.findall(r'<div class="[^"]*\bui-cell\b[^"]*"[^>]*>(.*?)</div>', _sec.group(1), re.S)
-            if _grid and _cells:
+            _section = _sec.group(1)
+            _grid = re.search(r'<div class="([^"]*\bui-grid\b[^"]*)"[^>]*>', _section, re.I)
+            _cols = re.search(r'(?:^|\s)c([23])(?:\s|$)', _grid.group(1)) if _grid else None
+            if _grid and _cols:
+                _inner = _div_inner(_section, _grid.end())
+
                 def _cell_chars(markup):
                     parts = [re.sub(r'<[^>]+>|\s', '', part)
                              for part in re.findall(r'<b>(.*?)</b>', markup, re.S)]
                     rest = re.sub(r'<[^>]+>|\s', '', re.sub(r'<b>.*?</b>', '', markup, flags=re.S))
                     parts.append(rest)
                     return max([len(part) for part in parts if part] or [0])
-                _ui_grid = {"cols": int(_grid.group(1)),
-                            "cells": [{"chars": _cell_chars(cell)} for cell in _cells]}
+
+                def _lines_chars(markup):
+                    parts = [re.sub(r'<[^>]+>|\s', '', part)
+                             for part in re.split(r'<br\s*/?>', markup, flags=re.I)]
+                    return max([len(part) for part in parts if part] or [0])
+
+                def _card_chars(markup):
+                    _h = re.search(r'<h[1-4]\b[^>]*>(.*?)</h[1-4]>', markup, re.S)
+                    _p = re.search(r'<p\b[^>]*>(.*?)</p>', markup, re.S)
+                    return {"title": _lines_chars(_h.group(1)) if _h else 0,
+                            "body": _lines_chars(_p.group(1)) if _p else 0}
+
+                _cells = re.findall(r'<div class="[^"]*\bui-cell\b[^"]*"[^>]*>(.*?)</div>', _inner, re.S)
+                _cards = re.findall(r'<div class="[^"]*\bui-card\b[^"]*"[^>]*>(.*?)</div>', _inner, re.S)
+                if _cells or _cards:
+                    _ui_grid = {"cols": int(_cols.group(1)),
+                                "cells": [{"chars": _cell_chars(cell)} for cell in _cells],
+                                "cards": [_card_chars(card) for card in _cards]}
 
         scenes.append({
             "id": _sid,
