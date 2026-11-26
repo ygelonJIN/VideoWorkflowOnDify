@@ -1,20 +1,20 @@
 #!/usr/bin/env python3
-"""把图像计划（image_plan）渲染成真实图片：GPT Image API。
+"""把图像计划（image_plan）渲染成真实图片：百炼 / 火山方舟 / OpenAI 兼容的生图 API。
 
 计划来自 Dify 的 H01P 节点，落到项目 `媒体/图片计划.json`。本脚本只做执行：
-读计划 → 逐张调用 `/v1/images/generations` → 写 `媒体/图片/<id>.png` → 记录哈希做缓存。
+读计划 → 逐张调生图接口 → 写 `媒体/图片/<id>.png` → 记录哈希做缓存。
 
 用法：
     python3 generate_images.py --plan 媒体/图片计划.json --out 媒体/图片
     python3 generate_images.py --plan 媒体/图片计划.json --only s01 --force
     python3 generate_images.py --plan 媒体/图片计划.json --dry-run     # 出占位图，跑通链路
 
-环境变量：
-    IMAGE_API_KEY / OPENAI_API_KEY   必填（dry-run 不需要）
-    IMAGE_API_BASE                   默认 https://api.openai.com/v1
-    IMAGE_MODEL                      默认 gpt-image-1
-    IMAGE_SIZE                       默认 1024x1536
-    IMAGE_QUALITY                    默认 medium
+环境变量（也可以写在 桌面端/.env 或 shell rc 里）：
+    IMAGE_API_KEY / DASHSCOPE_API_KEY / OPENAI_API_KEY / ARK_API_KEY   必填其一（dry-run 不需要）
+    IMAGE_API_BASE   留空按 Key 自动选：百炼原生入口 / OpenAI 默认地址
+    IMAGE_MODEL      百炼 qwen-image-3.0 / 火山 doubao-seedream-4-0 / OpenAI gpt-image-1
+    IMAGE_SIZE       默认 1024x1536（计划里有 size 时以计划为准）
+    IMAGE_QUALITY    默认 medium，只对 OpenAI 生效
 """
 from __future__ import annotations
 
@@ -41,6 +41,18 @@ SUPPORTED_SIZES = {"1024x1024", "1536x1024", "1024x1536", "1080x1920", "auto"}
 # 火山方舟（即梦同源 Seedream 模型）：Base 必须带 /api/v3
 VOLC_BASE = "https://ark.cn-beijing.volces.com/api/v3"
 VOLC_MODEL = "doubao-seedream-4-0-250828"
+
+# 阿里云百炼（DashScope / Model Studio）：两条路都能走，脚本按 Base 判断——
+#   只填 https://dashscope.aliyuncs.com → 原生同步接口（只认 Key，不用业务空间域名）；
+#   填 .../compatible-mode/v1 → OpenAI 兼容 /images/generations（要业务空间专属域名）。
+# 实测老域名的 compatible-mode 没有 images/generations（404），所以默认走原生。
+DASHSCOPE_BASE = "https://dashscope.aliyuncs.com"
+DASHSCOPE_MODEL = "qwen-image-3.0"
+DASHSCOPE_TIMEOUT = 600
+
+WORKSPACE_ROOT = Path(__file__).resolve().parents[2]
+DESKTOP_ENV = WORKSPACE_ROOT / "桌面端" / ".env"
+SHELL_RC_FILES = (".zshrc", ".zprofile", ".bash_profile", ".profile")
 # Seedream 3.0 只认固定尺寸；把 OpenAI 那套尺寸映射过去，4.0 也能接受这些值
 VOLC_SIZE_MAP = {
     "1024x1536": "832x1248",
@@ -55,12 +67,16 @@ def detect_provider(base_url: str) -> str:
     lowered = (base_url or "").lower()
     if "volces.com" in lowered or "ark.cn" in lowered or "volcengine" in lowered:
         return "volcengine"
+    if "dashscope" in lowered or "aliyuncs.com" in lowered or "bailian" in lowered:
+        return "dashscope"
     return "openai"
 
 
 def provider_defaults(provider: str) -> tuple[str, str]:
     if provider == "volcengine":
         return VOLC_BASE, VOLC_MODEL
+    if provider == "dashscope":
+        return DASHSCOPE_BASE, DASHSCOPE_MODEL
     return DEFAULT_BASE, DEFAULT_MODEL
 
 
@@ -77,13 +93,69 @@ def log(message: str) -> None:
 
 
 def env(name: str, fallback: str = "") -> str:
-    return str(os.environ.get(name, fallback)).strip()
+    value, _ = env_with_source(name)
+    return value or fallback
+
+
+_ENV_CACHE: dict[str, dict[str, str]] = {}
+
+
+def _parse_assignments(text: str) -> dict[str, str]:
+    """读 .env / shell rc 里的 KEY=VALUE，只取值，不执行文件。"""
+    values: dict[str, str] = {}
+    for raw in text.splitlines():
+        line = raw.strip()
+        if line.startswith("export "):
+            line = line[len("export "):].strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        name, value = line.split("=", 1)
+        name = name.strip()
+        value = value.strip().strip('"').strip("'")
+        if name and value:
+            values[name] = value
+    return values
+
+
+def _file_assignments(path: Path) -> dict[str, str]:
+    key = str(path)
+    if key not in _ENV_CACHE:
+        try:
+            _ENV_CACHE[key] = _parse_assignments(path.read_text(encoding="utf-8", errors="ignore"))
+        except OSError:
+            _ENV_CACHE[key] = {}
+    return _ENV_CACHE[key]
+
+
+def env_with_source(name: str) -> tuple[str, str]:
+    """按「环境变量 → 桌面端/.env → shell rc」找值；返回 (值, 来源)，来源只给日志用。"""
+    value = str(os.environ.get(name, "")).strip()
+    if value:
+        return value, "环境变量"
+    if DESKTOP_ENV.exists():
+        found = _file_assignments(DESKTOP_ENV).get(name, "").strip()
+        if found:
+            return found, "桌面端/.env"
+    for rc in SHELL_RC_FILES:
+        path = Path.home() / rc
+        if not path.exists():
+            continue
+        found = _file_assignments(path).get(name, "").strip()
+        if found:
+            return found, "~/" + rc
+    return "", ""
+
+
+KEY_NAMES = ("IMAGE_API_KEY", "DASHSCOPE_API_KEY", "OPENAI_API_KEY", "ARK_API_KEY")
 
 
 def resolve_key() -> str:
-    key = env("IMAGE_API_KEY") or env("OPENAI_API_KEY") or env("ARK_API_KEY")
-    if key:
-        return key
+    for name in KEY_NAMES:
+        value, source = env_with_source(name)
+        if value:
+            if source != "环境变量":
+                log("生图 Key 从 %s 读取（变量 %s）" % (source, name))
+            return value
     key_file = env("IMAGE_API_KEY_FILE")
     if key_file and Path(key_file).exists():
         return Path(key_file).read_text(encoding="utf-8").strip()
@@ -183,7 +255,41 @@ def cache_hash(item: dict, model: str, size: str, quality: str, prompt: str) -> 
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:16]
 
 
-def decode_image(payload: dict) -> bytes:
+def dashscope_endpoint(base_url: str) -> tuple[str, str]:
+    """返回 (完整 URL, 协议)：compatible-mode 走 OpenAI 兼容，其余走原生同步。"""
+    base = (base_url or DASHSCOPE_BASE).rstrip("/")
+    if "compatible-mode" in base:
+        return base + "/images/generations", "openai"
+    if base.endswith("/api/v1"):
+        base = base[: -len("/api/v1")]
+    return base + "/api/v1/services/aigc/multimodal-generation/generation", "native"
+
+
+def download_image(url: str) -> bytes:
+    with urllib.request.urlopen(url, timeout=120) as response:
+        return response.read()
+
+
+def decode_image(payload: dict, protocol: str = "openai") -> bytes:
+    if protocol == "native":
+        # 原生同步：output.choices[].message.content[].image（qwen-image）
+        # 旧 wanx 异步：output.results[].url
+        output = payload.get("output") if isinstance(payload.get("output"), dict) else {}
+        url = ""
+        choices = output.get("choices") or []
+        if choices:
+            content = (choices[0].get("message") or {}).get("content") or []
+            for item in content:
+                if isinstance(item, dict) and item.get("image"):
+                    url = item["image"]
+                    break
+        if not url:
+            results = output.get("results") or []
+            if results and isinstance(results[0], dict):
+                url = results[0].get("url") or ""
+        if url:
+            return download_image(url)
+        raise RuntimeError("原生响应里没有图片 URL：%s" % json.dumps(payload, ensure_ascii=False)[:300])
     data = payload.get("data")
     if not isinstance(data, list) or not data:
         raise RuntimeError("响应缺少 data 数组")
@@ -193,14 +299,17 @@ def decode_image(payload: dict) -> bytes:
         return base64.b64decode(b64)
     url = first.get("url")
     if url:
-        with urllib.request.urlopen(url, timeout=120) as response:
-            return response.read()
+        return download_image(url)
     raise RuntimeError("响应既没有 b64_json 也没有 url")
 
 
 def call_api(prompt: str, model: str, size: str, quality: str, base_url: str, api_key: str) -> bytes:
     provider = detect_provider(base_url)
-    endpoint = base_url.rstrip("/") + "/images/generations"
+    if provider == "dashscope":
+        endpoint, protocol = dashscope_endpoint(base_url)
+    else:
+        endpoint, protocol = base_url.rstrip("/") + "/images/generations", "openai"
+    timeout = 300
     if provider == "volcengine":
         # 火山方舟：默认返回 url；watermark 必须关，否则图上有"AI生成"水印
         body = {
@@ -210,6 +319,31 @@ def call_api(prompt: str, model: str, size: str, quality: str, base_url: str, ap
             "response_format": "url",
             "watermark": False,
         }
+    elif provider == "dashscope" and protocol == "native":
+        # 原生同步：参数嵌在 input/parameters 里，尺寸分隔符是星号。
+        body = {
+            "model": model,
+            "input": {"messages": [{"role": "user", "content": [{"text": prompt}]}]},
+            "parameters": {
+                "size": size.replace("x", "*"),
+                "n": 1,
+                "prompt_extend": True,
+                "watermark": False,
+            },
+        }
+        timeout = DASHSCOPE_TIMEOUT
+    elif provider == "dashscope":
+        # OpenAI 兼容：字段平铺；不认 quality / output_format，尺寸用字母 x。
+        body = {
+            "model": model,
+            "prompt": prompt,
+            "n": 1,
+            "size": size,
+            "response_format": "url",
+            "watermark": False,
+            "prompt_extend": True,
+        }
+        timeout = DASHSCOPE_TIMEOUT
     else:
         body = {"model": model, "prompt": prompt, "n": 1, "size": size}
         if "gpt-image" in model.lower():
@@ -228,9 +362,22 @@ def call_api(prompt: str, model: str, size: str, quality: str, base_url: str, ap
             "Accept": "application/json",
         },
     )
-    with urllib.request.urlopen(request, timeout=300) as response:
-        payload = json.loads(response.read().decode("utf-8"))
-    return decode_image(payload)
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        detail = ""
+        try:
+            detail = exc.read().decode("utf-8", "ignore")[:300]
+        except Exception:
+            pass
+        hint = ""
+        if exc.code == 404 and provider == "dashscope":
+            hint = "（百炼图片模型要在控制台开通；OpenAI 兼容入口只在新版业务空间专属域名上，默认走原生入口就别填 /compatible-mode）"
+        elif exc.code == 401:
+            hint = "（Key 无效或地域不对：百炼各地域的 Key 和域名不能混用）"
+        raise RuntimeError("HTTP %s %s%s" % (exc.code, detail, hint)) from exc
+    return decode_image(payload, protocol)
 
 
 def placeholder_png(path: Path, image_id: str, size: str) -> None:
@@ -510,11 +657,23 @@ def main() -> None:
                         help="生成给人用的出图清单 HTML（手动出图时用），可选路径")
     args = parser.parse_args()
 
+    model_override = args.model or env("IMAGE_MODEL", "")
     base_url = args.base_url or env("IMAGE_API_BASE", "")
+    if not base_url:
+        # 没写 Base 时按模型名推断服务商：只填 Key + 模型名就能用。
+        # （2026-11-26 踩过：模型是 qwen-image-3.0、又只配了 IMAGE_API_KEY，
+        #  旧逻辑只认 DASHSCOPE_API_KEY，于是一路打到 api.openai.com 返回 401。）
+        hint = model_override.lower()
+        if "qwen" in hint or "wanx" in hint:
+            base_url = DASHSCOPE_BASE
+        elif "seedream" in hint or "doubao" in hint:
+            base_url = VOLC_BASE
+        elif env_with_source("DASHSCOPE_API_KEY")[0]:
+            base_url = DASHSCOPE_BASE
     provider = detect_provider(base_url) if base_url else "openai"
     default_base, default_model = provider_defaults(provider)
     base_url = base_url or default_base
-    model = args.model or env("IMAGE_MODEL", "") or default_model
+    model = model_override or default_model
     size_override = args.size or env("IMAGE_SIZE", "") or DEFAULT_SIZE
     quality = args.quality or env("IMAGE_QUALITY", "") or DEFAULT_QUALITY
 
@@ -538,7 +697,7 @@ def main() -> None:
         readme = write_prompt_pack(plan, items, pack_dir, Path.cwd().name)
         print("出图清单：" + str(written.resolve()))
         print("提示词包：" + str(pack_dir.resolve()) + "（%d 份 txt + README.txt）" % len(items))
-        print("复制中文提示词出图，按 id 命名放回 媒体/图片/，然后 --skip-images 构建")
+        print("有生图 Key 就直接重跑同一条命令（自动出图再渲染）；手动出图时才把图按 id 命名放回 媒体/图片/，加 --skip-images 构建")
         return
 
     only = {part.strip() for part in args.only.split(",") if part.strip()}
@@ -579,6 +738,10 @@ def main() -> None:
     if provider == "volcengine":
         log("火山方舟模式：尺寸会映射到 Seedream 可接受的值（%s → %s），watermark 已关闭" % (
             size_override, map_size(size_override, provider)))
+    elif provider == "dashscope":
+        endpoint, protocol = dashscope_endpoint(base_url)
+        log("百炼模式：%s（%s），watermark 已关闭" % (
+            "OpenAI 兼容 /images/generations" if protocol == "openai" else "原生同步接口", endpoint))
 
     failures: list[str] = []
     done: list[str] = []
@@ -620,18 +783,11 @@ def main() -> None:
                     "created": time.strftime("%Y-%m-%dT%H:%M:%S"),
                 }
                 return image_id, "ok:%dx%d" % (width, height)
-            except urllib.error.HTTPError as exc:
-                detail = ""
-                try:
-                    detail = exc.read().decode("utf-8", "ignore")[:300]
-                except Exception:
-                    pass
-                last_error = "HTTP %s %s" % (exc.code, detail)
-                if exc.code in (400, 401, 403):
-                    raise RuntimeError(last_error) from exc
-                time.sleep(3 + attempt * 5)
             except Exception as exc:  # noqa: BLE001
-                last_error = "%s: %s" % (type(exc).__name__, exc)
+                last_error = str(exc) or type(exc).__name__
+                # 鉴权/参数/模型不存在重试也没用，直接点名，别烧三次超时。
+                if re.search(r"HTTP (400|401|403|404)", last_error):
+                    raise RuntimeError(last_error) from exc
                 time.sleep(3 + attempt * 5)
         raise RuntimeError(last_error or "未知错误")
 

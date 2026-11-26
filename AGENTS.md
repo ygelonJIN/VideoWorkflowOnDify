@@ -9,7 +9,7 @@
 - 导入 Dify、节点报错、变量对不上 → `Dify工作流/使用说明.md`。
 - 跑完不对：黑屏、静帧、音画不同步、字幕错位、整屏空白、输出残缺 → `经验文档/事故排查.md`。
 - 外部包渲出来的候选片全黑/静止/零时长 → 同上「进件候选片渲染」一节。
-- 出图、图片没生成、即梦出了图要往项目里丢 → `经验文档/生图与图片链路.md`。
+- 出图、图片没生成、配生图 Key、即梦出了图要往项目里丢 → `经验文档/生图与图片链路.md`。
 - 加 / 删 / 改一张卡、改选择层、动效"没生效" → `经验文档/能力层架构.md`，再看 `经验文档/动效与能力卡.md`。
 - 要把外部包搬进能力库（多来源、批量进件、待筛转正）→ `经验文档/能力层架构.md` 的「进件流水线」一节。
 - 查某个编号的来历、能不能提、删过没有 → `能力库/动效库/来源台账.md`。
@@ -60,6 +60,8 @@ bash /Volumes/TUF ESD-T1A Media/视频工作流/runtime/tools/run_dify_output.sh
 | 页间转场几刀 | **N 屏必出 N-1 条 `__pt`**：`R3` 按切点表逐刀生成，kind 从能力目录派生；模型只给偏好，漏的按本片转场族补齐并点名重跑 `S2` | `R3` 的 `build_transition_script` + `pt_catalog` |
 | 照片落版 | 全部 840 通栏横带，高度 `band` 600/420/300、`portrait` 520、`inset` 360、`thumb` 300、`texture` 620；**只有 `full` 满屏**，而 `full` 在 `S2N` 就归一成 `band`，所以生成端写不出满屏照片 | `R2` 的 `FIXED_H` / `slot` |
 | 场景脚本外壳 | `<script>` + `push(function(timeline, at){` + `});` **只由 `R2` 生成一次**；剥壳、丢卡、补入场都在 body 层，永远碰不到外壳 | `R2` 的 code |
+| 生图失败 | **不拦渲染**：有 Key 就自动出图，某张失败/缺 Key 时缺图的屏照出片并点名，只有环境问题才停 | `generate_images.py` 退出码 + `build_black_frame_project.py` 的 `images_ok` |
+| 生图配置 | `IMAGE_API_BASE` / `IMAGE_MODEL` / `IMAGE_API_KEY` 三项，百炼默认留空 Base 走原生入口；桌面端设置与 `桌面端/.env` 同源 | `generate_images.py` 的 `env_with_source` |
 | 卡片字号 | `.ui-card h3` = 本屏主字号 × 0.5、`p` = × 0.3（`--ui-card-title` / `--ui-card-body`）；`--ui-scale` 只给其它组件用 | `layout_composer` + `components.css` |
 | 组件栅格宽度 | 栅格列等分且永不越栏（`minmax(0,1fr)`）；`ui-cell` 按最长文字反算 `--ui-scale`（下限 1.55）；`ui-card` 标题按列宽反算 `--ui-card-title`（下限 34px）；U54 标签/值分两行 | `layout_composer.ui_grid_scale_cap` / `ui_card_title_cap` + `components.css` |
 
@@ -211,8 +213,8 @@ python3 能力库/动效库/add_card.py 本批.json --batch <批次>  # 写表 +
 - 不用读：流程本身跑得通、只是想跑一遍
 
 ### 经验文档/生图与图片链路.md
-- 什么时候读：画面要真实照片、图片没生成、改生图模型或尺寸、用即梦手动出图后要丢进项目
-- 包含：图像计划（`S2N`）→ 本地生图的分工、环境变量、即梦/火山方舟、无 API 时手动出图与"按修改时间对号"规则、单独跑与构建时替换、旧项目重渲染被拦
+- 什么时候读：画面要真实照片、图片没生成、配生图 Key、改生图模型或尺寸、用即梦手动出图后要丢进项目
+- 包含：图像计划（`S2N`）→ 本地生图的分工、三个变量与三种来源（环境变量 / `桌面端/.env` / shell rc）、**百炼默认走原生入口（老域名 compatible-mode 没有 /images/generations）**、火山方舟、OpenAI、**生图失败不拦渲染**、无 API 时手动出图与"按修改时间对号"规则、桌面端设置与「生图并出片」、单独跑与构建时替换、旧项目重渲染被拦
 - 不用读：图已经齐了只想渲染
 
 ### 经验文档/动效与能力卡.md

@@ -212,7 +212,8 @@ def placeholder_ids(html: str) -> list[str]:
     return sorted(set(IMAGE_PLACEHOLDER.findall(html)))
 
 
-def generate_images(project_dir: Path, plan_path: Path, args) -> None:
+def generate_images(project_dir: Path, plan_path: Path, args) -> bool:
+    """返回是否全部生成成功。失败不抛：缺图的屏照常渲染，先把片出来。"""
     script = RUNTIME_DIR / "scripts" / "generate_images.py"
     if not script.exists():
         raise SystemExit("缺少 generate_images.py：" + str(script))
@@ -226,7 +227,14 @@ def generate_images(project_dir: Path, plan_path: Path, args) -> None:
     if args.image_only_ids:
         command.extend(["--only", args.image_only_ids])
     print("开始生成图像：" + str(plan_path))
-    subprocess.run(command, check=True)
+    result = subprocess.run(command, check=False)
+    if result.returncode != 0:
+        print("⚠️ 生图没有全部完成（退出码 %d）：缺的屏会缺画面，成片照样往下出。" % result.returncode)
+        print("   补图：按上面「失败清单」里的 id 跑")
+        print("   python3 %s --plan %s --out %s --only <失败清单>" % (
+            script, plan_path, project_dir / "媒体" / "图片"))
+        return False
+    return True
 
 
 IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".webp"}
@@ -616,11 +624,12 @@ def main() -> None:
             print("图像计划：%d 张照片 + %d 屏 HTML 背景，已写入 %s" % (len(photo_images), len(html_images), plan_path))
         has_html = bool(data["html_document"].strip())
         wanted = placeholder_ids(data["html_document"]) if has_html else []
+        images_ok = True
         if wanted:
             if not image_plan:
                 raise SystemExit("HTML 里有 %d 个图片占位，但 Dify 输出没有 image_plan_json：H01P 没产出图像计划，重跑 Dify" % len(wanted))
             if not args.skip_images:
-                generate_images(project_dir, plan_path, args)
+                images_ok = generate_images(project_dir, plan_path, args)
         elif not has_html:
             print("本次没有 HTML（链路没跑到落版）：只准备图像计划与出图提示词，不渲染。")
         else:
@@ -640,13 +649,16 @@ def main() -> None:
                 if sys.platform == "darwin" and not args.no_open:
                     subprocess.run(["open", str(image_dir)], check=False)
             else:
-                print("图片已生成，跳过口播与渲染：" + str(project_dir / "媒体" / "图片"))
+                print(("图片已生成" if images_ok else "图片只出了一部分（缺的屏会缺画面）") + "，跳过口播与渲染：" + str(project_dir / "媒体" / "图片"))
             return
         image_ids = [str(item.get("id")) for item in (image_plan.get("images") or [])
                      if isinstance(item, dict) and item.get("id") and str(item.get("role") or "").lower() != "html"]
         if not image_ids:
             image_ids = wanted
-        html_final = replace_image_placeholders(data["html_document"], project_dir, image_ids, args.allow_missing_images, not args.strict_ids)
+        html_final = replace_image_placeholders(
+            data["html_document"], project_dir, image_ids,
+            args.allow_missing_images or not images_ok, not args.strict_ids,
+        )
         no_image_scenes = check_scene_images(html_final)
         if no_image_scenes:
             print("警告：这些场景没有图片，画面只剩文字：" + "、".join(no_image_scenes[:10]))
