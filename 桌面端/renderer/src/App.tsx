@@ -7,6 +7,7 @@ import { InputPanel } from "./InputPanel.js";
 import { Select } from "./Select.js";
 import { Settings } from "./Settings.js";
 import { Produce } from "./Produce.js";
+import { BatchProduce } from "./BatchProduce.js";
 import { RunSwitch } from "./RunSwitch.js";
 import { ReviewPanel } from "./ReviewPanel.js";
 import { readSize, startDrag } from "./drag.js";
@@ -219,6 +220,7 @@ export function App() {
   const [env, setEnv] = useState<EnvInfo | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [inputs, setInputs] = useState<RunInputs>(EMPTY_INPUTS);
+  const [inputEpoch, setInputEpoch] = useState(0);
   const [showInput, setShowInput] = useState(false);
   const [addType, setAddType] = useState("code");
   const [canUndo, setCanUndo] = useState(false);
@@ -247,6 +249,9 @@ export function App() {
   runsRef.current = runs;
   const inputsRef = useRef(inputs);
   inputsRef.current = inputs;
+  /* 输入框按工作流分别落盘：切回 04 还是上次写的那份，切到别的不会串。 */
+  const inputsPathRef = useRef<string>("");
+  const defaultInputsRef = useRef<RunInputs>(EMPTY_INPUTS);
   const launching = useRef(new Set<string>());
   const restoredPath = useRef<string | null>(null);
 
@@ -354,6 +359,7 @@ export function App() {
       setEnv(envInfo);
       const initialInputs: RunInputs = {};
       for (const [key, value] of Object.entries(defaults)) initialInputs[key] = typeof value === "string" ? value : String(value ?? "");
+      defaultInputsRef.current = initialInputs;
       setInputs(initialInputs);
       const preferred = list.find((item) => item.name.startsWith("04")) ?? list[0];
       if (preferred) void open(preferred.path);
@@ -364,6 +370,31 @@ export function App() {
       alive = false;
     };
   }, [open]);
+
+  /** 输入框按工作流路径落盘：切回同一条还是上次写的那份，没存档才退回 fixtures 默认值。 */
+  useEffect(() => {
+    const path = graph?.path;
+    if (!path) return;
+    let saved: RunInputs | null = null;
+    try {
+      const raw = localStorage.getItem(`studio.inputs:${path}`);
+      saved = raw ? (JSON.parse(raw) as RunInputs) : null;
+    } catch {
+      saved = null;
+    }
+    inputsPathRef.current = path;
+    setInputs(saved ? { ...defaultInputsRef.current, ...saved } : { ...defaultInputsRef.current });
+  }, [graph?.path]);
+
+  useEffect(() => {
+    const path = inputsPathRef.current;
+    if (!path || graph?.path !== path) return;
+    try {
+      localStorage.setItem(`studio.inputs:${path}`, JSON.stringify(inputs));
+    } catch {
+      /* 存不下就只留内存 */
+    }
+  }, [inputs, graph?.path]);
 
   /** 恢复上次的视图：待审阅 → 整批 → 上次成功 → 上次中断，只认当前这条 YAML。 */
   useEffect(() => {
@@ -575,12 +606,14 @@ export function App() {
         }
         if (producible) {
           setView("produce");
-          setNotice("运行完成，接着按「准备项目 → 复制提示词 → 放图 → 渲染成片」走");
+          setNotice("运行完成，自动出片中（可在出片页关掉）");
+          // 「出片」页收到事件就自己点：配了生图 Key 且开着自动出片时，从建项目到 mp4 一气跑完。
+          window.dispatchEvent(new CustomEvent("wf:run-completed", { detail: { runId, path: graph.path } }));
         }
         if (runResult.status === "error" && runResult.error) setError(runResult.error);
         if (runResult.status !== "success" && runResult.error) setNotice(runResult.error);
       } else {
-        if (producible) setNotice("这一条跑完了：在上方切换条里逐条去出片。");
+        if (producible) setNotice("这一条跑完了：在切换条里选中它去「出片」页出片（自动出片只在单条运行生效）。");
         else if (runResult.status === "error") setNotice(runResult.error ?? "有一条运行失败，点切换条看它的日志。");
       }
     } catch (cause) {
@@ -762,6 +795,34 @@ export function App() {
     setNotice("已收起这一批的切换条；已经生成的项目和成片还在「产物」里。");
   }, []);
 
+  /** 开始做新的：清上一轮的结果和输入框，保留 Key、TTS、视图偏好。 */
+  const newSession = useCallback(async () => {
+    const defaults = await api.inputs().catch(() => ({} as Record<string, string>));
+    const initial: RunInputs = {};
+    for (const [key, value] of Object.entries(defaults)) initial[key] = typeof value === "string" ? value : String(value ?? "");
+    defaultInputsRef.current = initial;
+    try {
+      localStorage.removeItem(LAST_RUN_KEY);
+      localStorage.removeItem(RESUME_KEY);
+      localStorage.removeItem(PENDING_REVIEW_KEY);
+      localStorage.removeItem(RUNS_KEY);
+      localStorage.removeItem("studio.batchItems");
+      // 新建默认单条：模式也回单条，抽屉重挂载时按这个读。
+      localStorage.setItem("studio.runMode", "single");
+      if (graph?.path) localStorage.removeItem(`studio.inputs:${graph.path}`);
+    } catch {
+      /* 忽略：内存里的状态照样清 */
+    }
+    setRuns([]);
+    setActiveRunId("");
+    setReviewOpen(false);
+    setError(null);
+    setInputs(initial);
+    setInputEpoch((value) => value + 1);
+    setShowInput(true);
+    setNotice("已清空上一轮的结果和输入，Key / TTS / 视图偏好保留");
+  }, [graph?.path]);
+
   const reloadGraph = useCallback(async (force: boolean) => {
     if (!graph || busy) return;
     try {
@@ -796,6 +857,8 @@ export function App() {
 
   /** 有「还没落成片」的结果时顶栏「出片」亮一个点；已经出完的不再亮。 */
   const producible = runs.some((run) => run.result && hasProducibleOutput(run.result.outputs) && !run.produced);
+  /** 已经出过片：顶栏「出片」打勾，让人一眼看到这一轮有成品了。 */
+  const producedCount = runs.filter((run) => run.produced).length;
   /** 跑完还没落成片的叫「可出片」；已经渲染过的这条叫「已出片」，不再提示去出片。 */
   const runLabel = (run: RunItem | null): string => (run?.produced ? "已出片" : run ? runStateText[run.status] : "就绪");
 
@@ -977,6 +1040,25 @@ export function App() {
 
   const showRunsBar = runs.length > 1 && view !== "artifacts";
 
+  /** 一批全部跑完时通知出片页：全自动开着就自动逐条出片（串行，不会并发烧图）。 */
+  const batchFinishedRef = useRef(false);
+  useEffect(() => {
+    if (runs.length <= 1) {
+      batchFinishedRef.current = false;
+      return;
+    }
+    const active = runs.some(
+      (run) => run.status === "queued" || run.status === "running" || run.status === "review",
+    );
+    if (active) {
+      batchFinishedRef.current = false;
+      return;
+    }
+    if (batchFinishedRef.current) return;
+    batchFinishedRef.current = true;
+    window.dispatchEvent(new Event("wf:batch-completed"));
+  }, [runs]);
+
   return (
     <div className={`app ${showRunsBar ? "has-runs" : ""}`}>
       <header className="topbar card">
@@ -1023,9 +1105,10 @@ export function App() {
             aria-selected={view === "produce"}
             className={view === "produce" ? "on" : ""}
             onClick={() => setView("produce")}
-            title="运行完成后：准备项目 → 出图提示词 → 放图 → 渲染成片"
+            title="运行完成后：配了生图 Key 就直接「生图并出片」；没配才走 出图提示词 → 放图 → 渲染"
           >
             出片{producible && view !== "produce" && <span className="dot" />}
+            {!producible && producedCount > 0 && <span className="tab-done">✓</span>}
           </button>
           <button
             role="tab"
@@ -1063,6 +1146,14 @@ export function App() {
             重做
           </button>
           <span className="vline" />
+          <button
+            className="btn sm ghost"
+            onClick={() => void newSession()}
+            disabled={busy}
+            title="清空上一轮的结果和输入，开始做新的（Key / TTS / 视图偏好保留）"
+          >
+            新建
+          </button>
           {busy ? (
             <button className="btn sm danger stop" onClick={() => void stopAll()} title="停止这一批里所有在跑和排队的条目">
               停止
@@ -1072,9 +1163,9 @@ export function App() {
               className="btn primary run"
               onClick={() => setShowInput(true)}
               disabled={!graph}
-              title="打开运行输入：单条，或一次批量跑同一工作流的多条需求"
+              title="开始：打开运行输入，单条或一次批量跑同一工作流的多条需求"
             >
-              运行
+              开始
             </button>
           )}
           <button className="btn sm ghost" onClick={() => setShowSettings(true)}>设置</button>
@@ -1147,21 +1238,36 @@ export function App() {
             )
           ) : null}
           <div className="produce-layer" hidden={view !== "produce"}>
-            <Produce
-              result={result}
-              runId={activeRun?.id ?? ""}
-              inputs={activeRun?.inputs ?? inputs}
-              defaultName={activeRun?.name ?? ""}
-              batch={batch && activeRun ? { index: activeIndex, total: runs.length, topic: activeRun.topic } : null}
-              onRun={() => setShowInput(true)}
-              onArtifacts={() => setView("artifacts")}
-              onNotice={setNotice}
-              onProduced={(forRunId, dir) =>
-                setRuns((previous) =>
-                  previous.map((run) => (run.id === forRunId ? { ...run, produced: { dir, at: Date.now() } } : run)),
-                )
-              }
-            />
+            {batch ? (
+              <BatchProduce
+                runs={runs}
+                inputs={inputs}
+                onSelect={selectRun}
+                onNotice={setNotice}
+                onProduced={(forRunId, dir) => {
+                  setRuns((previous) =>
+                    previous.map((run) => (run.id === forRunId ? { ...run, produced: { dir, at: Date.now() } } : run)),
+                  );
+                  setActiveRunId(forRunId);
+                }}
+              />
+            ) : (
+              <Produce
+                result={result}
+                runId={activeRun?.id ?? ""}
+                inputs={activeRun?.inputs ?? inputs}
+                defaultName={activeRun?.name ?? ""}
+                batch={null}
+                onRun={() => setShowInput(true)}
+                onArtifacts={() => setView("artifacts")}
+                onNotice={setNotice}
+                onProduced={(forRunId, dir) =>
+                  setRuns((previous) =>
+                    previous.map((run) => (run.id === forRunId ? { ...run, produced: { dir, at: Date.now() } } : run)),
+                  )
+                }
+              />
+            )}
           </div>
         </div>
 
@@ -1215,9 +1321,32 @@ export function App() {
                 <div className="log">
                   {result && result.status === "success" && typeof result.outputs.html_document === "string" && (
                     <div className="run-next">
-                      <span>运行完成 · {result.nodes.length} 节点 · {(result.ms / 1000).toFixed(1)}s</span>
+                      <span>
+                        运行完成 · {result.nodes.length} 节点 · {(result.ms / 1000).toFixed(1)}s
+                        {activeRun?.produced ? " · 已出片" : ""}
+                      </span>
                       <span className="spacer" />
-                      <button className="btn sm primary" onClick={() => setView("produce")}>下一步：去出片</button>
+                      {activeRun?.produced ? (
+                        <>
+                          <button
+                            className="btn sm primary"
+                            onClick={() => {
+                              const dir = activeRun.produced!.dir;
+                              void (async () => {
+                                const file = await api
+                                  .open(`${dir}/成片/最终视频.mp4`)
+                                  .catch(() => ({ ok: false, error: "" }));
+                                if (!file.ok) await api.open(`${dir}/成片`).catch(() => undefined);
+                              })();
+                            }}
+                          >
+                            查看成片
+                          </button>
+                          <button className="btn sm ghost" onClick={() => setView("produce")}>出片页</button>
+                        </>
+                      ) : (
+                        <button className="btn sm primary" onClick={() => setView("produce")}>下一步：去出片</button>
+                      )}
                     </div>
                   )}
                   {error && <div className="err">{error}</div>}
@@ -1249,6 +1378,7 @@ export function App() {
 
       {showInput && (
         <InputPanel
+          key={inputEpoch}
           inputs={inputs}
           variables={graph?.startVariables ?? []}
           running={busy}
@@ -1283,6 +1413,8 @@ export function App() {
           onClose={() => setShowSettings(false)}
           onSaved={(next) => {
             api.env().then(setEnv).catch(() => {});
+            // 「出片」页靠这个事件重读生图 Key，配完立刻从「渲染成片」切成「生图并出片」。
+            window.dispatchEvent(new Event("wf:settings-saved"));
             setNotice(next.hasKey ? "设置已保存" : "设置已保存（还没有 Key）");
           }}
         />

@@ -9,7 +9,7 @@ export interface Bridge {
   cancel(clientId: string): Promise<{ ok: boolean; error?: string }>;
   env(): Promise<EnvInfo>;
   settings(): Promise<SettingsInfo>;
-  saveSettings(payload: { baseUrl?: string; model?: string; protocol?: string; apiKey?: string; clearKey?: boolean }): Promise<SettingsInfo>;
+  saveSettings(payload: { baseUrl?: string; model?: string; protocol?: string; apiKey?: string; clearKey?: boolean; imageBaseUrl?: string; imageModel?: string; imageApiKey?: string; clearImageKey?: boolean }): Promise<SettingsInfo>;
   inputs(): Promise<Partial<RunInputs>>;
   onEvent(handler: (event: TraceEvent) => void): () => void;
   projects(): Promise<Project[]>;

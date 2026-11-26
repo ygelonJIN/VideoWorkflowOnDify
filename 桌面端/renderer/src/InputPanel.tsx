@@ -43,7 +43,8 @@ function readItems(): string[] {
   } catch {
     /* 存坏了就当没有 */
   }
-  return ["", "", "", ""];
+  // 新建默认两条：批量最常见的是一次对比两条，不够再「添加一条」。
+  return ["", ""];
 }
 
 function InputField({

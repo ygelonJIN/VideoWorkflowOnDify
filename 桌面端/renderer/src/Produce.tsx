@@ -162,7 +162,7 @@ function Step({
  * 以前是 260px 的内滚区，滚轮落在上面就只滚日志，永远滚不到下一个步骤框；
  * 现在超出的从顶部裁掉，要看全按「展开全部」，由出片页自己滚。
  */
-function LogBox({ text, placeholder }: { text: string; placeholder: string }) {
+export function LogBox({ text, placeholder }: { text: string; placeholder: string }) {
   const [height, setHeight] = useState(() => readSize("studio.logH", 220, 80));
   const [expanded, setExpanded] = useState(false);
   const clip = useRef<HTMLDivElement>(null);
@@ -221,8 +221,10 @@ export function Produce({ result, runId, inputs, defaultName = "", batch = null,
   const [busy, setBusy] = useState(false);
   const [drag, setDrag] = useState(false);
   const [allowMissing, setAllowMissing] = useState(() => localStorage.getItem("studio.allowMissing") === "1");
+  const [autoProduce, setAutoProduce] = useState(() => localStorage.getItem("studio.autoProduce") !== "0");
   const [rendered, setRendered] = useState(false);
   const [mimo, setMimo] = useState<{ hasKey: boolean; hint: string } | null>(null);
+  const [imageKey, setImageKey] = useState(false);
   const [openStep, setOpenStep] = useState(1);
   const picker = useRef<HTMLInputElement>(null);
   const dirRef = useRef("");
@@ -235,8 +237,15 @@ export function Produce({ result, runId, inputs, defaultName = "", batch = null,
   nameRef.current = projectName;
   const allowRef = useRef(allowMissing);
   allowRef.current = allowMissing;
+  const autoProduceRef = useRef(autoProduce);
+  autoProduceRef.current = autoProduce;
+  const imageKeyRef = useRef(imageKey);
+  imageKeyRef.current = imageKey;
   const resultRef = useRef(result);
   resultRef.current = result;
+  /* 跑完自动出片：事件先记 runId，等 result 真的换过来再启动。 */
+  const pendingAutoRef = useRef("");
+  const autoDoneRef = useRef(new Set<string>());
   /* 构建按 jobId 收事件：完成时回写的必须是「起这个构建的那条」，不是当前正在看的那条 */
   const runIdRef = useRef(runId);
   runIdRef.current = runId;
@@ -269,8 +278,47 @@ export function Produce({ result, runId, inputs, defaultName = "", batch = null,
     localStorage.setItem("studio.allowMissing", allowMissing ? "1" : "0");
   }, [allowMissing]);
 
+  /** 全自动开关：设置面板与出片页共用 localStorage，改哪边都同步。 */
+  useEffect(() => {
+    const reload = () => setAutoProduce(localStorage.getItem("studio.autoProduce") !== "0");
+    window.addEventListener("wf:auto-produce-changed", reload);
+    return () => window.removeEventListener("wf:auto-produce-changed", reload);
+  }, []);
+
+  /** App 在单条运行跑完时发出来；这里只记 runId，等 result 换过来再动手。 */
+  useEffect(() => {
+    const onCompleted = (event: Event) => {
+      const detail = (event as CustomEvent<{ runId?: string }>).detail;
+      if (detail?.runId) pendingAutoRef.current = detail.runId;
+    };
+    window.addEventListener("wf:run-completed", onCompleted);
+    return () => window.removeEventListener("wf:run-completed", onCompleted);
+  }, []);
+
+  /** 跑完就自动出片：开关开着、配了生图 Key、这条还没自动跑过。 */
+  useEffect(() => {
+    const id = pendingAutoRef.current;
+    if (!id || !result || result.runId !== id) return;
+    pendingAutoRef.current = "";
+    if (!autoProduceRef.current || !imageKeyRef.current) return;
+    if (autoDoneRef.current.has(id)) return;
+    autoDoneRef.current.add(id);
+    onNotice("跑完了，自动出片中…");
+    void start("render");
+  }, [result?.runId]);
+
   useEffect(() => {
     api.mimoStatus().then(setMimo).catch(() => setMimo({ hasKey: false, hint: "读取 MIMO_API_KEY 失败" }));
+  }, []);
+
+  // 设置面板保存后同步一次：配完生图 Key 不用重开出片页，按钮直接换成「生图并出片」。
+  useEffect(() => {
+    const reload = () => {
+      api.settings().then((info) => setImageKey(Boolean(info.hasImageKey))).catch(() => setImageKey(false));
+    };
+    reload();
+    window.addEventListener("wf:settings-saved", reload);
+    return () => window.removeEventListener("wf:settings-saved", reload);
   }, []);
 
   const refreshImages = useCallback(async (dir: string) => {
@@ -412,7 +460,7 @@ export function Produce({ result, runId, inputs, defaultName = "", batch = null,
           if (event.projectDir) setProjectDir(event.projectDir);
           setRendered(true);
           setStatus("渲染完成");
-          onNotice("渲染完成，去「产物」看成片");
+          onNotice("已出片 · 运行台和出片页都有「查看成片」");
           if (event.projectDir) onProducedRef.current(buildRunRef.current, event.projectDir);
         }
         return;
@@ -426,7 +474,6 @@ export function Produce({ result, runId, inputs, defaultName = "", batch = null,
   async function start(action: "prepare" | "render", replace = false) {
     const current = resultRef.current;
     if (!current || phaseRef.current) return;
-    if (action === "render" && !dirRef.current) return;
     setPhase(action);
     setLogs("");
     setError(null);
@@ -438,7 +485,8 @@ export function Produce({ result, runId, inputs, defaultName = "", batch = null,
       /* 默认名就是时间戳；这一分钟里已经有同名目录就加（1）（2），不覆盖别人的成品 */
       const requested = nameRef.current.trim() || projectStamp();
       let projectName = requested;
-      if (action === "prepare" && !dirRef.current) {
+      // 没准备过项目时，出片也从零建一个（自动避开同名目录），不必先点「准备项目」。
+      if (!dirRef.current) {
         const projects = await api.projects().catch(() => []);
         projectName = uniqueProjectName(requested, projects.map((project) => project.name));
         if (projectName !== requested) {
@@ -657,9 +705,12 @@ export function Produce({ result, runId, inputs, defaultName = "", batch = null,
           onToggle={() => setOpenStep(openStep === 4 ? 0 : 4)}
         >
           {!prepared ? (
-            <div className="hint-text">先完成第 2 步「准备项目」。</div>
+            <div className="hint-text">先完成第 2 步「准备项目」，或直接跳到第 5 步出片（会自动建项目）。</div>
           ) : (
             <>
+              {imageKey && (
+                <div className="hint-text">已配生图 Key：出片时会按图像计划自动出图，这一步只用于手动替换或补图。</div>
+              )}
               <div className="step-row">
                 <span className={`pill ${imagesDone ? "ok" : ""}`}>
                   {noImages ? "本次无需出图" : `已放 ${ids.length - cov.missing.length} / ${ids.length} 张`}
@@ -732,18 +783,21 @@ export function Produce({ result, runId, inputs, defaultName = "", batch = null,
 
         <Step
           index={5}
-          title="渲染成片"
+          title={imageKey ? "生图并出片" : "渲染成片"}
           summary={stepSummary[4] ?? ""}
           done={rendered}
           open={openStep === 5}
           onToggle={() => setOpenStep(openStep === 5 ? 0 : 5)}
         >
-          {!prepared ? (
-            <div className="hint-text">先完成第 2 步「准备项目」。</div>
+          {!runDone ? (
+            <div className="hint-text">先完成第 1 步「运行结果」。</div>
           ) : (
             <>
               <div className="step-row">
                 <span className="hint-text">配音：{mimo ? mimo.hint : "检查中…"}</span>
+                <span className="hint-text">
+                  {imageKey ? "生图：已配 Key，缺的图自动出" : "生图：未配 Key，图要手动放（设置里可配）"}
+                </span>
                 <label className="check">
                   <input type="checkbox" checked={allowMissing} onChange={(event) => setAllowMissing(event.target.checked)} />
                   缺图也继续（只用于排查版面）
@@ -751,7 +805,7 @@ export function Produce({ result, runId, inputs, defaultName = "", batch = null,
                 <span className="spacer" />
                 {rendered ? (
                   <>
-                    <button className="btn primary" onClick={() => void openVideo()}>打开成片</button>
+                    <button className="btn primary" onClick={() => void openVideo()}>查看成片</button>
                     <button
                       className="btn"
                       onClick={() => {
@@ -766,18 +820,47 @@ export function Produce({ result, runId, inputs, defaultName = "", batch = null,
                   <button
                     className="btn primary"
                     onClick={() => void start("render")}
-                    disabled={!runDone || phase !== null || (!imagesDone && !allowMissing)}
+                    disabled={!runDone || phase !== null || (!imagesDone && !allowMissing && !imageKey)}
                   >
-                    {phase === "render" ? "渲染中…" : "渲染成片"}
+                    {phase === "render" ? (imageKey ? "生图并出片中…" : "渲染中…") : (imageKey ? "生图并出片" : "渲染成片")}
                   </button>
                 )}
               </div>
-              {!imagesDone && !allowMissing && ids.length > 0 && (
+              {!imagesDone && !allowMissing && !imageKey && ids.length > 0 && (
                 <div className="warn-box">还缺 {cov.missing.length} 张：{cov.missing.join("、")}。补齐再渲染，或勾「缺图也继续」。</div>
+              )}
+              <div className="step-row">
+                <label className="check">
+                  <input
+                    type="checkbox"
+                    checked={autoProduce}
+                    onChange={(event) => {
+                      const value = event.target.checked;
+                      setAutoProduce(value);
+                      try {
+                        localStorage.setItem("studio.autoProduce", value ? "1" : "0");
+                      } catch {
+                        /* 忽略 */
+                      }
+                      window.dispatchEvent(new Event("wf:auto-produce-changed"));
+                    }}
+                  />
+                  跑完自动出片
+                </label>
+                <span className="hint-text">
+                  {!imageKey
+                    ? "配了生图 Key 才生效：运行成功后自动建项目、出图、配音、出 mp4"
+                    : autoProduce
+                      ? "运行成功后不用再点，直接建项目、出图、出片"
+                      : "运行成功后停在这里，需要你点上面的按钮"}
+                </span>
+              </div>
+              {imageKey && !prepared && (
+                <div className="hint-text">会从零建项目：写入图片计划 → 按计划出图 → 配音 → 字幕 → MP4，中间不用再点。</div>
               )}
               {status && <div className="hint-text">{status}</div>}
               {error && <div className="err-text">{error}</div>}
-              {(logs || phase === "render") && <LogBox text={logs} placeholder="渲染中…" />}
+              {(logs || phase === "render") && <LogBox text={logs} placeholder="出片中…" />}
             </>
           )}
         </Step>

@@ -67,11 +67,43 @@ function upsertEnv(text, key, value) {
   return next.length > 0 ? `${next.join("\n")}\n` : "";
 }
 
+/** 生图配置：与文本 Key 同一份 .env，字段 IMAGE_*（百炼/OpenAI 兼容/火山都走这套）。 */
+async function imageConfig() {
+  const file = parseEnvText(await readFile(ENV_PATH, "utf8").catch(() => ""));
+  let key = file.IMAGE_API_KEY || file.DASHSCOPE_API_KEY || process.env.IMAGE_API_KEY || process.env.DASHSCOPE_API_KEY || "";
+  // Python 那边会翻 ~/.zshrc；这里跟着翻，免得「命令行能出图、桌面端却判成没 Key」。
+  if (!key.trim()) key = await resolveImageKeyFromShell();
+  return {
+    key,
+    baseUrl: file.IMAGE_API_BASE || process.env.IMAGE_API_BASE || "",
+    model: file.IMAGE_MODEL || process.env.IMAGE_MODEL || "",
+  };
+}
+
+let imageShellKeyCache;
+async function resolveImageKeyFromShell() {
+  if (imageShellKeyCache !== undefined) return imageShellKeyCache;
+  imageShellKeyCache = await new Promise((resolve) => {
+    let output = "";
+    const child = spawn(
+      "zsh",
+      ["-lc", "source ~/.zshrc >/dev/null 2>&1; printenv IMAGE_API_KEY; printenv DASHSCOPE_API_KEY; printenv ARK_API_KEY"],
+      { stdio: ["ignore", "pipe", "ignore"] },
+    );
+    child.stdout.setEncoding("utf8");
+    child.stdout.on("data", (chunk) => { output += chunk; });
+    child.on("error", () => resolve(""));
+    child.on("close", () => resolve(output.split(/\r?\n/).map((line) => line.trim()).find(Boolean) ?? ""));
+  });
+  return imageShellKeyCache;
+}
+
 /** 设置面板读取：只回是否已配置和末四位，绝不把 Key 送回渲染层。 */
 export async function getSettings() {
   const raw = await readFile(ENV_PATH, "utf8").catch(() => "");
   const file = parseEnvText(raw);
   const keyValue = file.WF_API_KEY ?? process.env.WF_API_KEY ?? "";
+  const image = await imageConfig();
   return {
     path: path.join("桌面端", ".env"),
     baseUrl: file.WF_BASE_URL ?? process.env.WF_BASE_URL ?? "https://opencode.ai/zen/go/v1",
@@ -80,16 +112,24 @@ export async function getSettings() {
     hasKey: keyValue.trim().length > 0,
     keyHint: keyValue.trim() ? `末四位 ${keyValue.trim().slice(-4)}` : "",
     inProcessEnv: Boolean(process.env.WF_API_KEY) && !file.WF_API_KEY,
+    imageBaseUrl: image.baseUrl || "",
+    imageModel: image.model || "qwen-image-3.0",
+    hasImageKey: image.key.trim().length > 0,
+    imageKeyHint: image.key.trim() ? `末四位 ${image.key.trim().slice(-4)}` : "",
+    imageInProcessEnv: Boolean(process.env.IMAGE_API_KEY || process.env.DASHSCOPE_API_KEY) && !file.IMAGE_API_KEY && !file.DASHSCOPE_API_KEY,
   };
 }
 
-export async function saveSettings({ baseUrl, model, protocol, apiKey, clearKey } = {}) {
+export async function saveSettings({ baseUrl, model, protocol, apiKey, clearKey, imageBaseUrl, imageModel, imageApiKey, clearImageKey } = {}) {
   const protocols = new Set(["", "chat", "responses", "anthropic"]);
   if (protocol !== undefined && !protocols.has(String(protocol))) throw new Error(`不支持的协议：${protocol}`);
   if (baseUrl !== undefined && String(baseUrl).trim() && !/^https?:\/\//.test(String(baseUrl).trim())) {
     throw new Error("Base URL 必须以 http:// 或 https:// 开头");
   }
-  for (const [name, value] of [["Base URL", baseUrl], ["模型", model], ["API Key", apiKey]]) {
+  if (imageBaseUrl !== undefined && String(imageBaseUrl).trim() && !/^https?:\/\//.test(String(imageBaseUrl).trim())) {
+    throw new Error("生图 Base URL 必须以 http:// 或 https:// 开头");
+  }
+  for (const [name, value] of [["Base URL", baseUrl], ["模型", model], ["API Key", apiKey], ["生图 Base URL", imageBaseUrl], ["生图模型", imageModel], ["生图 Key", imageApiKey]]) {
     if (value !== undefined && /[\r\n]/.test(String(value))) throw new Error(`${name} 不能包含换行`);
   }
   let text = await readFile(ENV_PATH, "utf8").catch(() => "");
@@ -98,6 +138,10 @@ export async function saveSettings({ baseUrl, model, protocol, apiKey, clearKey 
   text = upsertEnv(text, "WF_PROTOCOL", protocol === undefined ? undefined : String(protocol).trim());
   if (clearKey) text = upsertEnv(text, "WF_API_KEY", undefined);
   else if (apiKey !== undefined && String(apiKey).trim()) text = upsertEnv(text, "WF_API_KEY", String(apiKey).trim());
+  text = upsertEnv(text, "IMAGE_API_BASE", imageBaseUrl === undefined ? undefined : String(imageBaseUrl).trim());
+  text = upsertEnv(text, "IMAGE_MODEL", imageModel === undefined ? undefined : String(imageModel).trim());
+  if (clearImageKey) text = upsertEnv(text, "IMAGE_API_KEY", undefined);
+  else if (imageApiKey !== undefined && String(imageApiKey).trim()) text = upsertEnv(text, "IMAGE_API_KEY", String(imageApiKey).trim());
   await writeFile(ENV_PATH, text, { mode: 0o600 });
   await chmod(ENV_PATH, 0o600).catch(() => {});
   return getSettings();
@@ -324,8 +368,10 @@ export async function startBuild({ kind, action, projectName, outputs, tts = {},
   const args = [BUILD_SCRIPT, name, "--input-file", inputPath, "--no-open"];
   if (kind === "prepare") args.push("--prepare");
   else {
-    args.push("--skip-images");
-    if (allowMissing) args.push("--allow-missing-images");
+    // 有生图 Key 就自动出图再渲染；没 Key 才退回「图已手动放好」的老路。
+    const image = await imageConfig();
+    if (!image.key.trim()) args.push("--skip-images");
+    if (allowMissing || image.key.trim()) args.push("--allow-missing-images");
     if (replace) args.push("--replace");
   }
   if (ttsResolved.provider) args.push("--tts-provider", ttsResolved.provider);
@@ -336,6 +382,10 @@ export async function startBuild({ kind, action, projectName, outputs, tts = {},
   const env = { ...process.env };
   const mimoKey = await resolveMimoKey();
   if (mimoKey) env.MIMO_API_KEY = mimoKey;
+  const image = await imageConfig();
+  if (image.key.trim()) env.IMAGE_API_KEY = image.key.trim();
+  if (image.baseUrl.trim()) env.IMAGE_API_BASE = image.baseUrl.trim();
+  if (image.model.trim()) env.IMAGE_MODEL = image.model.trim();
 
   const projectDir = path.join(workspaceDir, "成品", name);
   const expectedIds = imageIdsFromOutputs(outputs);

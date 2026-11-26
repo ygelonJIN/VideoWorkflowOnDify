@@ -104,6 +104,11 @@ export interface SettingsInfo {
   hasKey: boolean;
   keyHint: string;
   inProcessEnv?: boolean;
+  imageBaseUrl: string;
+  imageModel: string;
+  hasImageKey: boolean;
+  imageKeyHint: string;
+  imageInProcessEnv?: boolean;
 }
 
 export interface EnvInfo {
